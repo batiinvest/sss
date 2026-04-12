@@ -13,9 +13,15 @@
     .price-cell-value.small { font-size: 14px; }
     .upside-preview { background: var(--greenbg); border: 0.5px solid #9fe1cb; border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; color: var(--green); }
   </style>
-<style>body.in-iframe .sidebar{display:none!important;}body.in-iframe .hamburger{display:none!important;}body.in-iframe .layout{display:block;height:auto;}body.in-iframe .main{padding:1.5rem;min-height:100vh;}</style>
+<script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
+<style>
+  html.in-iframe .sidebar,
+  html.in-iframe .hamburger { display: none !important; }
+  html.in-iframe .layout    { display: block !important; }
+  html.in-iframe .main      { min-height: 100vh; }
+</style>
 </head>
-<body><script>if(window!==window.parent){document.body.classList.add("in-iframe");}</script>
+<body>
 
 <div class="layout">
 

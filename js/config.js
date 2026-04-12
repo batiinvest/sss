@@ -48,6 +48,7 @@ async function getCurrentMember() {
 const SUPABASE_URL  = 'https://xqqrxmxjvvzxcfxmqfks.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_M6XoN8lfV6_KEZ72yQ8OQQ_8tqo_nx2';
 
+
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 

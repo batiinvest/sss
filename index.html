@@ -87,15 +87,17 @@ async function init() {
   document.getElementById('updatedAt').textContent =
     `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 체결가 기준`;
 
-  const [members, picks, trades, allTradesData] = await Promise.all([
+  const [members, picks, allPicks, trades, allTradesData] = await Promise.all([
     fetchMemberStats(),
     fetchPicksByMonth(currentMonth()),
+    fetchAllPicks(),           // 전체 보유 종목 (평가손익용)
     fetchTrades(8),
     fetchAllTrades()
   ]);
 
   currentMembers = members;
   currentPicks   = picks;
+  allCurrentPicks = allPicks; // 전체 picks 저장
 
   renderMetrics(members, picks, allTradesData);
   renderPicksTable(picks, {});
@@ -103,7 +105,7 @@ async function init() {
   renderNotices(members, picks);
   renderTradesTable(trades);
 
-  // 비동기로 현재가 조회
+  // 비동기로 현재가 조회 (전체 보유 종목 기준)
   refreshPrices();
 }
 
@@ -160,7 +162,9 @@ async function triggerAndRefresh() {
 }
 
 async function refreshPrices() {
-  const holdPicks = currentPicks.filter(p => p.status === 'hold' && p.stock_code);
+  // 이번 달 탑픽이 아닌 전체 보유 종목 기준으로 평가손익 계산
+  const holdPicks = (allCurrentPicks.length ? allCurrentPicks : currentPicks)
+    .filter(p => p.status === 'hold' && p.stock_code);
 
   // 보유 종목 없어도 평가손익 초기화
   if (!holdPicks.length) {
@@ -183,12 +187,17 @@ async function refreshPrices() {
   let totalBuyAmt = 0, totalCurAmt = 0, matched = 0;
   holdPicks.forEach(p => {
     const curPrice = prices[p.stock_code]?.price;
+    console.log('평가손익 계산:', p.stock_name, 
+      'buy_price:', p.buy_price, 
+      'buy_quantity:', p.buy_quantity,
+      'curPrice:', curPrice);
     if (p.buy_price && p.buy_quantity && curPrice) {
       totalBuyAmt += p.buy_price * p.buy_quantity;
       totalCurAmt += curPrice * p.buy_quantity;
       matched++;
     }
   });
+  console.log('평가손익 결과: matched', matched, 'buyAmt', totalBuyAmt, 'curAmt', totalCurAmt);
 
   const pnlEl  = document.getElementById('unrealizedPnl');
   const rateEl = document.getElementById('unrealizedRate');

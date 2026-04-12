@@ -21,7 +21,7 @@
       </div>
     </div>
 
-    <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(100px,1fr));gap:10px;margin-bottom:1.25rem;">
       <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
       <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
       <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
@@ -161,7 +161,16 @@ async function triggerAndRefresh() {
 
 async function refreshPrices() {
   const holdPicks = currentPicks.filter(p => p.status === 'hold' && p.stock_code);
-  if (!holdPicks.length) return;
+
+  // 보유 종목 없어도 평가손익 초기화
+  if (!holdPicks.length) {
+    const pnlEl  = document.getElementById('unrealizedPnl');
+    const rateEl = document.getElementById('unrealizedRate');
+    if (pnlEl)  { pnlEl.textContent = '—'; pnlEl.className = 'metric-value'; }
+    if (rateEl) rateEl.textContent = '보유 종목 없음';
+    return;
+  }
+
   const codes = [...new Set(holdPicks.map(p => p.stock_code))];
   document.getElementById('priceUpdated').textContent = '현재가 조회 중...';
   const prices = await fetchCurrentPrices(codes);
@@ -169,6 +178,34 @@ async function refreshPrices() {
   const t = new Date();
   document.getElementById('priceUpdated').textContent =
     `현재가 ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
+
+  // 평가손익 계산
+  let totalBuyAmt = 0, totalCurAmt = 0, matched = 0;
+  holdPicks.forEach(p => {
+    const curPrice = prices[p.stock_code]?.price;
+    if (p.buy_price && p.buy_quantity && curPrice) {
+      totalBuyAmt += p.buy_price * p.buy_quantity;
+      totalCurAmt += curPrice * p.buy_quantity;
+      matched++;
+    }
+  });
+
+  const pnlEl  = document.getElementById('unrealizedPnl');
+  const rateEl = document.getElementById('unrealizedRate');
+  if (!pnlEl) return;
+
+  if (matched === 0) {
+    pnlEl.textContent  = '—';
+    pnlEl.className    = 'metric-value';
+    rateEl.textContent = '매수가 데이터 없음';
+    return;
+  }
+  const pnl  = totalCurAmt - totalBuyAmt;
+  const rate = totalBuyAmt > 0 ? (pnl / totalBuyAmt * 100) : 0;
+  const sign = pnl >= 0 ? '+' : '';
+  pnlEl.textContent = sign + won(pnl);
+  pnlEl.className   = 'metric-value ' + rCls(rate);
+  rateEl.textContent = `${sign}${rate.toFixed(1)}% · ${matched}/${holdPicks.length}종목`;
 }
 
 

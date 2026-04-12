@@ -372,12 +372,6 @@ textarea { resize: vertical; min-height: 72px; }
   .form-row .form-group { width: 100% !important; }
   .form-section { padding: 1rem !important; }
 
-  /* 카드 내부 그리드 2열 */
-  .metric-grid {
-    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
-    gap: 8px !important;
-  }
-
   /* 상단 헤더(topbar) 세로 배치 */
   .topbar {
     flex-direction: column !important;

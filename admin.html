@@ -5,70 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
   <link rel="stylesheet" href="css/style.css">
-<script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
-<style>
-  html.in-iframe .sidebar,
-  html.in-iframe .hamburger { display: none !important; }
-  html.in-iframe .layout    { display: block !important; }
-  html.in-iframe .main      { min-height: 100vh; }
-</style>
 </head>
 <body>
 
-<div class="layout">
-  <nav class="sidebar">
-    <a href="index.html" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="22" height="22" rx="6" fill="#185fa5"/>
-        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
-        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
-      </svg>
-      SSS
-    </a>
-    <!-- 미니 프로필 카드 -->
-    <div id="sideProfile" style="display:none;margin:8px 10px 4px;padding:10px 12px;background:var(--bg);border-radius:var(--r-md);border:0.5px solid var(--border);">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <div id="sideAvatar" class="avatar av1" style="width:30px;height:30px;font-size:11px;flex-shrink:0;">—</div>
-        <div style="min-width:0;">
-          <div id="sideName" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
-          <a href="mypage.html" style="font-size:11px;color:var(--accent);text-decoration:none;">내 정보 →</a>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
-          <div style="font-size:10px;color:var(--muted);">기준금액</div>
-          <div id="sideBase" style="font-size:12px;font-weight:500;">—</div>
-        </div>
-        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
-          <div style="font-size:10px;color:var(--muted);">누적 수익률</div>
-          <div id="sideReturn" style="font-size:12px;font-weight:500;">—</div>
-        </div>
-        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
-          <div style="font-size:10px;color:var(--muted);">투자금</div>
-          <div id="sideInvested" style="font-size:12px;font-weight:500;">—</div>
-        </div>
-        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
-          <div style="font-size:10px;color:var(--muted);">잔액</div>
-          <div id="sideCash" style="font-size:12px;font-weight:500;">—</div>
-        </div>
-      </div>
-    </div>
-    <a href="index.html" class="nav-item"><div class="nav-dot g"></div>대시보드</a>
-    <a href="picks.html" class="nav-item"><div class="nav-dot"></div>탑픽 관리</a>
-    <a href="trade.html" class="nav-item"><div class="nav-dot r"></div>매수 / 매도</a>
-    <a href="members.html" class="nav-item"><div class="nav-dot"></div>참여자 현황</a>
-    <a href="settle.html" class="nav-item"><div class="nav-dot a"></div>결산 관리</a>
-    <a href="schedule.html" class="nav-item"><div class="nav-dot g"></div>스터디 일정</a>
-    <a href="presentations.html" class="nav-item"><div class="nav-dot g"></div>발표 히스토리</a>
-    <a href="mypage.html" class="nav-item" id="nav-mypage"><div class="nav-dot"></div>내 정보</a>
-    <a href="admin.html"  class="nav-item nav-admin-item active" id="nav-admin"><div class="nav-dot"></div>사용자 관리</a>
-    <div class="sidebar-spacer"></div>
-    <div class="sidebar-footer">
-      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
-    </div>
-  </nav>
-
-  <main class="main">
+<div class="layout" style="display:block;"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">

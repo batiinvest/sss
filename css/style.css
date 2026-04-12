@@ -343,3 +343,135 @@ textarea { resize: vertical; min-height: 72px; }
 /* ── 권한별 메뉴 ── */
 .nav-admin-item { display: none !important; }
 .nav-admin-item.visible { display: flex !important; }
+
+/* ── 모바일: 사이드바 프로필 카드 ── */
+@media (max-width: 768px) {
+  #sideProfile { display: none !important; }
+  .sidebar.nav-open #sideProfile { display: block !important; }
+}
+
+/* ============================================================
+   모바일 최적화 (app.html iframe 방식)
+   ============================================================ */
+
+/* ── app.html 모바일: 사이드바 상단 고정 + iframe 아래 */
+@media (max-width: 768px) {
+  /* 사이드바 프로필 카드 - 모바일 햄버거 열렸을 때만 */
+  #sideProfile { display: none !important; }
+  .sidebar.nav-open #sideProfile { display: block !important; }
+
+  /* 미니 프로필 카드 모바일 그리드 */
+  #sideProfile > div:last-child {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ── 공통: 모바일에서 form-row 1열 */
+@media (max-width: 600px) {
+  .form-row { flex-direction: column !important; gap: 0 !important; }
+  .form-row .form-group { width: 100% !important; }
+  .form-section { padding: 1rem !important; }
+
+  /* 카드 내부 그리드 2열 */
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    gap: 8px !important;
+  }
+
+  /* 상단 헤더(topbar) 세로 배치 */
+  .topbar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .topbar .btn, .topbar button {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* 테이블 가로 스크롤 */
+  .table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  table { min-width: 480px !important; font-size: 12px !important; }
+  th, td { padding: 7px 6px !important; white-space: nowrap !important; }
+
+  /* 카드 */
+  .card { border-radius: var(--r-md) !important; padding: 0 !important; }
+  .card-head { padding: 0.9rem 1rem !important; }
+
+  /* 배지/태그 */
+  .badge { font-size: 10px !important; padding: 2px 6px !important; }
+
+  /* btn-row */
+  .btn-row { flex-wrap: wrap !important; gap: 6px !important; }
+}
+
+/* ── 달력 모바일 최적화 */
+@media (max-width: 600px) {
+  .cal-grid { gap: 1px !important; }
+  .cal-day {
+    min-height: 52px !important;
+    padding: 3px !important;
+    font-size: 11px !important;
+  }
+  .cal-day-num { font-size: 11px !important; margin-bottom: 2px !important; }
+  .cal-event {
+    font-size: 9px !important;
+    padding: 1px 3px !important;
+    border-radius: 3px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  .cal-header div { font-size: 11px !important; }
+
+  /* 다가오는 일정 */
+  .upcoming-item {
+    padding: 10px 12px !important;
+    gap: 10px !important;
+  }
+  .upcoming-day { font-size: 22px !important; }
+  .upcoming-month { font-size: 10px !important; }
+
+  /* 발표 히스토리 테이블 - 덜 중요한 열 숨기기 */
+  .hist-hide-mobile { display: none !important; }
+
+  /* 멤버 카드 그리드 */
+  #memberCards { grid-template-columns: 1fr !important; }
+
+  /* 참여자 현황 - 4열→2열 */
+  .member-stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* 연말결산 카드 3열→2열 */
+  #annualPreviewBody > div:first-child {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* 발표 히스토리 산업/기업 카드 */
+  #industryCards, #memberCards {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+
+  /* 폼 버튼 */
+  .form-section > div:last-child {
+    flex-direction: column !important;
+  }
+  .form-section > div:last-child .btn {
+    width: 100% !important;
+  }
+}
+
+/* ── 매우 작은 화면 (375px) */
+@media (max-width: 390px) {
+  .metric-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+  .metric-value { font-size: 14px !important; }
+  .metric-label { font-size: 10px !important; }
+  .metric-sub   { font-size: 10px !important; }
+
+  table { min-width: 360px !important; font-size: 11px !important; }
+  th, td { padding: 5px 4px !important; }
+}

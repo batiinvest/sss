@@ -25,6 +25,15 @@
     .upcoming-month { font-size: 11px; color: var(--muted); }
     .upcoming-day   { font-size: 20px; font-weight: 500; line-height: 1.2; }
     .ev-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
+
+    @media (max-width: 600px) {
+      .cal-day     { min-height: 54px; padding: 2px; }
+      .cal-day-num { font-size: 11px; }
+      .cal-event   { font-size: 9px; padding: 1px 2px; }
+      .cal-header div { font-size: 11px; padding: 4px 0; }
+      .upcoming-date  { min-width: 44px; }
+      .upcoming-day   { font-size: 22px; }
+    }
   </style>
 </head>
 <body>

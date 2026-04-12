@@ -6,25 +6,42 @@
   <title>SSS · 스터디 펀드</title>
   <link rel="stylesheet" href="css/style.css">
   <style>
-    html, body { height: 100%; margin: 0; overflow: hidden; }
-    .layout    { height: 100vh; overflow: hidden; }
+    html, body { height: 100%; margin: 0; }
+    .layout { height: 100vh; display: flex; overflow: hidden; }
 
-    /* iframe 컨테이너 */
+    /* iframe */
     #page-frame {
       flex: 1;
       border: none;
       width: 100%;
-      height: 100vh;
+      height: 100%;
       background: var(--bg);
       opacity: 1;
       transition: opacity 0.12s ease;
+      display: block;
     }
     #page-frame.switching { opacity: 0; }
 
-    /* 모바일: 레이아웃 */
+    /* 모바일 */
     @media (max-width: 768px) {
-      .layout { flex-direction: column; overflow: visible; }
-      #page-frame { height: calc(100vh - 56px); }
+      html, body { height: 100%; overflow: hidden; }
+      .layout {
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+      .sidebar {
+        flex-shrink: 0;
+        height: auto !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 200 !important;
+      }
+      #page-frame {
+        flex: 1;
+        height: 0; /* flex child가 남은 공간 채우도록 */
+        min-height: 0;
+      }
     }
   </style>
 </head>

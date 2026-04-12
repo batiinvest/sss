@@ -70,7 +70,7 @@
 
     <!-- 프로필 카드 -->
     <div class="card" style="margin-bottom:1.25rem;">
-      <div style="display:flex;align-items:center;gap:16px;">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
         <div id="profileAvatar" class="avatar av1" style="width:52px;height:52px;font-size:18px;">—</div>
         <div style="flex:1;">
           <div style="font-size:18px;font-weight:500;" id="profileName">—</div>
@@ -86,7 +86,7 @@
     </div>
 
     <!-- 핵심 지표 -->
-    <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1.25rem;">
+    <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:1.25rem;" id="myMetricGrid">
       <div class="metric">
         <div class="metric-label">기준금액</div>
         <div class="metric-value" id="myBaseAmount">—</div>

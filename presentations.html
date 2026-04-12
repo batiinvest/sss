@@ -505,7 +505,7 @@ function renderTable(data) {
       </td>
       <td style="text-align:right;font-weight:500;">${cur?.price ? cur.price.toLocaleString() + '원' : '—'}</td>
       <td style="text-align:right;" class="${retCls}"><strong>${retStr}</strong></td>
-      <td style="text-align:right;font-size:12px;color:var(--muted);">
+      <td style="text-align:right;font-size:12px;color:var(--muted);" class="hist-hide-mobile">
         ${(()=>{
           // price_at 있고 현재가·현재시총 있으면 비율로 역산
           if (p.price_at && cur?.price && cur?.market_cap) {
@@ -515,8 +515,8 @@ function renderTable(data) {
           return p.market_cap_at ? p.market_cap_at.toLocaleString() + '억' : '—';
         })()}
       </td>
-      <td style="text-align:right;font-size:12px;color:var(--muted);">${cur?.market_cap ? cur.market_cap.toLocaleString() + '억' : '—'}</td>
-      <td style="text-align:right;" class="${capRetCls}">${capRetStr}</td>
+      <td style="text-align:right;font-size:12px;color:var(--muted);" class="hist-hide-mobile">${cur?.market_cap ? cur.market_cap.toLocaleString() + '억' : '—'}</td>
+      <td style="text-align:right;" class="${capRetCls} hist-hide-mobile">${capRetStr}</td>
     </tr>`;
   });
 

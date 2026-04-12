@@ -6,9 +6,26 @@
   <title>SSS · 스터디 펀드</title>
   <link rel="stylesheet" href="css/style.css">
   <style>
-    #page-content { flex: 1; min-width: 0; }
-    #page-content main { min-height: 100vh; }
-    .page-loading { opacity: 0.4; pointer-events: none; transition: opacity 0.15s; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    .layout    { height: 100vh; overflow: hidden; }
+
+    /* iframe 컨테이너 */
+    #page-frame {
+      flex: 1;
+      border: none;
+      width: 100%;
+      height: 100vh;
+      background: var(--bg);
+      opacity: 1;
+      transition: opacity 0.12s ease;
+    }
+    #page-frame.switching { opacity: 0; }
+
+    /* 모바일: 레이아웃 */
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; overflow: visible; }
+      #page-frame { height: calc(100vh - 56px); }
+    }
   </style>
 </head>
 <body>
@@ -61,16 +78,16 @@
     <a href="#" onclick="loadPage('settle');return false;"        class="nav-item" data-page="settle"><div class="nav-dot a"></div>결산 관리</a>
     <a href="#" onclick="loadPage('schedule');return false;"      class="nav-item" data-page="schedule"><div class="nav-dot g"></div>스터디 일정</a>
     <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표 히스토리</a>
-    <a href="#" onclick="loadPage('mypage');return false;"        class="nav-item" id="nav-mypage" data-page="mypage"><div class="nav-dot"></div>내 정보</a>
-    <a href="#" onclick="loadPage('admin');return false;"         class="nav-item nav-admin-item" id="nav-admin" data-page="admin"><div class="nav-dot"></div>사용자 관리</a>
+    <a href="#" onclick="loadPage('mypage');return false;"        class="nav-item" data-page="mypage" id="nav-mypage"><div class="nav-dot"></div>내 정보</a>
+    <a href="#" onclick="loadPage('admin');return false;"         class="nav-item nav-admin-item" data-page="admin" id="nav-admin"><div class="nav-dot"></div>사용자 관리</a>
     <div class="sidebar-spacer"></div>
     <div class="sidebar-footer">
       <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
     </div>
   </nav>
 
-  <!-- 페이지 컨텐츠 영역 -->
-  <div id="page-content"></div>
+  <!-- iframe: 각 페이지 컨텐츠 -->
+  <iframe id="page-frame" src="index.html" title="페이지 컨텐츠"></iframe>
 
 </div>
 <div id="toast" class="toast"></div>
@@ -79,85 +96,60 @@
 <script src="js/config.js?v=20260412"></script>
 <script src="js/db.js?v=20260412"></script>
 <script>
-// ── 현재 페이지 스크립트 정리용
-let _currentPageCleanup = null;
+let currentPage = 'index';
 
-// ── 페이지 로드
-async function loadPage(pageName) {
+function loadPage(pageName) {
+  if (currentPage === pageName) return;
+  currentPage = pageName;
+
   // active 메뉴 표시
   document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     el.classList.toggle('active', el.dataset.page === pageName);
   });
 
-  // URL 업데이트 (뒤로가기 지원)
-  history.pushState({ page: pageName }, '', `#${pageName}`);
+  // URL 해시 업데이트
+  history.pushState({ page: pageName }, '', '#' + pageName);
 
-  const content = document.getElementById('page-content');
-  content.classList.add('page-loading');
+  // iframe fade 전환
+  const frame = document.getElementById('page-frame');
+  frame.classList.add('switching');
 
-  try {
-    // 페이지 HTML fetch
-    const res  = await fetch(`${pageName}.html?v=20260412`);
-    const html = await res.text();
-
-    // <main> 내용 추출
-    const parser = new DOMParser();
-    const doc    = parser.parseFromString(html, 'text/html');
-    const main   = doc.querySelector('main.main');
-    if (!main) { content.innerHTML = '<main class="main"><p>페이지를 찾을 수 없습니다.</p></main>'; return; }
-
-    // 이전 스크립트 변수 정리
-    if (_currentPageCleanup) { try { _currentPageCleanup(); } catch(e) {} }
-    _currentPageCleanup = null;
-
-    // 컨텐츠 교체
-    content.innerHTML = `<main class="main">${main.innerHTML}</main>`;
-
-    // 페이지 스크립트 재실행
-    const scripts = doc.querySelectorAll('script:not([src])');
-    const lastScript = scripts[scripts.length - 1];
-    if (lastScript) {
-      // location.href 이동을 loadPage로 intercept
-      const patchedCode = lastScript.textContent
-        .replace(/location\.href\s*=\s*['"]([^'"]+)\.html['"]/g, (_, p) => `loadPage('${p}')`)
-        .replace(/async function requireAuth[\s\S]*?(?=
-async function |
-function )/g, '')
-        .replace(/async function doLogout[\s\S]*?(?=
-async function |
-function |
-init\(\))/g, '');
-      const fn = new Function(patchedCode);
-      try { fn(); } catch(e) { console.error(`${pageName} 스크립트 오류:`, e); }
-    }
-
-  } catch(e) {
-    content.innerHTML = '<main class="main"><p style="padding:2rem;color:red;">페이지 로드 실패: ' + e.message + '</p></main>';
-  } finally {
-    content.classList.remove('page-loading');
-  }
+  setTimeout(() => {
+    frame.src = pageName + '.html?v=20260412';
+    frame.onload = () => {
+      frame.classList.remove('switching');
+      // 모바일: 햄버거 닫기
+      document.querySelector('.sidebar')?.classList.remove('nav-open');
+    };
+  }, 120);
 }
 
-// ── 뒤로가기/앞으로가기 지원
+// 뒤로가기/앞으로가기
 window.addEventListener('popstate', (e) => {
   const page = e.state?.page || 'index';
-  loadPage(page);
+  if (page !== currentPage) loadPage(page);
 });
 
-// ── 초기 페이지 로드
-async function initApp() {
-  await requireAuth();
-  initSidebarAuth();
-
-  // URL 해시에서 페이지 결정
-  const hash = location.hash.replace('#', '') || 'index';
-  await loadPage(hash);
-}
-
+// 로그아웃
 async function doLogout() {
   sessionStorage.removeItem('sideProfileData');
   await sb.auth.signOut();
   location.reload();
+}
+
+// 초기 실행
+async function initApp() {
+  await requireAuth();
+  initSidebarAuth();
+
+  const hash = location.hash.replace('#', '');
+  if (hash && hash !== 'index') {
+    loadPage(hash);
+  } else {
+    // 초기 active 표시
+    document.querySelector('[data-page="index"]')?.classList.add('active');
+    history.replaceState({ page: 'index' }, '', '#index');
+  }
 }
 
 initApp();

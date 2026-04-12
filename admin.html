@@ -90,6 +90,10 @@
             <label>이메일</label>
             <input type="email" id="f-email" placeholder="예: hong@email.com" />
           </div>
+          <div class="form-group" id="f-pw-group">
+            <label>초기 비밀번호 <span style="color:var(--muted);font-weight:400;">신규 추가 시 입력 (6자 이상)</span></label>
+            <input type="password" id="f-pw" placeholder="입력 시 로그인 계정도 함께 생성됩니다" />
+          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -259,6 +263,11 @@ function renderSummaryCards() {
 
 function openForm(prefill = {}) {
   if (!currentUserIsAdmin) { toast('관리자만 추가/수정할 수 있습니다.'); return; }
+  // 수정 시 비밀번호 필드 숨김, 추가 시 표시
+  const pwGroup = document.getElementById('f-pw-group');
+  if (pwGroup) pwGroup.style.display = prefill.id ? 'none' : 'block';
+  const pwInput = document.getElementById('f-pw');
+  if (pwInput) pwInput.value = '';
   editingMemberId = prefill.id || null;  // 전역 변수에 저장
   document.getElementById('formTitle').textContent = editingMemberId ? '참여자 수정' : '참여자 추가';
   document.getElementById('f-name').value   = prefill.name        || '';
@@ -305,10 +314,31 @@ async function saveMember() {
       toast(`${name}님 정보가 수정되었습니다.`);
     } else {
       // 추가
+      const pw = document.getElementById('f-pw')?.value?.trim();
+
+      // members 테이블에 추가
       const { error } = await sb.from('members')
         .insert({ name, email, base_amount: base, joined_at: joined, note });
       if (error) throw error;
-      toast(`${name}님이 추가되었습니다!`);
+
+      // 이메일 + 비밀번호 입력 시 Supabase Auth 계정도 생성
+      if (email && pw && pw.length >= 6) {
+        const { error: authErr } = await sb.auth.admin?.createUser({
+          email,
+          password: pw,
+          email_confirm: true,
+        });
+        if (authErr) {
+          // admin API 없으면 signUp으로 대체
+          // 별도 클라이언트로 signUp (현재 관리자 세션 유지)
+          const { createClient } = supabase;
+          const sbTemp = createClient(SUPABASE_URL, SUPABASE_ANON);
+          await sbTemp.auth.signUp({ email, password: pw });
+        }
+        toast(`${name}님 추가 + 로그인 계정 생성 완료!`);
+      } else {
+        toast(`${name}님이 추가되었습니다. 로그인 계정은 Supabase에서 별도 생성하세요.`);
+      }
     }
     closeForm();
     await loadData();

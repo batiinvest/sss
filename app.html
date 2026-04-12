@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 펀드</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    #page-content { flex: 1; min-width: 0; }
+    #page-content main { min-height: 100vh; }
+    .page-loading { opacity: 0.4; pointer-events: none; transition: opacity 0.15s; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- 사이드바: 한 번만 로드, 페이지 이동 시 유지 -->
+  <nav class="sidebar">
+    <a href="#" onclick="loadPage('index');return false;" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect width="22" height="22" rx="6" fill="#185fa5"/>
+        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
+        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      SSS
+    </a>
+
+    <!-- 미니 프로필 카드 -->
+    <div id="sideProfile" style="display:none;margin:8px 10px 4px;padding:10px 12px;background:var(--bg);border-radius:var(--r-md);border:0.5px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div id="sideAvatar" class="avatar av1" style="width:30px;height:30px;font-size:11px;flex-shrink:0;">—</div>
+        <div style="min-width:0;">
+          <div id="sideName" style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">—</div>
+          <a href="#" onclick="loadPage('mypage');return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">내 정보 →</a>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
+          <div style="font-size:10px;color:var(--muted);">기준금액</div>
+          <div id="sideBase" style="font-size:12px;font-weight:500;">—</div>
+        </div>
+        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
+          <div style="font-size:10px;color:var(--muted);">누적 수익률</div>
+          <div id="sideReturn" style="font-size:12px;font-weight:500;">—</div>
+        </div>
+        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
+          <div style="font-size:10px;color:var(--muted);">투자금</div>
+          <div id="sideInvested" style="font-size:12px;font-weight:500;">—</div>
+        </div>
+        <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
+          <div style="font-size:10px;color:var(--muted);">잔액</div>
+          <div id="sideCash" style="font-size:12px;font-weight:500;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <a href="#" onclick="loadPage('index');return false;"         class="nav-item" data-page="index"><div class="nav-dot g"></div>대시보드</a>
+    <a href="#" onclick="loadPage('picks');return false;"         class="nav-item" data-page="picks"><div class="nav-dot"></div>탑픽 관리</a>
+    <a href="#" onclick="loadPage('trade');return false;"         class="nav-item" data-page="trade"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="#" onclick="loadPage('members');return false;"       class="nav-item" data-page="members"><div class="nav-dot"></div>참여자 현황</a>
+    <a href="#" onclick="loadPage('settle');return false;"        class="nav-item" data-page="settle"><div class="nav-dot a"></div>결산 관리</a>
+    <a href="#" onclick="loadPage('schedule');return false;"      class="nav-item" data-page="schedule"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="#" onclick="loadPage('mypage');return false;"        class="nav-item" id="nav-mypage" data-page="mypage"><div class="nav-dot"></div>내 정보</a>
+    <a href="#" onclick="loadPage('admin');return false;"         class="nav-item nav-admin-item" id="nav-admin" data-page="admin"><div class="nav-dot"></div>사용자 관리</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <!-- 페이지 컨텐츠 영역 -->
+  <div id="page-content"></div>
+
+</div>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20260412"></script>
+<script src="js/db.js?v=20260412"></script>
+<script>
+// ── 현재 페이지 스크립트 정리용
+let _currentPageCleanup = null;
+
+// ── 페이지 로드
+async function loadPage(pageName) {
+  // active 메뉴 표시
+  document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === pageName);
+  });
+
+  // URL 업데이트 (뒤로가기 지원)
+  history.pushState({ page: pageName }, '', `#${pageName}`);
+
+  const content = document.getElementById('page-content');
+  content.classList.add('page-loading');
+
+  try {
+    // 페이지 HTML fetch
+    const res  = await fetch(`${pageName}.html?v=20260412`);
+    const html = await res.text();
+
+    // <main> 내용 추출
+    const parser = new DOMParser();
+    const doc    = parser.parseFromString(html, 'text/html');
+    const main   = doc.querySelector('main.main');
+    if (!main) { content.innerHTML = '<main class="main"><p>페이지를 찾을 수 없습니다.</p></main>'; return; }
+
+    // 이전 스크립트 변수 정리
+    if (_currentPageCleanup) { try { _currentPageCleanup(); } catch(e) {} }
+    _currentPageCleanup = null;
+
+    // 컨텐츠 교체
+    content.innerHTML = `<main class="main">${main.innerHTML}</main>`;
+
+    // 페이지 스크립트 재실행
+    const scripts = doc.querySelectorAll('script:not([src])');
+    const lastScript = scripts[scripts.length - 1];
+    if (lastScript) {
+      // location.href 이동을 loadPage로 intercept
+      const patchedCode = lastScript.textContent
+        .replace(/location\.href\s*=\s*['"]([^'"]+)\.html['"]/g, (_, p) => `loadPage('${p}')`)
+        .replace(/async function requireAuth[\s\S]*?(?=
+async function |
+function )/g, '')
+        .replace(/async function doLogout[\s\S]*?(?=
+async function |
+function |
+init\(\))/g, '');
+      const fn = new Function(patchedCode);
+      try { fn(); } catch(e) { console.error(`${pageName} 스크립트 오류:`, e); }
+    }
+
+  } catch(e) {
+    content.innerHTML = '<main class="main"><p style="padding:2rem;color:red;">페이지 로드 실패: ' + e.message + '</p></main>';
+  } finally {
+    content.classList.remove('page-loading');
+  }
+}
+
+// ── 뒤로가기/앞으로가기 지원
+window.addEventListener('popstate', (e) => {
+  const page = e.state?.page || 'index';
+  loadPage(page);
+});
+
+// ── 초기 페이지 로드
+async function initApp() {
+  await requireAuth();
+  initSidebarAuth();
+
+  // URL 해시에서 페이지 결정
+  const hash = location.hash.replace('#', '') || 'index';
+  await loadPage(hash);
+}
+
+async function doLogout() {
+  sessionStorage.removeItem('sideProfileData');
+  await sb.auth.signOut();
+  location.reload();
+}
+
+initApp();
+</script>
+</body>
+</html>

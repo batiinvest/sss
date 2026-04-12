@@ -260,15 +260,22 @@ async function init() {
 
   const sel = document.getElementById('f-member');
   const flt = document.getElementById('filterMember');
+  const me    = await getCurrentMember();
+  const admin = await isAdmin();
   members.forEach(m => {
-    sel.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+    // 비관리자면 본인 항목만 선택 가능
+    const disabled = (!admin && me && m.id !== me.id) ? ' disabled' : '';
+    sel.innerHTML += `<option value="${m.id}"${disabled}>${m.name}</option>`;
     flt.innerHTML += `<option value="${m.id}">${m.name}</option>`;
   });
+  // 본인 자동 선택
+  if (me && sel) sel.value = me.id;
 
   document.getElementById('f-month').value = selMonth;
   buildMonthTabs();
   renderMonthPicks(selMonth);
   renderHistory();
+
 }
 
 // ── 종목코드 입력 후 0.9초 대기 → 자동 조회
@@ -618,7 +625,15 @@ function toggleForm() {
 }
 
 async function submitPickForm() {
-  const memberId    = document.getElementById('f-member').value;
+  // 본인 또는 관리자만 제출 가능
+  const me    = await getCurrentMember();
+  const admin = await isAdmin();
+  const memberId = document.getElementById('f-member').value;
+  if (!admin && me && memberId !== me.id) {
+    toast('본인의 탑픽만 제출할 수 있습니다.');
+    return;
+  }
+
   const month       = document.getElementById('f-month').value;
   const stockName   = document.getElementById('f-stock').value.trim();
   const stockCode   = document.getElementById('f-code').value.trim();

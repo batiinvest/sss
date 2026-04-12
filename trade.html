@@ -167,15 +167,29 @@ async function init() {
   allTrades = await fetchTrades(50);
 
   // 셀렉트 채우기
-  ['buy-member','sell-member','tradeFilterMember'].forEach(id => {
+  const me    = await getCurrentMember();
+  const admin = await isAdmin();
+  ['buy-member','sell-member'].forEach(id => {
     const el = document.getElementById(id);
-    members.forEach(m => el.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+    members.forEach(m => {
+      const disabled = (!admin && me && m.id !== me.id) ? ' disabled' : '';
+      el.innerHTML += `<option value="${m.id}"${disabled}>${m.name}</option>`;
+    });
+    if (me && el) el.value = me.id;
   });
+  const fltEl = document.getElementById('tradeFilterMember');
+  members.forEach(m => fltEl.innerHTML += `<option value="${m.id}">${m.name}</option>`);
 
   document.getElementById('buy-member').addEventListener('change', () => updatePickSelect('buy'));
   document.getElementById('sell-member').addEventListener('change', () => updatePickSelect('sell'));
 
   renderTrades(allTrades);
+
+  // 자동 선택 후 pick 목록 갱신
+  if (me) {
+    updatePickSelect('buy');
+    updatePickSelect('sell');
+  }
 
   // URL 파라미터: ?type=sell → 매도 폼으로 스크롤
   if (new URLSearchParams(location.search).get('type') === 'sell') {
@@ -220,7 +234,13 @@ function calcSellReturn() {
 }
 
 async function submitBuy() {
-  const memberId  = document.getElementById('buy-member').value;
+  const me    = await getCurrentMember();
+  const admin = await isAdmin();
+  const memberId = document.getElementById('buy-member').value;
+  if (!admin && me && memberId !== me.id) {
+    toast('본인의 매수만 등록할 수 있습니다.');
+    return;
+  }
   const pickId    = document.getElementById('buy-pick').value;
   const price     = parseInt(document.getElementById('buy-price').value);
   const quantity  = parseInt(document.getElementById('buy-qty').value);
@@ -239,7 +259,13 @@ async function submitBuy() {
 }
 
 async function submitSell() {
-  const memberId  = document.getElementById('sell-member').value;
+  const me    = await getCurrentMember();
+  const admin = await isAdmin();
+  const memberId = document.getElementById('sell-member').value;
+  if (!admin && me && memberId !== me.id) {
+    toast('본인의 매도만 등록할 수 있습니다.');
+    return;
+  }
   const pickId    = document.getElementById('sell-pick').value;
   const price     = parseInt(document.getElementById('sell-price').value);
   const quantity  = parseInt(document.getElementById('sell-qty').value);

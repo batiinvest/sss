@@ -2,12 +2,303 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0;url=app.html#index">
-  <title>SSS · 스터디 펀드</title>
-<style>body.in-iframe .sidebar{display:none!important;}body.in-iframe .hamburger{display:none!important;}body.in-iframe .layout{display:block;height:auto;}body.in-iframe .main{padding:1.5rem;min-height:100vh;}</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 대시보드</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
-<body><script>if(window!==window.parent){document.body.classList.add("in-iframe");}</script>
+<body>
+<div class="layout" style="display:block;"><main class="main">
+    <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
-  <script>location.replace('app.html#index');</script>
+    <div class="topbar">
+      <div>
+        <div class="page-title">대시보드</div>
+        <div class="updated" id="updatedAt">불러오는 중...</div>
+      </div>
+      <div class="btn-row">
+        <a href="trade.html?type=sell" class="btn">매도 요청</a>
+        <a href="picks.html?action=new" class="btn btn-primary">+ 탑픽 제출</a>
+      </div>
+    </div>
+
+    <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;">
+      <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
+      <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
+      <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
+      <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
+      <div class="metric"><div class="metric-label">이번 달 탑픽 제출</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
+      <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
+            <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률</th><th>목표가</th><th>상태</th></tr></thead>
+            <tbody id="picksTbody"><tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="card-title">참여자 수익률</div></div>
+        <div id="memberBars" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div style="margin-top:14px;border-top:0.5px solid var(--border);padding-top:12px;">
+          <div class="notice-list" id="notices"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">최근 매매 내역</div>
+        <a href="trade.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>일시</th><th>추천자</th><th>종목</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th></tr></thead>
+          <tbody id="tradesTbody"><tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20260412"></script>
+<script src="js/db.js?v=20260412"></script>
+<script>
+let currentPicks = [];
+let currentMembers = [];
+
+async function init() {
+  await requireAuth();
+  checkDBConnection();
+
+  const now = new Date();
+  document.getElementById('updatedAt').textContent =
+    `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 체결가 기준`;
+
+  const [members, picks, trades, allTradesData] = await Promise.all([
+    fetchMemberStats(),
+    fetchPicksByMonth(currentMonth()),
+    fetchTrades(8),
+    fetchAllTrades()
+  ]);
+
+  currentMembers = members;
+  currentPicks   = picks;
+
+  renderMetrics(members, picks, allTradesData);
+  renderPicksTable(picks, {});
+  renderMemberBars(members);
+  renderNotices(members, picks);
+  renderTradesTable(trades);
+
+  // 비동기로 현재가 조회
+  refreshPrices();
+}
+
+// ── 현재가 갱신: GitHub Actions → DB 조회
+async function triggerAndRefresh() {
+  const btn = document.getElementById('priceRefreshBtn');
+  if (!btn) return;
+  btn.disabled = true;
+
+  let pat = null;
+  try { pat = await getAppSetting('gh_pat'); } catch(e) {}
+  const repo = window.GH_REPO || '';
+
+  if (!pat || repo.includes('YOUR_GITHUB_ID')) {
+    btn.textContent = '조회 중...';
+    await refreshPrices();
+    btn.disabled = false;
+    btn.textContent = '현재가 갱신';
+    return;
+  }
+
+  btn.textContent = '업데이트 중...';
+  document.getElementById('priceUpdated').textContent = 'Actions 실행 중 (약 60초)...';
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${repo}/actions/workflows/refresh_picks.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${pat}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref: 'main' }),
+      }
+    );
+    if (res.status === 204) {
+      document.getElementById('priceUpdated').textContent = '업데이트 중... 60초 후 완료';
+      setTimeout(async () => {
+        await refreshPrices();
+        btn.disabled = false;
+        btn.textContent = '현재가 갱신';
+      }, 65000);
+    } else {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  } catch(e) {
+    toast('Actions 실패, DB에서 조회합니다.');
+    await refreshPrices();
+    btn.disabled = false;
+    btn.textContent = '현재가 갱신';
+  }
+}
+
+async function refreshPrices() {
+  const holdPicks = currentPicks.filter(p => p.status === 'hold' && p.stock_code);
+  if (!holdPicks.length) return;
+  const codes = [...new Set(holdPicks.map(p => p.stock_code))];
+  document.getElementById('priceUpdated').textContent = '현재가 조회 중...';
+  const prices = await fetchCurrentPrices(codes);
+  renderPicksTable(currentPicks, prices);
+  const t = new Date();
+  document.getElementById('priceUpdated').textContent =
+    `현재가 ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
+}
+
+
+function renderMetrics(members, picks, allTrades = []) {
+  const totalBase   = members.reduce((s,m) => s + m.base_amount, 0);
+  const totalProfit = members.reduce((s,m) => s + m.net_profit, 0);
+
+  document.getElementById('totalAsset').textContent  = won(totalBase);
+  document.getElementById('totalProfit').textContent = `초기 대비 ${totalProfit>=0?'+':''}${won(totalProfit)}`;
+  document.getElementById('memberCount').textContent = members.length + '명';
+
+  // 투자금 / 잔액
+  const totalBuyAmt  = allTrades.filter(t => t.trade_type==='buy').reduce((s,t) => s+t.price*t.quantity, 0);
+  const totalSellAmt = allTrades.filter(t => t.trade_type==='sell').reduce((s,t) => s+t.price*t.quantity, 0);
+  const totalInvested = totalBuyAmt - totalSellAmt;
+  const totalCash     = totalBase - totalInvested;
+
+  document.getElementById('totalInvested').textContent = won(totalInvested);
+  document.getElementById('investedSub').textContent   = `매수 ${won(totalBuyAmt)} · 매도 -${won(totalSellAmt)}`;
+  document.getElementById('totalCash').textContent     = won(totalCash);
+  document.getElementById('totalCash').className       = 'metric-value ' + rCls(totalCash);
+  document.getElementById('cashSub').textContent       = `총자산 ${won(totalBase)} - 투자금 ${won(totalInvested)}`;
+
+  // 평가손익 초기값
+  document.getElementById('unrealizedPnl').textContent  = '계산 중...';
+  document.getElementById('unrealizedRate').textContent = '현재가 로드 후 계산';
+
+  const submitted = picks.length;
+  const missing   = members.filter(m => !picks.find(p => p.member_id === m.id));
+  document.getElementById('pickStatus').textContent = `${submitted} / ${members.length}`;
+  document.getElementById('pickMissing').innerHTML  = missing.length
+    ? `<span class="badge b-warn">${missing.map(m=>m.name).join(', ')} 미제출</span>`
+    : '<span class="badge b-sold">전원 제출 완료</span>';
+}
+
+function renderPicksTable(picks, prices) {
+  const tbody = document.getElementById('picksTbody');
+  if (!picks.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">이번 달 탑픽이 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = picks.map((p, i) => {
+    const priceInfo = prices[p.stock_code];
+    const curPrice  = priceInfo?.price;
+    const dayChange = priceInfo?.change;
+
+    // 현재가가 있으면 실시간 수익률, 없으면 확정 수익률
+    let rateVal, rateStr;
+    if (p.status === 'hold' && curPrice && p.buy_price) {
+      rateVal = ((curPrice - p.buy_price) / p.buy_price * 100);
+      rateStr = pct(rateVal);
+    } else {
+      rateVal = p.realized_return;
+      rateStr = pct(rateVal);
+    }
+
+    const upside = p.target_price && (curPrice || p.buy_price)
+      ? (((p.target_price - (curPrice||p.buy_price)) / (curPrice||p.buy_price)) * 100).toFixed(1)
+      : null;
+
+    const statusBadge = p.status === 'sold'
+      ? '<span class="badge b-sold">매도완료</span>'
+      : '<span class="badge b-hold">보유중</span>';
+
+    const dayChangeEl = dayChange != null
+      ? `<span style="font-size:11px;" class="${rCls(dayChange)}">${dayChange>=0?'+':''}${dayChange}%</span>`
+      : '<span class="muted" style="font-size:11px;">-</span>';
+
+    return `<tr>
+      <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
+      <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}</span></td>
+      <td>${won(p.buy_price)}</td>
+      <td>${curPrice ? won(curPrice) : '<span class="muted">-</span>'}</td>
+      <td>${dayChangeEl}</td>
+      <td class="${rCls(rateVal)}">${rateStr}</td>
+      <td style="color:var(--green);">${p.target_price ? won(p.target_price)+(upside?`<br><span style="font-size:11px;">(+${upside}%)</span>`:'') : '-'}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderMemberBars(members) {
+  const sorted = [...members].sort((a,b) => b.return_rate - a.return_rate);
+  const maxAbs = Math.max(...sorted.map(m => Math.abs(m.return_rate)), 1);
+  document.getElementById('memberBars').innerHTML = sorted.map((m, i) => {
+    const w = Math.round(Math.abs(m.return_rate) / maxAbs * 100);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg);border-radius:var(--r-md);">
+      <div class="avatar ${avCls[i%6]}" style="width:28px;height:28px;font-size:11px;">${m.name.slice(0,2)}</div>
+      <div style="font-size:13px;font-weight:500;width:52px;flex-shrink:0;">${m.name}</div>
+      <div style="flex:1;height:6px;background:var(--border);border-radius:4px;overflow:hidden;">
+        <div class="prog-bar ${m.return_rate>=0?'bar-up':'bar-dn'}" style="width:${w}%;"></div>
+      </div>
+      <div class="${rCls(m.return_rate)}" style="font-size:12px;min-width:46px;text-align:right;">${pct(m.return_rate)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderNotices(members, picks) {
+  const items = [];
+  const missing = members.filter(m => !picks.find(p => p.member_id === m.id));
+  if (missing.length) items.push(`<div class="notice"><div class="nd nd-warn"></div>${missing.map(m=>m.name).join(', ')}님 탑픽 미제출</div>`);
+  members.filter(m => m.return_rate < 0).forEach(m =>
+    items.push(`<div class="notice"><div class="nd nd-info"></div>${m.name}님 누적 ${pct(m.return_rate)} · 손실 중</div>`)
+  );
+  document.getElementById('notices').innerHTML = items.length
+    ? items.join('') : '<div class="notice"><div class="nd nd-ok"></div>특이사항 없음</div>';
+}
+
+function renderTradesTable(trades) {
+  const tbody = document.getElementById('tradesTbody');
+  if (!trades.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">매매 내역이 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = trades.map(t => {
+    const d = new Date(t.traded_at);
+    const ds = `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    return `<tr>
+      <td class="muted">${ds}</td>
+      <td>${t.members?.name||'-'}</td>
+      <td style="font-weight:500;">${t.stock_name}</td>
+      <td>${t.trade_type==='buy'?'<span class="badge b-buy">매수</span>':'<span class="badge b-sell">매도</span>'}</td>
+      <td>${won(t.price)}</td>
+      <td>${t.quantity}주</td>
+      <td>${won(t.price*t.quantity)}</td>
+    </tr>`;
+  }).join('');
+}
+
+init();
+</script>
 </body>
 </html>

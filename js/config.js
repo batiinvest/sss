@@ -5,6 +5,19 @@
 // ── 펀드 설정
 const BASE_AMOUNT = 500000;    // 1인당 초기 기준금액 (원) — 변경 시 여기만 수정
 
+// 관리자 이메일 목록 — 사용자 관리(추가/수정/탈퇴) 권한
+// 로그인 시 사용하는 이메일 또는 "아이디@study.local" 형식
+const ADMIN_EMAILS = [
+  'batiinvestment@gmail.com',       // 예시 — 실제 관리자 이메일로 변경
+];
+
+// 현재 로그인 유저가 관리자인지 확인
+async function isAdmin() {
+  const { data } = await sb.auth.getSession();
+  const email = data?.session?.user?.email || '';
+  return ADMIN_EMAILS.includes(email);
+}
+
 const SUPABASE_URL  = 'https://xqqrxmxjvvzxcfxmqfks.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_M6XoN8lfV6_KEZ72yQ8OQQ_8tqo_nx2';
 

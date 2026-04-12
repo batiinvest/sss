@@ -39,8 +39,11 @@
         <div class="page-title">사용자 관리</div>
         <div class="updated">참여자 추가 · 정보 수정 · 탈퇴 처리</div>
       </div>
-      <button class="btn btn-primary" onclick="openForm()">+ 참여자 추가</button>
+      <button class="btn btn-primary" id="addMemberBtn" onclick="openForm()">+ 참여자 추가</button>
     </div>
+
+    <!-- 관리자 전용 안내 배너 (비관리자에게만 표시) -->
+    <div id="adminBanner" style="display:none;background:#faeeda;border:0.5px solid #f0c070;border-radius:var(--r-md);padding:10px 14px;margin-bottom:1.25rem;font-size:13px;color:#633806;align-items:center;gap:8px;"></div>
 
     <!-- 추가/수정 폼 -->
     <div id="memberForm" class="card" style="display:none;margin-bottom:1.25rem;">
@@ -128,10 +131,29 @@ let members = [];
 let allPicks = [];
 let settlements = [];
 
+let currentUserIsAdmin = false;
+
 async function init() {
   await requireAuth();
   checkDBConnection();
+  currentUserIsAdmin = await isAdmin();
   await loadData();
+  applyAdminUI();
+}
+
+function applyAdminUI() {
+  // 비관리자면 추가 버튼 숨김 + 안내 배너 표시
+  const addBtn = document.getElementById('addMemberBtn');
+  const banner = document.getElementById('adminBanner');
+  if (!currentUserIsAdmin) {
+    if (addBtn) addBtn.style.display = 'none';
+    if (banner) {
+      banner.style.display = 'flex';
+      banner.textContent = '👁 읽기 전용 모드 — 관리자만 참여자를 추가·수정·탈퇴할 수 있습니다.';
+    }
+  } else {
+    if (banner) banner.style.display = 'none';
+  }
 }
 
 async function loadData() {
@@ -169,8 +191,8 @@ function renderMembers() {
       <td class="muted" style="font-size:12px;">${m.note || '-'}</td>
       <td>
         <div style="display:flex;gap:6px;">
-          <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="editMember('${m.id}')">수정</button>
-          <button class="btn" style="font-size:11px;padding:3px 10px;color:var(--up);border-color:var(--up);" onclick="confirmDeactivate('${m.id}','${m.name}')">탈퇴</button>
+          ${currentUserIsAdmin ? `<button class="btn" style="font-size:11px;padding:3px 10px;" onclick="editMember('${m.id}')">수정</button>` : ''}
+          ${currentUserIsAdmin ? `<button class="btn" style="font-size:11px;padding:3px 10px;color:var(--up);border-color:var(--up);" onclick="confirmDeactivate('${m.id}','${m.name}')">탈퇴</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -207,6 +229,7 @@ function renderSummaryCards() {
 }
 
 function openForm(prefill = {}) {
+  if (!currentUserIsAdmin) { toast('관리자만 추가/수정할 수 있습니다.'); return; }
   editingMemberId = prefill.id || null;  // 전역 변수에 저장
   document.getElementById('formTitle').textContent = editingMemberId ? '참여자 수정' : '참여자 추가';
   document.getElementById('f-name').value   = prefill.name        || '';
@@ -231,6 +254,7 @@ function editMember(id) {
 }
 
 async function saveMember() {
+  if (!currentUserIsAdmin) { toast('관리자만 저장할 수 있습니다.'); return; }
   const name   = document.getElementById('f-name').value.trim();
   const email  = document.getElementById('f-email').value.trim() || null;
   const base   = parseInt(document.getElementById('f-base').value) || (typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000);
@@ -275,6 +299,7 @@ function confirmDeactivate(id, name) {
 }
 
 async function doDeactivate(id, name) {
+  if (!currentUserIsAdmin) { toast('관리자만 탈퇴 처리할 수 있습니다.'); return; }
   try {
     await deactivateMember(id);
     toast(`${name}님 탈퇴 처리 완료`);

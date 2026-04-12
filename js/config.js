@@ -25,15 +25,28 @@ async function getCurrentMember() {
   const { data } = await sb.auth.getSession();
   const email = data?.session?.user?.email;
   if (!email) { _currentMember = null; return null; }
-  const { data: member } = await sb.from('members')
+
+  // 1차: auth 이메일로 직접 조회
+  let { data: member } = await sb.from('members')
     .select('*').eq('email', email).maybeSingle();
+
+  // 2차: @study.local 제거 후 실제 이메일로 재조회
+  // (아이디만 입력한 경우 batiinvestment@study.local 형태)
+  if (!member && email.endsWith('@study.local')) {
+    const userId = email.replace('@study.local', '');
+    // members 테이블에서 이메일에 해당 userId가 포함된 경우 조회
+    const { data: m2 } = await sb.from('members')
+      .select('*').ilike('email', userId + '@%').maybeSingle();
+    member = m2;
+  }
+
+  // 3차: auth user id(uid)로도 조회 시도 (향후 uid 컬럼 추가 시)
   _currentMember = member || null;
   return _currentMember;
 }
 
 const SUPABASE_URL  = 'https://xqqrxmxjvvzxcfxmqfks.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_M6XoN8lfV6_KEZ72yQ8OQQ_8tqo_nx2';
-
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);

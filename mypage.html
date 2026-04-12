@@ -78,6 +78,8 @@
         <button class="btn" onclick="closeEditForm()" style="font-size:12px;">닫기</button>
       </div>
       <div class="form-section">
+        <!-- 프로필 수정 -->
+        <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;letter-spacing:0.05em;">기본 정보</div>
         <div class="form-row">
           <div class="form-group">
             <label>이름</label>
@@ -92,9 +94,28 @@
           <label>메모</label>
           <input type="text" id="edit-note" placeholder="투자 스타일, 메모 등" />
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <button class="btn" onclick="closeEditForm()">취소</button>
-          <button class="btn btn-primary" onclick="saveProfile()">저장</button>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:1.25rem;">
+          <button class="btn btn-primary" onclick="saveProfile()">프로필 저장</button>
+        </div>
+
+        <!-- 비밀번호 변경 -->
+        <div style="border-top:0.5px solid var(--border);padding-top:1rem;">
+          <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;letter-spacing:0.05em;">비밀번호 변경</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>새 비밀번호</label>
+              <input type="password" id="edit-pw" placeholder="새 비밀번호 (6자 이상)" />
+            </div>
+            <div class="form-group">
+              <label>비밀번호 확인</label>
+              <input type="password" id="edit-pw2" placeholder="비밀번호 재입력" />
+            </div>
+          </div>
+          <div id="pwMsg" style="font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;">
+            <button class="btn" onclick="closeEditForm()">닫기</button>
+            <button class="btn btn-primary" onclick="changePassword()">비밀번호 변경</button>
+          </div>
         </div>
       </div>
     </div>
@@ -433,6 +454,31 @@ function openEditForm() {
 }
 function closeEditForm() {
   document.getElementById('editForm').style.display = 'none';
+  document.getElementById('edit-pw').value  = '';
+  document.getElementById('edit-pw2').value = '';
+  document.getElementById('pwMsg').textContent = '';
+}
+
+async function changePassword() {
+  const pw  = document.getElementById('edit-pw').value;
+  const pw2 = document.getElementById('edit-pw2').value;
+  const msg = document.getElementById('pwMsg');
+
+  if (!pw) { msg.style.color='#a32d2d'; msg.textContent='새 비밀번호를 입력하세요.'; return; }
+  if (pw.length < 6) { msg.style.color='#a32d2d'; msg.textContent='비밀번호는 6자 이상이어야 합니다.'; return; }
+  if (pw !== pw2) { msg.style.color='#a32d2d'; msg.textContent='비밀번호가 일치하지 않습니다.'; return; }
+
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if (error) {
+    msg.style.color = '#a32d2d';
+    msg.textContent = '변경 실패: ' + error.message;
+  } else {
+    msg.style.color = '#0f6e56';
+    msg.textContent = '✅ 비밀번호가 변경되었습니다.';
+    document.getElementById('edit-pw').value  = '';
+    document.getElementById('edit-pw2').value = '';
+    setTimeout(() => { msg.textContent = ''; }, 3000);
+  }
 }
 
 async function saveProfile() {

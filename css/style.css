@@ -339,3 +339,7 @@ textarea { resize: vertical; min-height: 72px; }
   table { min-width: 420px; font-size: 12px; }
   th, td { padding: 7px 6px; }
 }
+
+/* ── 권한별 메뉴 ── */
+.nav-admin-item { display: none !important; }
+.nav-admin-item.visible { display: flex !important; }

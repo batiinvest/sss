@@ -1,18 +1,22 @@
-name: 탑픽 현재가 즉시 업데이트 (수동)
+name: 탑픽 현재가 업데이트 (장중 자동)
 
 on:
-  workflow_dispatch:   # 대시보드 "현재가 갱신" 버튼에서 트리거
+  schedule:
+    - cron: '0 1 * * 1-5'    # KST 10:00 (UTC 01:00)
+    - cron: '0 4 * * 1-5'    # KST 13:00 (UTC 04:00)
+    - cron: '30 6 * * 1-5'   # KST 15:30 장 마감 직전 (UTC 06:30)
+  workflow_dispatch:           # 수동 실행 / 대시보드 버튼
 
 jobs:
-  refresh-picks:
+  update-picks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
       - name: 패키지 설치
-        run: pip install finance-datareader -q
+        run: pip install finance-datareader requests -q
 
-      - name: 탑픽 즉시 업데이트
+      - name: 탑픽 종목 현재가 업데이트
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -52,7 +56,7 @@ jobs:
             with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
               r.read()
 
-          # 보유 탑픽 조회
+          # 1. 현재 보유 중인 탑픽 종목 코드 조회 (status = hold)
           picks = sb_get(
             '/rest/v1/picks_with_trades'
             '?select=stock_code,stock_name,market'
@@ -61,21 +65,23 @@ jobs:
           )
 
           if not picks:
-            print('보유 중인 탑픽 없음')
+            print('보유 중인 탑픽 없음 — 종료')
             exit(0)
 
+          # 중복 제거
           code_map = {}
           for p in picks:
             code = p.get('stock_code')
             if code:
               code_map[code] = p
 
-          codes = list(code_map.keys())
-          print(f'즉시 업데이트 대상: {len(codes)}개 → {codes}')
+          codes  = list(code_map.keys())
+          print(f'탑픽 종목: {len(codes)}개 → {codes}')
 
           now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-          rows = []
 
+          # 2. KRX 전체 시세에서 해당 종목만 추출
+          rows = []
           for market_name, df in [('KOSPI', fdr.StockListing('KOSPI')),
                                    ('KOSDAQ', fdr.StockListing('KOSDAQ'))]:
             for _, row in df.iterrows():
@@ -108,9 +114,11 @@ jobs:
               })
               print(f'  {code} {code_map[code].get("stock_name")} → {price:,}원 ({change_rate:+.2f}%)')
 
-          if rows:
-            sb_upsert(rows)
-            print(f'✅ {len(rows)}개 즉시 업데이트 완료')
-          else:
+          if not rows:
             print('업데이트할 가격 데이터 없음')
+            exit(0)
+
+          # 3. Supabase 업데이트
+          sb_upsert(rows)
+          print(f'✅ 탑픽 {len(rows)}개 업데이트 완료')
           PYEOF

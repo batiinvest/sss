@@ -1,14 +1,15 @@
-name: 주식 현재가 자동 업데이트 (전종목 · 1일 1회)
+name: 전종목 현재가 업데이트 (장 마감)
 
 on:
   schedule:
-    - cron: '10 7 * * 1-5'   # 평일 KST 16:10 장 마감 후 1회
-  workflow_dispatch:
+    - cron: '10 7 * * 1-5'   # KST 16:10 장 마감 후 (UTC 07:10)
+  workflow_dispatch:           # 수동 실행 가능
 
 jobs:
   update-prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+
     steps:
       - name: 패키지 설치
         run: pip install finance-datareader -q
@@ -34,7 +35,7 @@ jobs:
             'Prefer': 'resolution=merge-duplicates',
           }
 
-          def supabase_upsert_batch(rows):
+          def upsert_batch(rows):
             data = json.dumps(rows).encode()
             req = urllib.request.Request(
               SUPABASE_URL + '/rest/v1/stock_prices',
@@ -42,7 +43,6 @@ jobs:
             )
             with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
               r.read()
-              return r.status
 
           now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
 
@@ -52,37 +52,26 @@ jobs:
           print(f'KOSPI: {len(kospi)}개, KOSDAQ: {len(kosdaq)}개')
 
           rows = []
-          for df, market in [(kospi,'KOSPI'), (kosdaq,'KOSDAQ')]:
+          for df, market in [(kospi, 'KOSPI'), (kosdaq, 'KOSDAQ')]:
             for _, row in df.iterrows():
-              code = str(row.get('Code','')).strip().zfill(6)
-              name = str(row.get('Name','')).strip()
+              code = str(row.get('Code', '')).strip().zfill(6)
+              name = str(row.get('Name', '')).strip()
               if not code or not name or code == '000000' or name == 'nan':
                 continue
-
-              price = 0
               try:
-                v = row.get('Close', 0)
-                if v and float(v) > 0:
-                  price = int(float(v))
-              except: pass
-
+                price = int(float(row.get('Close', 0) or 0))
+              except:
+                price = 0
               if price == 0:
                 continue
-
-              market_cap = None
               try:
-                v = row.get('Marcap', 0)
-                if v and float(v) > 0:
-                  market_cap = int(float(v) // 100_000_000)
-              except: pass
-
-              change_rate = 0.0
+                market_cap = int(float(row.get('Marcap', 0) or 0) // 100_000_000) or None
+              except:
+                market_cap = None
               try:
-                v = row.get('ChagesRatio', 0)
-                if v:
-                  change_rate = round(float(v), 2)
-              except: pass
-
+                change_rate = round(float(row.get('ChagesRatio', 0) or 0), 2)
+              except:
+                change_rate = 0.0
               rows.append({
                 'stock_code':  code,
                 'stock_name':  name,
@@ -93,19 +82,20 @@ jobs:
                 'updated_at':  now_iso,
               })
 
-          print(f'현재가 있는 종목: {len(rows)}개')
+          print(f'업데이트 대상: {len(rows)}개')
 
           BATCH = 100
           saved = 0
           for i in range(0, len(rows), BATCH):
+            batch = rows[i:i+BATCH]
             try:
-              supabase_upsert_batch(rows[i:i+BATCH])
-              saved += len(rows[i:i+BATCH])
+              upsert_batch(batch)
+              saved += len(batch)
               if (i // BATCH) % 20 == 0:
                 print(f'  저장: {saved}/{len(rows)}')
             except Exception as e:
               print(f'  배치 오류: {e}')
             time.sleep(0.05)
 
-          print(f'✅ 완료: {saved}개 업데이트')
+          print(f'✅ 전종목 업데이트 완료: {saved}개')
           PYEOF

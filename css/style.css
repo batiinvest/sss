@@ -1,0 +1,341 @@
+/* ============================================================
+   공통 스타일 v3 - 모바일 반응형 개선
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #f5f5f4;
+  --surface:  #ffffff;
+  --border:   rgba(0,0,0,0.10);
+  --border2:  rgba(0,0,0,0.18);
+  --text:     #1a1a1a;
+  --muted:    #6b7280;
+  --hint:     #9ca3af;
+  --up:       #a32d2d;
+  --upbg:     #fdecea;
+  --dn:       #0c447c;
+  --dnbg:     #e6f1fb;
+  --green:    #0f6e56;
+  --greenbg:  #eaf3de;
+  --amber:    #854f0b;
+  --amberbg:  #faeeda;
+  --accent:   #185fa5;
+  --r-md:     8px;
+  --r-lg:     12px;
+  --sidebar-w: 200px;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Layout ── */
+.layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 0.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 1.5rem;
+  overflow-x: hidden;
+}
+
+/* ── Sidebar 내부 ── */
+.logo {
+  padding: 1.1rem 1.25rem;
+  font-size: 15px;
+  font-weight: 500;
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.nav-item {
+  padding: 9px 1.25rem;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.nav-item:hover  { background: var(--bg); color: var(--text); }
+.nav-item.active { background: var(--bg); color: var(--text); font-weight: 500; }
+
+.nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+.nav-dot.g { background: #1d9e75; }
+.nav-dot.r { background: #a32d2d; }
+.nav-dot.a { background: #ba7517; }
+
+.sidebar-spacer  { flex: 1; }
+.sidebar-footer  { padding: 1rem 1.25rem; border-top: 0.5px solid var(--border); flex-shrink: 0; }
+
+/* ── 햄버거 버튼 (모바일에서만 표시) ── */
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  flex-direction: column;
+  gap: 5px;
+  margin-left: auto;
+}
+.hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* ── 모바일 네비 드로어 ── */
+.nav-drawer {
+  display: none;
+}
+
+/* ── Topbar ── */
+.topbar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px; }
+.page-title { font-size: 18px; font-weight: 500; }
+.updated    { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.btn-row    { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+
+/* ── Buttons ── */
+.btn { padding: 7px 14px; border-radius: var(--r-md); font-size: 13px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--border2); background: var(--surface); color: var(--text); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.btn:hover         { background: var(--bg); }
+.btn-primary       { background: var(--accent); color: #b5d4f4; border-color: var(--accent); }
+.btn-primary:hover { background: #0c447c; color: #b5d4f4; }
+.btn-danger        { background: #a32d2d; color: #fdecea; border-color: #a32d2d; }
+
+/* ── Metric cards ── */
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+.metric      { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 1rem 1.1rem; }
+.metric-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.metric-value { font-size: 22px; font-weight: 500; line-height: 1.2; }
+.metric-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* ── Cards ── */
+.card      { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 1rem 1.25rem; }
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 8px; }
+.card-title { font-size: 14px; font-weight: 500; }
+
+/* ── Two-column grid ── */
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; margin-bottom: 1.25rem; }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-wrap::-webkit-scrollbar { height: 4px; }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+table       { width: 100%; border-collapse: collapse; font-size: 13px; }
+th  { font-size: 11px; font-weight: 500; color: var(--muted); text-align: left; padding: 6px 8px; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+td  { padding: 9px 8px; border-bottom: 0.5px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--bg); }
+
+/* ── Badges ── */
+.badge { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: var(--r-md); font-weight: 500; white-space: nowrap; }
+.b-up   { background: var(--upbg);    color: var(--up); }
+.b-dn   { background: var(--dnbg);    color: var(--dn); }
+.b-hold { background: var(--bg);      color: var(--muted); border: 0.5px solid var(--border); }
+.b-sold { background: var(--greenbg); color: var(--green); }
+.b-warn { background: var(--amberbg); color: var(--amber); }
+.b-buy  { background: var(--upbg);    color: var(--up); }
+.b-sell { background: var(--dnbg);    color: var(--dn); }
+
+/* ── Avatar ── */
+.avatar { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; flex-shrink: 0; }
+.av1 { background: #e8f4fd; color: #0c447c; }
+.av2 { background: #eaf3de; color: #27500a; }
+.av3 { background: #faeeda; color: #633806; }
+.av4 { background: #eeedfe; color: #3c3489; }
+.flex { display: flex; align-items: center; gap: 6px; }
+
+.up    { color: var(--up);    font-weight: 500; }
+.dn    { color: var(--dn);    font-weight: 500; }
+.muted { color: var(--muted); }
+
+/* ── Tabs ── */
+.tab-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.tab { font-size: 12px; padding: 4px 10px; border-radius: var(--r-md); border: 0.5px solid var(--border); color: var(--muted); cursor: pointer; background: transparent; }
+.tab:hover  { background: var(--bg); }
+.tab.active { background: var(--bg); color: var(--text); font-weight: 500; border-color: var(--border2); }
+
+/* ── Forms ── */
+.form-section { display: flex; flex-direction: column; gap: 14px; }
+.form-row     { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.form-group   { display: flex; flex-direction: column; gap: 5px; }
+label         { font-size: 12px; color: var(--muted); font-weight: 500; }
+input, select, textarea { padding: 8px 10px; border: 0.5px solid var(--border2); border-radius: var(--r-md); font-size: 13px; background: var(--surface); color: var(--text); width: 100%; outline: none; font-family: inherit; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(24,95,165,0.12); }
+textarea { resize: vertical; min-height: 72px; }
+
+/* ── Notices ── */
+.notice-list { display: flex; flex-direction: column; gap: 6px; }
+.notice { padding: 8px 10px; border-radius: var(--r-md); border: 0.5px solid var(--border); font-size: 12px; display: flex; align-items: center; gap: 8px; }
+.nd      { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.nd-warn { background: #ba7517; }
+.nd-info { background: #185fa5; }
+.nd-ok   { background: #1d9e75; }
+
+/* ── Progress ── */
+.prog-track { height: 5px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.prog-bar   { height: 100%; border-radius: 4px; }
+.bar-up { background: #1d9e75; }
+.bar-dn { background: #a32d2d; }
+
+/* ── DB 배너 ── */
+.db-banner { padding: 10px 14px; border-radius: var(--r-md); font-size: 13px; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 8px; }
+.db-banner.ok      { background: var(--greenbg); color: var(--green); border: 0.5px solid #9fe1cb; }
+.db-banner.error   { background: var(--upbg);    color: var(--up);    border: 0.5px solid #f0997b; }
+.db-banner.pending { background: var(--bg);      color: var(--muted); border: 0.5px solid var(--border); }
+
+/* ── Toast ── */
+.toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a1a; color: white; padding: 10px 18px; border-radius: var(--r-lg); font-size: 13px; z-index: 1000; opacity: 0; transition: opacity 0.2s; pointer-events: none; max-width: calc(100vw - 48px); }
+.toast.show { opacity: 1; }
+
+/* ── Auth overlay ── */
+.auth-overlay { position: fixed; inset: 0; background: rgba(245,245,244,0.95); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 1rem; }
+.auth-box     { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 2rem; width: 100%; max-width: 320px; }
+.auth-title   { font-size: 16px; font-weight: 500; margin-bottom: 1.25rem; text-align: center; }
+
+/* ============================================================
+   모바일 반응형 (768px 이하)
+   ============================================================ */
+@media (max-width: 768px) {
+
+  /* ── 레이아웃 ── */
+  .layout { flex-direction: column; }
+  .main   { padding: 1rem; }
+
+  /* ── 사이드바 → 상단 고정 헤더 ── */
+  .sidebar {
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 0.75rem;
+    overflow-y: visible;
+    overflow-x: hidden;
+  }
+
+  /* ── 로고 ── */
+  .logo {
+    padding: 0.75rem 0;
+    border-bottom: none;
+    flex: 1;
+    font-size: 14px;
+  }
+
+  /* ── 햄버거 버튼 표시 ── */
+  .hamburger { display: flex; }
+
+  /* ── 기본 상태에서 nav 메뉴 숨김 ── */
+  .sidebar .nav-item,
+  .sidebar-spacer,
+  .sidebar-footer { display: none; }
+
+  /* ── 드로어 열렸을 때 ── */
+  .sidebar.nav-open {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    height: auto;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar.nav-open .logo {
+    padding: 0.75rem 1rem;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .sidebar.nav-open .nav-item {
+    display: flex;
+    padding: 12px 1.25rem;
+    font-size: 14px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .sidebar.nav-open .nav-item:last-of-type { border-bottom: none; }
+  .sidebar.nav-open .sidebar-footer {
+    display: block;
+    padding: 0.75rem 1.25rem;
+    border-top: 0.5px solid var(--border);
+  }
+  .sidebar.nav-open .sidebar-spacer { display: none; }
+  .sidebar.nav-open .hamburger { position: absolute; top: 0.75rem; right: 0.75rem; }
+
+  /* ── Metric grid: 2열 ── */
+  .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+  .metric-value { font-size: 18px; }
+
+  /* ── Grid-2: 1열 ── */
+  .grid-2 { grid-template-columns: 1fr; }
+
+  /* ── Form row: 1열 ── */
+  .form-row { grid-template-columns: 1fr; }
+
+  /* ── Topbar: 버튼 아래로 ── */
+  .topbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .btn-row { width: 100%; justify-content: flex-end; }
+
+  /* ── 테이블: 가로 스크롤 + 최소 너비 ── */
+  .table-wrap { margin: 0 -1rem; padding: 0 1rem; width: calc(100% + 2rem); }
+  table { min-width: 500px; }
+
+  /* ── 카드 패딩 축소 ── */
+  .card { padding: 0.875rem 1rem; }
+  .card-head { margin-bottom: 0.75rem; }
+
+  /* ── Page title ── */
+  .page-title { font-size: 16px; }
+}
+
+/* ============================================================
+   소형 모바일 (480px 이하)
+   ============================================================ */
+@media (max-width: 480px) {
+  .metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }
+  .metric { padding: 0.75rem; }
+  .metric-value { font-size: 16px; }
+  .metric-label { font-size: 11px; }
+
+  .btn { padding: 6px 10px; font-size: 12px; }
+  .btn-row { gap: 6px; }
+
+  table { min-width: 420px; font-size: 12px; }
+  th, td { padding: 7px 6px; }
+}

@@ -1,0 +1,124 @@
+name: 탑픽 종목 현재가 즉시 업데이트
+
+on:
+  workflow_dispatch:
+
+jobs:
+  refresh-picks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 패키지 설치
+        run: pip install finance-datareader -q
+
+      - name: 탑픽 종목 현재가 업데이트
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - << 'PYEOF'
+          import json, os, ssl, time, datetime
+          import urllib.request
+          import FinanceDataReader as fdr
+
+          SUPABASE_URL = os.environ['SUPABASE_URL']
+          SERVICE_KEY  = os.environ['SUPABASE_SERVICE_KEY']
+          ctx = ssl.create_default_context()
+
+          sb_headers = {
+            'apikey': SERVICE_KEY,
+            'Authorization': 'Bearer ' + SERVICE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates',
+          }
+
+          def supabase_get(path):
+            req = urllib.request.Request(SUPABASE_URL + path, headers=sb_headers)
+            with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+              return json.loads(r.read())
+
+          def supabase_upsert(rows):
+            data = json.dumps(rows).encode()
+            req = urllib.request.Request(
+              SUPABASE_URL + '/rest/v1/stock_prices',
+              data=data, headers=sb_headers, method='POST'
+            )
+            with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+              r.read()
+              return r.status
+
+          # 스터디에서 언급된 종목 = 전체 picks 테이블의 고유 종목코드
+          picks = supabase_get(
+            '/rest/v1/picks?select=stock_code,stock_name,market&stock_code=not.is.null'
+          )
+
+          # 중복 제거
+          codes = {}
+          for p in picks:
+            code = p.get('stock_code','').strip()
+            if code:
+              codes[code] = {
+                'name':   p.get('stock_name',''),
+                'market': p.get('market','KOSPI'),
+              }
+
+          if not codes:
+            print('조회할 종목 없음')
+            exit(0)
+
+          print(f'탑픽 종목 {len(codes)}개: {list(codes.keys())}')
+
+          # KRX 전종목 시세에서 해당 종목만 추출
+          now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+          print('KRX 시세 로딩...')
+          kospi  = fdr.StockListing('KOSPI')
+          kosdaq = fdr.StockListing('KOSDAQ')
+
+          rows = []
+          for df, market in [(kospi,'KOSPI'), (kosdaq,'KOSDAQ')]:
+            for _, row in df.iterrows():
+              code = str(row.get('Code','')).strip().zfill(6)
+              if code not in codes:
+                continue
+
+              price = 0
+              try:
+                v = row.get('Close', 0)
+                if v and float(v) > 0:
+                  price = int(float(v))
+              except: pass
+
+              market_cap = None
+              try:
+                v = row.get('Marcap', 0)
+                if v and float(v) > 0:
+                  market_cap = int(float(v) // 100_000_000)
+              except: pass
+
+              change_rate = 0.0
+              try:
+                v = row.get('ChagesRatio', 0)
+                if v:
+                  change_rate = round(float(v), 2)
+              except: pass
+
+              info = codes[code]
+              rows.append({
+                'stock_code':  code,
+                'stock_name':  info['name'] or str(row.get('Name','')),
+                'market':      info['market'],
+                'price':       price,
+                'change_rate': change_rate,
+                'market_cap':  market_cap,
+                'updated_at':  now_iso,
+              })
+              print(f'  {code} {info["name"]}: {price:,}원 ({change_rate:+.2f}%)')
+
+          if not rows:
+            print('가격 데이터 없음')
+            exit(1)
+
+          status = supabase_upsert(rows)
+          print(f'\n✅ {len(rows)}개 업데이트 완료 (HTTP {status})')
+          PYEOF

@@ -1,0 +1,112 @@
+name: 전종목 초기 적재 (최초 1회 실행)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  init-stocks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 패키지 설치
+        run: pip install finance-datareader -q
+
+      - name: KOSPI + KOSDAQ 전종목 DB 저장
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python3 - << 'PYEOF'
+          import json, os, ssl, time, datetime
+          import urllib.request
+          import FinanceDataReader as fdr
+
+          SUPABASE_URL = os.environ['SUPABASE_URL']
+          SERVICE_KEY  = os.environ['SUPABASE_SERVICE_KEY']
+          ctx = ssl.create_default_context()
+
+          sb_headers = {
+            'apikey': SERVICE_KEY,
+            'Authorization': 'Bearer ' + SERVICE_KEY,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates',
+          }
+
+          def supabase_upsert_batch(rows):
+            data = json.dumps(rows).encode()
+            req = urllib.request.Request(
+              SUPABASE_URL + '/rest/v1/stock_prices',
+              data=data, headers=sb_headers, method='POST'
+            )
+            with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+              r.read()
+              return r.status
+
+          now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+          print('전종목 리스트 로딩...')
+          kospi  = fdr.StockListing('KOSPI')
+          kosdaq = fdr.StockListing('KOSDAQ')
+          print(f'KOSPI: {len(kospi)}개, KOSDAQ: {len(kosdaq)}개')
+
+          all_stocks = []
+          for df, market in [(kospi, 'KOSPI'), (kosdaq, 'KOSDAQ')]:
+            for _, row in df.iterrows():
+              code = str(row.get('Code', '')).strip().zfill(6)
+              name = str(row.get('Name', '')).strip()
+              if not code or not name or code == '000000' or name == 'nan':
+                continue
+
+              # 현재가
+              price = 0
+              try:
+                v = row.get('Close', 0)
+                if v and float(v) > 0:
+                  price = int(float(v))
+              except: pass
+
+              # 시가총액 (원 단위 → 억원, 항상 // 100_000_000)
+              market_cap = None
+              try:
+                v = row.get('Marcap', 0)
+                if v and float(v) > 0:
+                  market_cap = int(float(v) // 100_000_000)
+              except: pass
+
+              # 등락률
+              change_rate = 0.0
+              try:
+                v = row.get('ChagesRatio', 0)
+                if v:
+                  change_rate = round(float(v), 2)
+              except: pass
+
+              all_stocks.append({
+                'stock_code':  code,
+                'stock_name':  name,
+                'market':      market,
+                'price':       price,
+                'change_rate': change_rate,
+                'market_cap':  market_cap,
+                'updated_at':  now_iso if price > 0 else '2000-01-01T00:00:00Z',
+              })
+
+          has_price = sum(1 for s in all_stocks if s['price'] > 0)
+          print(f'총 {len(all_stocks)}개 (현재가 있음: {has_price}개)')
+
+          # 100개씩 배치 저장
+          BATCH = 100
+          saved = 0
+          for i in range(0, len(all_stocks), BATCH):
+            batch = all_stocks[i:i+BATCH]
+            try:
+              supabase_upsert_batch(batch)
+              saved += len(batch)
+              if (i // BATCH) % 10 == 0:
+                print(f'  진행: {saved}/{len(all_stocks)} ({saved/len(all_stocks)*100:.0f}%)')
+            except Exception as e:
+              print(f'  배치 오류: {e}')
+            time.sleep(0.05)
+
+          print(f'✅ 완료: {saved}/{len(all_stocks)}개 저장')
+          PYEOF

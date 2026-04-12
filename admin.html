@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 펀드</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar">
+    <a href="index.html" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="22" height="22" rx="6" fill="#185fa5"/>
+        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
+        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      SSS
+    </a>
+    <a href="index.html" class="nav-item"><div class="nav-dot g"></div>대시보드</a>
+    <a href="picks.html" class="nav-item"><div class="nav-dot"></div>탑픽 관리</a>
+    <a href="trade.html" class="nav-item"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="members.html" class="nav-item"><div class="nav-dot"></div>참여자 현황</a>
+    <a href="settle.html" class="nav-item"><div class="nav-dot a"></div>결산 관리</a>
+    <a href="schedule.html" class="nav-item"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="presentations.html" class="nav-item"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="admin.html" class="nav-item active"><div class="nav-dot"></div>사용자 관리</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">사용자 관리</div>
+        <div class="updated">참여자 추가 · 정보 수정 · 탈퇴 처리</div>
+      </div>
+      <button class="btn btn-primary" onclick="openForm()">+ 참여자 추가</button>
+    </div>
+
+    <!-- 추가/수정 폼 -->
+    <div id="memberForm" class="card" style="display:none;margin-bottom:1.25rem;">
+      <div class="card-head">
+        <div class="card-title" id="formTitle">참여자 추가</div>
+        <button class="btn" onclick="closeForm()" style="font-size:12px;">닫기</button>
+      </div>
+      <div class="form-section">
+        <div class="form-row">
+          <div class="form-group">
+            <label>이름 *</label>
+            <input type="text" id="f-name" placeholder="예: 홍길동" />
+          </div>
+          <div class="form-group">
+            <label>이메일</label>
+            <input type="email" id="f-email" placeholder="예: hong@email.com" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>기준금액 (원)</label>
+            <input type="number" id="f-base" value="500000" />
+          </div>
+          <div class="form-group">
+            <label>참여일</label>
+            <input type="date" id="f-joined" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>메모 (선택)</label>
+          <input type="text" id="f-note" placeholder="예: 2기 참여자" />
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn" onclick="closeForm()">취소</button>
+          <button class="btn btn-primary" id="saveBtn" onclick="saveMember()">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 참여자 목록 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">참여자 목록</div>
+        <div style="font-size:12px;color:var(--muted);" id="memberCountLabel">—</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>참여자</th><th>이메일</th><th>참여일</th>
+            <th>기준금액</th><th>누적 수익률</th><th>종목 수</th><th>메모</th>
+            <th style="width:130px;">작업</th>
+          </tr></thead>
+          <tbody id="membersTbody">
+            <tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:1.25rem;" id="summaryCards"></div>
+  </main>
+</div>
+
+<!-- 탈퇴 확인 모달 -->
+<div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:320px;border:0.5px solid var(--border);">
+    <div style="font-size:15px;font-weight:500;margin-bottom:8px;">참여자 탈퇴 처리</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;" id="confirmMsg"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-danger" id="confirmBtn">탈퇴 처리</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script>
+// 현재 수정 중인 멤버 ID를 전역 변수로 관리 (hidden input 대신)
+let editingMemberId = null;
+let members = [];
+let allPicks = [];
+let settlements = [];
+
+async function init() {
+  await requireAuth();
+  checkDBConnection();
+  await loadData();
+}
+
+async function loadData() {
+  [members, allPicks, settlements] = await Promise.all([
+    fetchMemberStats(),
+    fetchAllPicks(),
+    fetchSettlements()
+  ]);
+  renderMembers();
+  renderSummaryCards();
+}
+
+function renderMembers() {
+  document.getElementById('memberCountLabel').textContent = `총 ${members.length}명 활성`;
+  const tbody = document.getElementById('membersTbody');
+  if (!members.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">참여자가 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = members.map((m, i) => {
+    const pickCount = allPicks.filter(p => p.member_id === m.id).length;
+    const rCl = rCls(m.return_rate);
+    return `<tr>
+      <td>
+        <div class="flex">
+          <div class="avatar ${avCls[i%6]}" style="width:30px;height:30px;font-size:11px;">${m.name.slice(0,2)}</div>
+          <div style="font-weight:500;">${m.name}</div>
+        </div>
+      </td>
+      <td class="muted">${m.email || '-'}</td>
+      <td class="muted">${m.joined_at}</td>
+      <td style="font-weight:500;">${(m.base_amount/10000).toFixed(1)}만원</td>
+      <td class="${rCl}">${pct(m.return_rate)}</td>
+      <td>${pickCount}건</td>
+      <td class="muted" style="font-size:12px;">${m.note || '-'}</td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn" style="font-size:11px;padding:3px 10px;" onclick="editMember('${m.id}')">수정</button>
+          <button class="btn" style="font-size:11px;padding:3px 10px;color:var(--up);border-color:var(--up);" onclick="confirmDeactivate('${m.id}','${m.name}')">탈퇴</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSummaryCards() {
+  if (!members.length) return;
+  const sorted = [...members].sort((a,b) => b.return_rate - a.return_rate);
+  const best  = sorted[0];
+  const worst = sorted[sorted.length-1];
+  const avg   = (members.reduce((s,m) => s+m.return_rate,0)/members.length).toFixed(1);
+  const total = members.reduce((s,m) => s+m.base_amount, 0);
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">최고 수익률</div>
+      <div class="flex" style="gap:10px;">
+        <div class="avatar av1" style="width:32px;height:32px;font-size:12px;">${best.name.slice(0,2)}</div>
+        <div><div style="font-weight:500;">${best.name}</div><div class="up" style="font-size:18px;font-weight:500;">${pct(best.return_rate)}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">전체 평균</div>
+      <div style="font-size:28px;font-weight:500;" class="${rCls(avg)}">${pct(avg)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">총 ${(total/10000).toFixed(0)}만원 운용 중</div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">최저 수익률</div>
+      <div class="flex" style="gap:10px;">
+        <div class="avatar av3" style="width:32px;height:32px;font-size:12px;">${worst.name.slice(0,2)}</div>
+        <div><div style="font-weight:500;">${worst.name}</div><div class="${rCls(worst.return_rate)}" style="font-size:18px;font-weight:500;">${pct(worst.return_rate)}</div></div>
+      </div>
+    </div>`;
+}
+
+function openForm(prefill = {}) {
+  editingMemberId = prefill.id || null;  // 전역 변수에 저장
+  document.getElementById('formTitle').textContent = editingMemberId ? '참여자 수정' : '참여자 추가';
+  document.getElementById('f-name').value   = prefill.name        || '';
+  document.getElementById('f-email').value  = prefill.email       || '';
+  document.getElementById('f-base').value   = prefill.base_amount || (typeof BASE_AMOUNT !== "undefined" ? BASE_AMOUNT : 500000);
+  document.getElementById('f-joined').value = prefill.joined_at   || new Date().toLocaleDateString('sv-SE');
+  document.getElementById('f-note').value   = prefill.note        || '';
+  document.getElementById('memberForm').style.display = 'block';
+  document.getElementById('f-name').focus();
+  // 폼 상단으로 스크롤
+  document.getElementById('memberForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeForm() {
+  editingMemberId = null;
+  document.getElementById('memberForm').style.display = 'none';
+}
+
+function editMember(id) {
+  const m = members.find(m => m.id === id);
+  if (m) openForm(m);
+}
+
+async function saveMember() {
+  const name   = document.getElementById('f-name').value.trim();
+  const email  = document.getElementById('f-email').value.trim() || null;
+  const base   = parseInt(document.getElementById('f-base').value) || (typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000);
+  const joined = document.getElementById('f-joined').value;
+  const note   = document.getElementById('f-note').value.trim() || null;
+
+  if (!name) { toast('이름을 입력하세요.'); return; }
+
+  document.getElementById('saveBtn').textContent = '저장 중...';
+  document.getElementById('saveBtn').disabled = true;
+
+  try {
+    if (editingMemberId) {
+      // 수정: ID를 명시적으로 전달
+      const { error } = await sb.from('members')
+        .update({ name, email, base_amount: base, joined_at: joined, note })
+        .eq('id', editingMemberId);
+      if (error) throw error;
+      toast(`${name}님 정보가 수정되었습니다.`);
+    } else {
+      // 추가
+      const { error } = await sb.from('members')
+        .insert({ name, email, base_amount: base, joined_at: joined, note });
+      if (error) throw error;
+      toast(`${name}님이 추가되었습니다!`);
+    }
+    closeForm();
+    await loadData();
+  } catch(e) {
+    toast('오류: ' + (e.message || '저장 실패'));
+  } finally {
+    document.getElementById('saveBtn').textContent = '저장';
+    document.getElementById('saveBtn').disabled = false;
+  }
+}
+
+function confirmDeactivate(id, name) {
+  document.getElementById('confirmMsg').textContent =
+    `${name}님을 탈퇴 처리합니다. 탈퇴 후에는 대시보드에 표시되지 않습니다. (데이터는 보존됩니다)`;
+  document.getElementById('confirmBtn').onclick = () => doDeactivate(id, name);
+  document.getElementById('confirmModal').style.display = 'flex';
+}
+
+async function doDeactivate(id, name) {
+  try {
+    await deactivateMember(id);
+    toast(`${name}님 탈퇴 처리 완료`);
+    closeModal();
+    await loadData();
+  } catch(e) { toast('오류: ' + e.message); }
+}
+
+function closeModal() {
+  document.getElementById('confirmModal').style.display = 'none';
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 펀드</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <a href="index.html" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="22" height="22" rx="6" fill="#185fa5"/>
+        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
+        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      SSS
+    </a>
+    <a href="index.html" class="nav-item"><div class="nav-dot g"></div>대시보드</a>
+    <a href="picks.html" class="nav-item"><div class="nav-dot"></div>탑픽 관리</a>
+    <a href="trade.html" class="nav-item"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="members.html" class="nav-item"><div class="nav-dot"></div>참여자 현황</a>
+    <a href="settle.html" class="nav-item active"><div class="nav-dot a"></div>결산 관리</a>
+    <a href="schedule.html" class="nav-item"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="presentations.html" class="nav-item"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="admin.html" class="nav-item"><div class="nav-dot"></div>사용자 관리</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">결산 관리</div>
+        <div class="updated">매도 입력 시 자동 결산 · 수익/손실 자동 계산</div>
+      </div>
+    </div>
+
+
+    <!-- 자동 결산 안내 -->
+    <div style="background:#e8f4fd;border:0.5px solid #b5d4f4;border-radius:var(--r-lg);padding:12px 16px;margin-bottom:1.25rem;font-size:13px;color:#0c447c;line-height:1.7;">
+      <strong>자동 결산</strong>: 매수/매도 페이지에서 매도를 입력하면 결산이 자동으로 생성됩니다.<br>
+      수수료는 거래금액의 0.3%로 자동 계산됩니다.
+    </div>
+
+    <!-- 연말 결산 섹션 -->
+    <div class="card" style="margin-bottom:1.25rem;" id="annualSection">
+      <div class="card-head">
+        <div>
+          <div class="card-title">연말 결산</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">1등 시상 후 나머지 균등 재배분</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAnnualForm()">+ 연말 결산 실행</button>
+      </div>
+
+      <!-- 연말 결산 폼 -->
+      <div id="annualForm" style="display:none;border-top:0.5px solid var(--border);padding-top:1rem;margin-top:0.5rem;">
+        <div class="form-section">
+          <div class="form-row">
+            <div class="form-group">
+              <label>결산 연도</label>
+              <input type="number" id="a-year" placeholder="예: 2025" min="2020" max="2099" />
+            </div>
+            <div class="form-group">
+              <label>시상금 (원) <span style="color:var(--muted);font-weight:400;">— 1등에게 지급할 금액</span></label>
+              <input type="number" id="a-prize" placeholder="예: 100000" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>메모</label>
+            <input type="text" id="a-note" placeholder="예: 2025년 연말 결산" />
+          </div>
+
+          <!-- 미리보기 -->
+          <div id="annualPreview" style="display:none;background:var(--bg);border-radius:var(--r-md);padding:1rem;">
+            <div style="font-size:13px;font-weight:500;margin-bottom:10px;">결산 미리보기</div>
+            <div id="annualPreviewBody"></div>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button class="btn" onclick="closeAnnualForm()">취소</button>
+            <button class="btn" onclick="calcAnnualPreview()">계산해보기</button>
+            <button class="btn btn-primary" id="annualConfirmBtn" style="display:none;" onclick="executeAnnualSettlement()">결산 확정</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 연말 결산 히스토리 -->
+      <div id="annualHistory" style="margin-top:1rem;">
+        <div class="muted" style="text-align:center;padding:1rem;font-size:13px;">불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 결산 내역 테이블 -->
+    <div class="card">
+      <div class="card-head"><div class="card-title">결산 내역</div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>결산일</th><th>참여자</th><th>종목</th>
+            <th>매수가</th><th>매도가</th><th>수수료</th>
+            <th>순손익</th><th>수익률</th><th>결산 후 기준금액</th>
+          </tr></thead>
+          <tbody id="settleTbody">
+            <tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script>
+let allSettles = [];
+
+async function init() {
+  await requireAuth();
+  checkDBConnection();
+
+  // 멤버 & 결산 내역 병렬 로드
+  [members, allSettles] = await Promise.all([
+    fetchMembers(),
+    fetchSettlements()
+  ]);
+
+  renderSettles(allSettles);
+  await loadAnnualHistory();
+}
+
+function renderSettles(settles) {
+  const tbody = document.getElementById('settleTbody');
+  if (!settles.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">결산 내역이 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = settles.map(s => {
+    const d = new Date(s.settled_at);
+    const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+    return `<tr>
+      <td class="muted">${ds}</td>
+      <td>${s.members?.name || '-'}</td>
+      <td style="font-weight:500;">${s.picks?.stock_name || '-'}</td>
+      <td>${won(s.buy_price)}</td>
+      <td>${won(s.sell_price)}</td>
+      <td class="muted">-${won(s.tax_fee)}</td>
+      <td class="${rCls(s.net_profit)}">${s.net_profit>=0?'+':''}${won(s.net_profit)}</td>
+      <td class="${rCls(s.return_rate)}">${pct(s.return_rate)}</td>
+      <td style="font-weight:500;">${won(s.new_base_amount)}</td>
+    </tr>`;
+  }).join('');
+}
+
+
+// ── 연말 결산 관련 함수들
+let members = [];
+let annualData = [];
+
+function openAnnualForm() {
+  const form = document.getElementById('annualForm');
+  form.style.display = 'block';
+  // 현재 연도 자동 입력
+  document.getElementById('a-year').value = new Date().getFullYear() - 1;
+  document.getElementById('annualPreview').style.display = 'none';
+  document.getElementById('annualConfirmBtn').style.display = 'none';
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeAnnualForm() {
+  document.getElementById('annualForm').style.display = 'none';
+}
+
+async function calcAnnualPreview() {
+  const year  = parseInt(document.getElementById('a-year').value);
+  const prize = parseInt(document.getElementById('a-prize').value) || 0;
+
+  if (!year) { toast('연도를 입력하세요.'); return; }
+  if (prize < 0) { toast('시상금은 0 이상이어야 합니다.'); return; }
+
+  // 현재 활성 멤버의 base_amount 합산
+  const activeMembers = members.filter(m => m.is_active);
+  if (!activeMembers.length) { toast('활성 멤버가 없습니다.'); return; }
+
+  const totalBefore = activeMembers.reduce((s, m) => s + (m.base_amount || 0), 0);
+
+  // 1등: base_amount가 가장 높은 멤버
+  const sorted = [...activeMembers].sort((a, b) => (b.base_amount || 0) - (a.base_amount || 0));
+  const winner = sorted[0];
+
+  // 재배분 계산
+  const totalAfter   = totalBefore - prize;
+  const newBase      = Math.floor(totalAfter / activeMembers.length);
+  const remainder    = totalAfter - newBase * activeMembers.length;  // 나머지 (버림)
+
+  // 미리보기 렌더링
+  const previewEl = document.getElementById('annualPreviewBody');
+  // 미리보기 렌더링 (DOM 방식으로 중첩 백틱 문제 회피)
+  const rows = sorted.map((m, i) => {
+    const initBase    = (typeof BASE_AMOUNT !== "undefined" ? BASE_AMOUNT : 500000);
+    const profit      = (m.base_amount || 0) - initBase;
+    const isWinner    = m.id === winner.id;
+    const profitStr   = (profit >= 0 ? '+' : '') + won(profit);
+    const profitCls   = profit >= 0 ? 'up' : 'dn';
+    const winnerStyle = isWinner ? 'background:var(--amberbg);' : '';
+    const prizeStr    = isWinner ? won(prize) : '—';
+    const prizeStyle  = isWinner ? 'color:var(--amber);font-weight:500;' : 'color:var(--muted)';
+    return '<tr style="' + winnerStyle + '">' +
+      '<td style="padding:8px;">' + (isWinner ? '🏆 ' : '') + '<strong>' + m.name + '</strong>' +
+        (isWinner ? '<span style="font-size:11px;color:var(--amber);margin-left:4px;">1등</span>' : '') +
+      '</td>' +
+      '<td style="text-align:right;padding:8px;">' + won(m.base_amount) + '</td>' +
+      '<td style="text-align:right;padding:8px;" class="' + profitCls + '">' + profitStr + '</td>' +
+      '<td style="text-align:right;padding:8px;' + prizeStyle + '">' + prizeStr + '</td>' +
+      '<td style="text-align:right;padding:8px;font-weight:500;color:var(--green);">' + won(newBase) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const remStr = remainder > 0
+    ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;text-align:right;">' +
+      '※ 나머지 ' + won(remainder) + ' 는 버림 처리</div>'
+    : '';
+
+  previewEl.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem;">' +
+      '<div class="metric" style="padding:0.75rem;">' +
+        '<div class="metric-label">총 펀드 규모</div>' +
+        '<div style="font-size:16px;font-weight:500;">' + won(totalBefore) + '</div>' +
+        '<div class="metric-sub">활성 ' + activeMembers.length + '명 합산</div>' +
+      '</div>' +
+      '<div class="metric" style="padding:0.75rem;">' +
+        '<div class="metric-label">시상금 (1등)</div>' +
+        '<div style="font-size:16px;font-weight:500;color:var(--amber);">' + won(prize) + '</div>' +
+        '<div class="metric-sub">' + winner.name + '</div>' +
+      '</div>' +
+      '<div class="metric" style="padding:0.75rem;">' +
+        '<div class="metric-label">1인당 새 기준금액</div>' +
+        '<div style="font-size:16px;font-weight:500;color:var(--green);">' + won(newBase) + '</div>' +
+        '<div class="metric-sub">재배분 후 (총 ' + won(totalAfter) + ')</div>' +
+      '</div>' +
+    '</div>' +
+    '<table style="width:100%;font-size:13px;border-collapse:collapse;">' +
+      '<thead><tr>' +
+        '<th style="text-align:left;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">멤버</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">현재 기준금액</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">수익</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">시상금</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">새 기준금액</th>' +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+    remStr
+
+  document.getElementById('annualPreview').style.display = 'block';
+  document.getElementById('annualConfirmBtn').style.display = 'inline-flex';
+
+  // 임시 저장
+  window._annualCalc = { year, prize, totalBefore, totalAfter, newBase, winner, activeMembers };
+}
+
+async function executeAnnualSettlement() {
+  const calc = window._annualCalc;
+  if (!calc) { toast('먼저 계산해보기를 클릭하세요.'); return; }
+
+  const note = document.getElementById('a-note').value.trim() || `${calc.year}년 연말 결산`;
+  const btn  = document.getElementById('annualConfirmBtn');
+  btn.textContent = '처리 중...';
+  btn.disabled = true;
+
+  try {
+    // 1. annual_settlements 테이블에 기록
+    const { error: e1 } = await sb.from('annual_settlements').insert({
+      year:            calc.year,
+      winner_id:       calc.winner.id,
+      prize_amount:    calc.prize,
+      total_before:    calc.totalBefore,
+      total_after:     calc.totalAfter,
+      new_base_amount: calc.newBase,
+      member_count:    calc.activeMembers.length,
+      note:            note,
+    });
+    if (e1) throw e1;
+
+    // 2. 모든 활성 멤버의 base_amount를 newBase로 리셋
+    const updatePromises = calc.activeMembers.map(m =>
+      sb.from('members').update({ base_amount: calc.newBase }).eq('id', m.id)
+    );
+    await Promise.all(updatePromises);
+
+    toast(`✅ ${calc.year}년 연말 결산 완료! 1인당 ${won(calc.newBase)}으로 재배분됨`);
+    closeAnnualForm();
+
+    // 멤버 데이터 갱신
+    members = await fetchMembers();
+    await loadAnnualHistory();
+
+  } catch(e) {
+    toast('결산 오류: ' + e.message);
+  } finally {
+    btn.textContent = '결산 확정';
+    btn.disabled = false;
+  }
+}
+
+async function loadAnnualHistory() {
+  const histEl = document.getElementById('annualHistory');
+  try {
+    const { data, error } = await sb.from('annual_settlements')
+      .select('*, members(name)')
+      .order('year', { ascending: false });
+
+    // 테이블 없는 경우 (error code 42P01)
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        histEl.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:0.5rem 0;">SQL Editor에서 <code>supabase_annual_settlement.sql</code>을 실행하면 연말 결산 기능이 활성화됩니다.</div>';
+      } else {
+        histEl.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:0.5rem 0;">연말 결산 내역 없음</div>';
+        console.error('annual_settlements 오류:', error.message);
+      }
+      return;
+    }
+
+    annualData = data || [];
+
+    if (!annualData.length) {
+      histEl.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;font-size:13px;">연말 결산 내역이 없습니다</div>';
+      return;
+    }
+
+    histEl.innerHTML = `
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">연도</th>
+            <th style="text-align:left;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">1등</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">시상금</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">결산 전 총액</th>
+            <th style="text-align:right;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">1인당 새 기준금액</th>
+            <th style="text-align:left;padding:6px 8px;border-bottom:0.5px solid var(--border);font-size:11px;color:var(--muted);">메모</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${annualData.map(a => `
+            <tr>
+              <td style="padding:9px 8px;border-bottom:0.5px solid var(--border);font-weight:500;">${a.year}년</td>
+              <td style="padding:9px 8px;border-bottom:0.5px solid var(--border);">🏆 ${a.members?.name || '—'}</td>
+              <td style="padding:9px 8px;border-bottom:0.5px solid var(--border);text-align:right;color:var(--amber);font-weight:500;">${won(a.prize_amount)}</td>
+              <td style="padding:9px 8px;border-bottom:0.5px solid var(--border);text-align:right;">${won(a.total_before)}</td>
+              <td style="padding:9px 8px;border-bottom:0.5px solid var(--border);text-align:right;font-weight:500;color:var(--green);">${won(a.new_base_amount)}</td>
+              <td style="padding:9px 8px;border-bottom:0.5px solid var(--border);color:var(--muted);font-size:12px;">${a.note || ''}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    histEl.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;font-size:13px;">annual_settlements 테이블을 먼저 생성하세요.</div>';
+  }
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  location.href = 'index.html';
+}
+
+init();
+</script>
+</body>
+</html>

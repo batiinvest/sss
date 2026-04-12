@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 펀드</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .price-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .price-cell { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; }
+    .price-cell-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .price-cell-value { font-size: 18px; font-weight: 500; }
+    .price-cell-value.small { font-size: 14px; }
+    .upside-preview { background: var(--greenbg); border: 0.5px solid #9fe1cb; border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; color: var(--green); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <a href="index.html" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="22" height="22" rx="6" fill="#185fa5"/>
+        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
+        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      SSS
+    </a>
+    <a href="index.html" class="nav-item"><div class="nav-dot g"></div>대시보드</a>
+    <a href="picks.html" class="nav-item active"><div class="nav-dot"></div>탑픽 관리</a>
+    <a href="trade.html" class="nav-item"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="members.html" class="nav-item"><div class="nav-dot"></div>참여자 현황</a>
+    <a href="settle.html" class="nav-item"><div class="nav-dot a"></div>결산 관리</a>
+    <a href="schedule.html" class="nav-item"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="presentations.html" class="nav-item"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="admin.html" class="nav-item"><div class="nav-dot"></div>사용자 관리</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">탑픽 관리</div>
+        <div class="updated">종목 제출 · 월별 히스토리 조회</div>
+      </div>
+      <button class="btn btn-primary" onclick="toggleForm()">+ 탑픽 제출</button>
+    </div>
+
+    <!-- ── 탑픽 제출 폼 ── -->
+    <div id="pickForm" class="card" style="margin-bottom:1.25rem;display:none;">
+      <div class="card-head">
+        <div class="card-title">탑픽 제출</div>
+        <button class="btn" onclick="toggleForm()" style="font-size:12px;">닫기</button>
+      </div>
+      <div class="form-section">
+
+        <!-- 추천자 + 월 -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>추천자 *</label>
+            <select id="f-member"><option value="">선택하세요</option></select>
+          </div>
+          <div class="form-group">
+            <label>대상 월 *</label>
+            <input type="month" id="f-month" />
+          </div>
+        </div>
+
+        <!-- 종목명 자동완성 검색 -->
+        <div class="form-group" style="position:relative;">
+          <label>종목명 검색 * <span style="color:var(--muted);font-weight:400;">— 2글자 이상 입력하면 종목 리스트가 표시됩니다</span></label>
+          <input type="text" id="f-stock" placeholder="예: 삼성  또는  005930"
+            autocomplete="off"
+            oninput="onStockSearch(this.value)"
+            onkeydown="onStockSearchKey(event)" />
+          <!-- 자동완성 드롭다운 -->
+          <div id="stockDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:240px;overflow-y:auto;margin-top:2px;"></div>
+        </div>
+
+        <!-- 선택된 종목 표시 (hidden inputs) -->
+        <input type="hidden" id="f-code" />
+        <input type="hidden" id="f-market" value="KOSPI" />
+        <input type="hidden" id="f-db-price" />
+        <input type="hidden" id="f-db-cap" />
+
+        <!-- 선택 확인 배지 -->
+        <div id="selectedStock" style="display:none;padding:10px 14px;background:var(--greenbg);border-radius:var(--r-md);border:0.5px solid #9fe1cb;font-size:13px;display:none;">
+          <span id="selectedStockText"></span>
+          <button onclick="clearSelectedStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);margin-left:8px;font-size:12px;">✕ 다시 선택</button>
+        </div>
+
+        <!-- 현재가 조회 결과 박스 -->
+        <div id="lookupLoading" style="display:none;padding:10px 14px;background:var(--bg);border-radius:var(--r-md);font-size:13px;color:var(--muted);">
+          <span id="loadingDots">현재가 조회 중</span>
+        </div>
+
+        <div id="lookupResult" style="display:none;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+            조회 결과 <span id="lookupSource" style="font-weight:500;"></span>
+            <span style="margin-left:6px;font-size:11px;">(Yahoo Finance · 15분 지연 · 장 마감 후는 종가)</span>
+          </div>
+          <div class="price-result-grid">
+            <div class="price-cell">
+              <div class="price-cell-label">현재가</div>
+              <div class="price-cell-value" id="r-price">—</div>
+            </div>
+            <div class="price-cell">
+              <div class="price-cell-label">당일 등락</div>
+              <div class="price-cell-value" id="r-change">—</div>
+            </div>
+            <div class="price-cell">
+              <div class="price-cell-label">시가총액</div>
+              <div class="price-cell-value small" id="r-cap">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="lookupError" style="display:none;padding:12px 14px;background:var(--amberbg);border-radius:var(--r-md);font-size:13px;color:var(--amber);line-height:1.7;border:0.5px solid #f0c070;">
+          <strong>현재가 자동 조회를 사용하려면 Edge Function 배포가 필요합니다</strong><br>
+          Supabase 대시보드 → Edge Functions → New Function → 이름: <code style="background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:3px;">stock-price</code><br>
+          → <code style="background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:3px;">edge_function_stock_price.ts</code> 내용 붙여넣기 → Deploy<br>
+          <span style="margin-top:4px;display:block;color:var(--text);">배포 전까지는 아래 현재가 · 시총 칸에 직접 입력하세요.</span>
+        </div>
+
+        <!-- 목표가 -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>현재가 (원) <span style="color:var(--muted);font-weight:400;">— 자동 입력 또는 직접 입력</span></label>
+            <input type="number" id="f-cur-price" placeholder="자동 입력됨"
+              oninput="onCurPriceInput()" />
+          </div>
+          <div class="form-group">
+            <label>목표 주가 (원)</label>
+            <input type="number" id="f-target-price" placeholder="예: 90000"
+              oninput="onTargetPriceInput()" />
+          </div>
+        </div>
+
+        <!-- 주가 기준 상승여력 미리보기 -->
+        <div id="upsidePreview" style="display:none;" class="upside-preview">
+          <span id="upsideText"></span>
+        </div>
+
+        <!-- 시총 -->
+        <div class="form-row">
+          <div class="form-group">
+            <label>현재 시총 (억원) <span style="color:var(--muted);font-weight:400;">— 자동 입력 또는 직접 입력</span></label>
+            <input type="number" id="f-cur-cap" placeholder="자동 입력됨"
+              oninput="calcCapUpside()" />
+          </div>
+          <div class="form-group">
+            <label>목표 시총 (억원)</label>
+            <input type="number" id="f-tgt-cap" placeholder="예: 4200000"
+              oninput="onTargetCapInput()" />
+          </div>
+        </div>
+
+        <!-- 시총 기준 상승여력 미리보기 -->
+        <div id="capUpsidePreview" style="display:none;" class="upside-preview">
+          <span id="capUpsideText"></span>
+        </div>
+
+        <!-- 매수 사유 -->
+        <div class="form-group">
+          <label>매수 사유</label>
+          <textarea id="f-reason" placeholder="매수 근거, 투자 thesis, 리스크 등을 자유롭게 작성하세요" style="min-height:90px;"></textarea>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="btn" onclick="toggleForm()">취소</button>
+          <button class="btn btn-primary" id="submitBtn" onclick="submitPickForm()">제출</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 월별 탭 + 테이블 -->
+    <div class="card" style="margin-bottom:1.25rem;">
+      <div class="card-head">
+        <div class="card-title">월별 탑픽</div>
+        <div class="tab-row" id="monthTabs"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>추천자</th><th>종목</th><th>시장</th>
+            <th>매수가</th><th>매도가</th><th>확정 수익률</th>
+            <th>목표가</th><th>시총 상승여력</th><th>상태</th>
+          </tr></thead>
+          <tbody id="monthPicksTbody">
+            <tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 매수 사유 카드 -->
+    <div class="card">
+      <div class="card-head"><div class="card-title">매수 사유</div></div>
+      <div id="reasonCards" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;"></div>
+    </div>
+
+    <!-- 전체 히스토리 -->
+    <div class="card" style="margin-top:1.25rem;">
+      <div class="card-head">
+        <div class="card-title">전체 히스토리</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <select id="filterMember" onchange="applyFilter()" style="font-size:12px;padding:4px 8px;width:auto;">
+            <option value="">전체 참여자</option>
+          </select>
+          <select id="filterStatus" onchange="applyFilter()" style="font-size:12px;padding:4px 8px;width:auto;">
+            <option value="">전체 상태</option>
+            <option value="hold">보유중</option>
+            <option value="sold">매도완료</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table style="table-layout:fixed;min-width:720px;">
+          <thead><tr>
+            <th style="width:64px;">월</th>
+            <th style="width:70px;">추천자</th>
+            <th style="width:110px;">종목</th>
+            <th style="width:56px;">시장</th>
+            <th style="width:90px;">매수가</th>
+            <th style="width:90px;">매도가</th>
+            <th style="width:80px;">수익률</th>
+            <th style="width:70px;">상태</th>
+            <th>매수 사유</th>
+          </tr></thead>
+          <tbody id="historyTbody">
+            <tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script>
+let allPicks = [];
+let members  = [];
+let selMonth = currentMonth();
+let autoLookupTimer = null;
+
+async function init() {
+  await requireAuth();
+  checkDBConnection();
+  members  = await fetchMembers();
+  allPicks = await fetchAllPicks();
+
+  const sel = document.getElementById('f-member');
+  const flt = document.getElementById('filterMember');
+  members.forEach(m => {
+    sel.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+    flt.innerHTML += `<option value="${m.id}">${m.name}</option>`;
+  });
+
+  document.getElementById('f-month').value = selMonth;
+  buildMonthTabs();
+  renderMonthPicks(selMonth);
+  renderHistory();
+}
+
+// ── 종목코드 입력 후 0.9초 대기 → 자동 조회
+// ── 종목명 자동완성 검색
+let stockSearchTimer = null;
+let dropdownIdx = -1;
+
+async function onStockSearch(val) {
+  clearTimeout(stockSearchTimer);
+  const q = val.trim();
+  const dd = document.getElementById('stockDropdown');
+
+  if (q.length < 2) {
+    dd.style.display = 'none';
+    return;
+  }
+
+  stockSearchTimer = setTimeout(async () => {
+    try {
+      const { data } = await sb.from('stock_prices')
+        .select('stock_code, stock_name, market, price, change_rate, market_cap')
+        .or(`stock_name.ilike.%${q}%,stock_code.ilike.%${q}%`)
+        .gt('price', 0)
+        .order('market_cap', { ascending: false, nullsFirst: false })
+        .limit(15);
+
+      if (!data || data.length === 0) {
+        dd.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--muted);">검색 결과 없음</div>';
+        dd.style.display = 'block';
+        return;
+      }
+
+      dropdownIdx = -1;
+      dd.innerHTML = data.map((s, i) => {
+        const sign = (s.change_rate||0) >= 0 ? '+' : '';
+        const cls  = (s.change_rate||0) >= 0 ? 'color:#0f6e56' : 'color:#a32d2d';
+        const cap  = s.market_cap ? `${s.market_cap.toLocaleString()}억` : '';
+        return `<div class="stock-dd-item" data-idx="${i}"
+          data-code="${s.stock_code}" data-name="${s.stock_name}"
+          data-market="${s.market}" data-price="${s.price||0}"
+          data-cap="${s.market_cap||0}" data-change="${s.change_rate||0}"
+          onclick="selectStock(this)"
+          style="display:flex;justify-content:space-between;align-items:center;
+                 padding:9px 14px;cursor:pointer;border-bottom:0.5px solid var(--border);font-size:13px;">
+          <div>
+            <span style="font-weight:500;">${s.stock_name}</span>
+            <span style="color:var(--muted);font-size:11px;margin-left:6px;">${s.stock_code} · ${s.market}</span>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:500;">${s.price ? s.price.toLocaleString()+'원' : '-'}</div>
+            <div style="font-size:11px;${cls}">${s.price ? sign+(s.change_rate||0).toFixed(2)+'%' : ''}
+              ${cap ? `<span style="color:var(--muted);margin-left:4px;">${cap}</span>` : ''}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      dd.style.display = 'block';
+
+      // hover 스타일
+      dd.querySelectorAll('.stock-dd-item').forEach(el => {
+        el.addEventListener('mouseenter', () => el.style.background = 'var(--bg)');
+        el.addEventListener('mouseleave', () => el.style.background = '');
+      });
+
+    } catch(e) {
+      console.error('종목 검색 오류:', e);
+    }
+  }, 300);
+}
+
+// 키보드 탐색
+function onStockSearchKey(e) {
+  const dd = document.getElementById('stockDropdown');
+  const items = dd.querySelectorAll('.stock-dd-item');
+  if (!items.length || dd.style.display === 'none') return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    dropdownIdx = Math.min(dropdownIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.style.background = i === dropdownIdx ? 'var(--bg)' : '');
+    items[dropdownIdx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    dropdownIdx = Math.max(dropdownIdx - 1, 0);
+    items.forEach((el, i) => el.style.background = i === dropdownIdx ? 'var(--bg)' : '');
+    items[dropdownIdx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && dropdownIdx >= 0) {
+    e.preventDefault();
+    selectStock(items[dropdownIdx]);
+  } else if (e.key === 'Escape') {
+    dd.style.display = 'none';
+  }
+}
+
+// 종목 선택
+function selectStock(el) {
+  const code    = el.dataset.code;
+  const name    = el.dataset.name;
+  const market  = el.dataset.market;
+  const price   = parseInt(el.dataset.price) || 0;
+  const cap     = parseInt(el.dataset.cap)   || 0;
+  const change  = parseFloat(el.dataset.change) || 0;
+
+  // hidden inputs 채우기
+  document.getElementById('f-stock').value  = name;
+  document.getElementById('f-code').value   = code;
+  document.getElementById('f-market').value = market;
+
+  // 드롭다운 닫기
+  document.getElementById('stockDropdown').style.display = 'none';
+
+  // 선택 확인 배지
+  const badge = document.getElementById('selectedStock');
+  const sign  = change >= 0 ? '+' : '';
+  const cls   = change >= 0 ? 'color:#0f6e56' : 'color:#a32d2d';
+  document.getElementById('selectedStockText').innerHTML =
+    `✅ <strong>${name}</strong> <span style="color:var(--muted)">${code} · ${market}</span>`;
+  badge.style.display = 'block';
+
+  // 현재가·시총 자동 입력
+  if (price > 0) {
+    document.getElementById('f-cur-price').value = price;
+    // DB 원래 가격 보존 (현재가 수정 시 시총 역산용)
+    document.getElementById('f-db-price').value = price;
+    document.getElementById('f-db-cap').value   = cap;
+
+    // 결과 박스 표시
+    document.getElementById('lookupSource').textContent =
+      `${code} · ${name} · DB 저장 가격`;
+    document.getElementById('r-price').textContent  = price.toLocaleString() + '원';
+    document.getElementById('r-price').className    = 'price-cell-value';
+    document.getElementById('r-change').textContent = `${sign}${change.toFixed(2)}%`;
+    document.getElementById('r-change').className   = `price-cell-value ${change >= 0 ? 'up' : 'dn'}`;
+    const capEl = document.getElementById('r-cap');
+    if (cap > 0) {
+      capEl.textContent = cap.toLocaleString() + '억원';
+      document.getElementById('f-cur-cap').value = cap;
+    } else {
+      capEl.textContent = '직접 입력';
+    }
+    document.getElementById('lookupResult').style.display = 'block';
+    calcUpsidePreview();
+    calcCapUpside();
+  }
+}
+
+function clearSelectedStock() {
+  document.getElementById('f-stock').value  = '';
+  document.getElementById('f-code').value   = '';
+  document.getElementById('f-market').value = 'KOSPI';
+  document.getElementById('f-cur-price').value = '';
+  document.getElementById('f-cur-cap').value   = '';
+  document.getElementById('f-db-price').value  = '';
+  document.getElementById('f-db-cap').value    = '';
+  document.getElementById('selectedStock').style.display   = 'none';
+  document.getElementById('lookupResult').style.display    = 'none';
+  document.getElementById('upsidePreview').style.display   = 'none';
+  document.getElementById('capUpsidePreview').style.display = 'none';
+  document.getElementById('f-stock').focus();
+}
+
+// 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#f-stock') && !e.target.closest('#stockDropdown')) {
+    document.getElementById('stockDropdown').style.display = 'none';
+  }
+});
+
+// ── 목표주가 입력 → 목표시총 자동 계산
+function onTargetPriceInput() {
+  calcUpsidePreview();
+
+  const curPrice  = parseInt(document.getElementById('f-cur-price').value);
+  const curCap    = parseInt(document.getElementById('f-cur-cap').value);
+  const tgtPrice  = parseInt(document.getElementById('f-target-price').value);
+  const tgtCapEl  = document.getElementById('f-tgt-cap');
+
+  if (curPrice > 0 && curCap > 0 && tgtPrice > 0) {
+    const tgtCap = Math.round(curCap * (tgtPrice / curPrice));
+    tgtCapEl.value = tgtCap;
+    calcCapUpside();
+  }
+}
+
+// ── 목표시총 입력 → 목표주가 자동 계산
+function onTargetCapInput() {
+  calcCapUpside();
+
+  const curPrice  = parseInt(document.getElementById('f-cur-price').value);
+  const curCap    = parseInt(document.getElementById('f-cur-cap').value);
+  const tgtCap    = parseInt(document.getElementById('f-tgt-cap').value);
+  const tgtPriceEl = document.getElementById('f-target-price');
+
+  if (curPrice > 0 && curCap > 0 && tgtCap > 0) {
+    const tgtPrice = Math.round(curPrice * (tgtCap / curCap));
+    tgtPriceEl.value = tgtPrice;
+    calcUpsidePreview();
+  }
+}
+
+// ── 현재가 수정 시 현재 시총 자동 역산
+function onCurPriceInput() {
+  const newPrice = parseInt(document.getElementById('f-cur-price').value);
+  const dbPrice  = parseInt(document.getElementById('f-db-price').value);
+  const dbCap    = parseInt(document.getElementById('f-db-cap').value);
+
+  // DB 원래 가격과 시총이 있으면 비율로 역산
+  if (newPrice > 0 && dbPrice > 0 && dbCap > 0) {
+    const newCap = Math.round(dbCap * (newPrice / dbPrice));
+    document.getElementById('f-cur-cap').value = newCap;
+
+    // 시총 표시 업데이트
+    const capEl = document.getElementById('r-cap');
+    if (capEl) capEl.textContent = newCap.toLocaleString() + '억원';
+  }
+
+  // 기존 목표주가↔시총 연동도 재계산
+  calcUpsidePreview();
+  onTargetPriceInput(); // 목표주가가 있으면 목표시총 재계산
+}
+
+function calcUpsidePreview() {
+  const cur = parseInt(document.getElementById('f-cur-price').value);
+  const tgt = parseInt(document.getElementById('f-target-price').value);
+  if (!cur || !tgt) { document.getElementById('upsidePreview').style.display = 'none'; return; }
+  const u = ((tgt - cur) / cur * 100).toFixed(1);
+  document.getElementById('upsideText').innerHTML =
+    `주가 기준 상승여력: ${won(cur)} → ${won(tgt)} &nbsp;<strong>(${u >= 0 ? '+' : ''}${u}%)</strong>`;
+  document.getElementById('upsidePreview').style.display = 'block';
+}
+
+function calcCapUpside() {
+  const cur = parseInt(document.getElementById('f-cur-cap').value);
+  const tgt = parseInt(document.getElementById('f-tgt-cap').value);
+  if (!cur || !tgt) { document.getElementById('capUpsidePreview').style.display = 'none'; return; }
+  const u = ((tgt - cur) / cur * 100).toFixed(1);
+  document.getElementById('capUpsideText').innerHTML =
+    `시총 기준 상승여력: ${cur.toLocaleString()}억 → ${tgt.toLocaleString()}억 &nbsp;<strong>(+${u}%)</strong>`;
+  document.getElementById('capUpsidePreview').style.display = 'block';
+}
+
+// ── 월 탭
+function buildMonthTabs() {
+  const months = [...new Set(allPicks.map(p => p.month))].sort().reverse();
+  if (!months.includes(selMonth)) months.unshift(selMonth);
+  document.getElementById('monthTabs').innerHTML = months.slice(0,8).map(m => {
+    const label = m.replace('-','년 ') + '월';
+    return `<div class="tab ${m===selMonth?'active':''}" onclick="switchMonth('${m}',this)">${label}</div>`;
+  }).join('');
+}
+
+function switchMonth(month, el) {
+  selMonth = month;
+  document.querySelectorAll('#monthTabs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderMonthPicks(month);
+}
+
+function renderMonthPicks(month) {
+  const picks = allPicks.filter(p => p.month === month);
+  const tbody = document.getElementById('monthPicksTbody');
+  if (!picks.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">${month} 탑픽 없음</td></tr>`;
+    document.getElementById('reasonCards').innerHTML = '';
+    return;
+  }
+  tbody.innerHTML = picks.map((p, i) => {
+    const r = p.realized_return;
+    const upside = p.target_cap && p.current_cap
+      ? (((p.target_cap - p.current_cap) / p.current_cap) * 100).toFixed(1) : null;
+    const statusBadge = p.status==='sold'
+      ? '<span class="badge b-sold">매도완료</span>'
+      : '<span class="badge b-hold">보유중</span>';
+    return `<tr>
+      <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
+      <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}</span></td>
+      <td><span class="badge b-hold">${p.market||'KOSPI'}</span></td>
+      <td>${won(p.buy_price)}</td>
+      <td>${won(p.sell_price)}</td>
+      <td class="${rCls(r)}">${pct(r)}</td>
+      <td style="color:var(--green);">${won(p.target_price)}</td>
+      <td>${upside ? `<span style="color:var(--green);">+${upside}%</span>` : '-'}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('reasonCards').innerHTML = picks.map(p => `
+    <div style="background:var(--bg);border-radius:var(--r-md);padding:12px 14px;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:4px;">${p.member_name} · ${p.stock_name}
+        ${p.stock_code ? `<span style="font-size:11px;color:var(--muted);font-weight:400;">(${p.stock_code})</span>` : ''}
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7;">${p.reason||'사유 미입력'}</div>
+    </div>`).join('');
+}
+
+function renderHistory(filtered) {
+  const picks = filtered || allPicks;
+  const tbody = document.getElementById('historyTbody');
+  if (!picks.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">데이터 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = picks.map((p, i) => {
+    const r = p.realized_return;
+    const statusBadge = p.status==='sold'
+      ? '<span class="badge b-sold">매도완료</span>'
+      : '<span class="badge b-hold">보유중</span>';
+    return `<tr>
+      <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
+      <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div></div></td>
+      <td style="font-weight:500;">${p.stock_name}</td>
+      <td class="muted">${p.market||''}</td>
+      <td>${won(p.buy_price)}</td>
+      <td>${won(p.sell_price)}</td>
+      <td class="${rCls(r)}">${pct(r)}</td>
+      <td>${statusBadge}</td>
+      <td style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">${p.reason||'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function applyFilter() {
+  const memberId = document.getElementById('filterMember').value;
+  const status   = document.getElementById('filterStatus').value;
+  renderHistory(allPicks.filter(p =>
+    (!memberId || p.member_id === memberId) &&
+    (!status   || p.status === status)
+  ));
+}
+
+function toggleForm() {
+  const f = document.getElementById('pickForm');
+  const open = f.style.display === 'none';
+  f.style.display = open ? 'block' : 'none';
+  if (open) {
+    // 초기화
+    ['lookupResult','lookupError','lookupLoading','upsidePreview','capUpsidePreview','selectedStock','stockDropdown']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; });
+    document.getElementById('f-stock').value     = '';
+    document.getElementById('f-code').value      = '';
+    document.getElementById('f-market').value    = 'KOSPI';
+    document.getElementById('f-cur-price').value = '';
+    document.getElementById('f-cur-cap').value   = '';
+    f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => document.getElementById('f-stock').focus(), 300);
+  }
+}
+
+async function submitPickForm() {
+  const memberId    = document.getElementById('f-member').value;
+  const month       = document.getElementById('f-month').value;
+  const stockName   = document.getElementById('f-stock').value.trim();
+  const stockCode   = document.getElementById('f-code').value.trim();
+  const market      = document.getElementById('f-market').value;
+  const curPrice    = parseInt(document.getElementById('f-cur-price').value) || null;
+  const targetPrice = parseInt(document.getElementById('f-target-price').value) || null;
+  const currentCap  = parseInt(document.getElementById('f-cur-cap').value) || null;
+  const targetCap   = parseInt(document.getElementById('f-tgt-cap').value) || null;
+  const reason      = document.getElementById('f-reason').value.trim();
+
+  if (!memberId || !month || !stockName) {
+    toast('추천자, 대상 월, 종목명은 필수입니다.');
+    return;
+  }
+
+  const btn = document.getElementById('submitBtn');
+  btn.textContent = '제출 중...';
+  btn.disabled = true;
+
+  try {
+    await submitPick({
+      member_id: memberId, month, stock_name: stockName, stock_code: stockCode,
+      market, target_price: targetPrice, current_cap: currentCap,
+      target_cap: targetCap, reason
+    });
+    toast('탑픽이 제출되었습니다!');
+    toggleForm();
+    allPicks = await fetchAllPicks();
+    buildMonthTabs();
+    renderMonthPicks(selMonth);
+    renderHistory();
+  } catch(e) {
+    toast('오류: ' + (e.message || '제출 실패'));
+  } finally {
+    btn.textContent = '제출';
+    btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  location.href = 'index.html';
+}
+
+init();
+if (new URLSearchParams(location.search).get('action') === 'new') {
+  setTimeout(toggleForm, 300);
+}
+</script>
+</body>
+</html>

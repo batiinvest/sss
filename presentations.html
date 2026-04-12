@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 펀드</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .industry-group-header {
+      background: var(--bg);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      border-bottom: 0.5px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .industry-tag {
+      display: inline-block;
+      background: #e8f4fd;
+      color: #0c447c;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: var(--r-md);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .stock-tag {
+      display: inline-block;
+      background: #eaf3de;
+      color: #27500a;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: var(--r-md);
+      font-weight: 500;
+    }
+    .price-cell:hover { background: var(--bg); outline: 1px dashed var(--border2); }
+    .price-edit-input {
+      width: 90px; text-align: right; font-size: 13px;
+      border: 1px solid var(--accent); border-radius: 4px;
+      padding: 2px 6px; outline: none;
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar">
+    <a href="index.html" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="22" height="22" rx="6" fill="#185fa5"/>
+        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
+        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      SSS
+    </a>
+    <a href="index.html" class="nav-item"><div class="nav-dot g"></div>대시보드</a>
+    <a href="picks.html" class="nav-item"><div class="nav-dot"></div>탑픽 관리</a>
+    <a href="trade.html" class="nav-item"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="members.html" class="nav-item"><div class="nav-dot"></div>참여자 현황</a>
+    <a href="settle.html" class="nav-item"><div class="nav-dot a"></div>결산 관리</a>
+    <a href="schedule.html" class="nav-item"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="presentations.html" class="nav-item active"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="admin.html" class="nav-item"><div class="nav-dot"></div>사용자 관리</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">발표 히스토리</div>
+        <div class="updated" id="priceUpdatedAt">발표 당시 주가 vs 현재 주가 비교</div>
+      </div>
+      <div class="btn-row">
+        <select id="filterMember" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
+          <option value="">전체 발표자</option>
+        </select>
+        <select id="filterCategory" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
+          <option value="">전체 구분</option>
+          <option value="industry">산업 분석</option>
+          <option value="stock">기업 분석</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div id="summaryCards" class="metric-grid" style="margin-bottom:1.25rem;"></div>
+
+    <!-- 산업별 수익률 -->
+    <div class="card" style="margin-bottom:1.25rem;" id="industrySection">
+      <div class="card-head">
+        <div class="card-title">산업별 평균 수익률</div>
+        <div style="font-size:12px;color:var(--muted);">산업 분석 기준</div>
+      </div>
+      <div id="industryCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;"></div>
+    </div>
+
+    <!-- 기업별 수익률 -->
+    <div class="card" style="margin-bottom:1.25rem;" id="memberSection">
+      <div class="card-head">
+        <div class="card-title">기업별 평균 수익률</div>
+        <div style="font-size:12px;color:var(--muted);">발표자별 · 기업 분석 종목 기준</div>
+      </div>
+      <div id="memberCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;"></div>
+    </div>
+
+    <!-- 전체 발표 히스토리 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">발표 히스토리</div>
+        <div style="font-size:12px;color:var(--muted);" id="countLabel"></div>
+      </div>
+      <div class="table-wrap">
+        <table id="histTable">
+          <thead>
+            <tr>
+              <th>발표일</th>
+              <th>발표자</th>
+              <th>산업/테마</th>
+              <th>종목</th>
+              <th style="text-align:right;">발표 당시가</th>
+              <th style="text-align:right;">현재가</th>
+              <th style="text-align:right;">수익률</th>
+              <th style="text-align:right;">시총 (발표시)</th>
+              <th style="text-align:right;">시총 (현재)</th>
+              <th style="text-align:right;">시총 변화</th>
+            </tr>
+          </thead>
+          <tbody id="histTbody">
+            <tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script>
+let allData  = [];
+let members  = [];
+let priceMap = {};
+
+async function init() {
+  await requireAuth();
+  checkDBConnection();
+
+  const tbody = document.getElementById('histTbody');
+
+  // presentations 테이블 로드 시도
+  let presRes, memberData;
+  try {
+    [{ data: presRes }, memberData] = await Promise.all([
+      sb.from('presentations')
+        .select('*, members(name)')
+        .order('presented_at', { ascending: false })
+        .order('created_at',   { ascending: true }),
+      fetchMembers()
+    ]);
+  } catch(e) {
+    console.error('데이터 로드 오류:', e.message);
+    tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">데이터 로드 오류: ' + e.message + '</td></tr>';
+    return;
+  }
+
+  // presentations 테이블이 없는 경우
+  if (presRes === undefined) {
+    tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">presentations 테이블을 먼저 생성하세요. (supabase_add_presentations.sql 실행)</td></tr>';
+    return;
+  }
+
+  allData = presRes || [];
+  members = memberData || [];
+
+  // 필터 멤버 채우기
+  const sel = document.getElementById('filterMember');
+  members.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+
+  // 데이터 없으면 바로 렌더
+  if (!allData.length) {
+    renderAll([]);
+    return;
+  }
+
+  // 현재가 조회
+  try {
+    // 1. stock_code 있는 항목 - 코드로 직접 조회
+    const codes = [...new Set(allData.filter(p => p.stock_code).map(p => p.stock_code))];
+
+    // 2. stock_code 없는 항목 - 종목명 수집
+    const noCodeItems  = allData.filter(p => !p.stock_code);
+    const stockNames   = [...new Set(
+      noCodeItems
+        .map(p => parseStockName(p))
+        .filter(n => n && n.length >= 2)
+    )];
+
+    // 코드 조회 + 종목명 OR 조회를 동시에 실행
+    const [codeRes, nameRes] = await Promise.all([
+      codes.length > 0
+        ? sb.from('stock_prices')
+            .select('stock_code,stock_name,price,change_rate,market_cap,updated_at')
+            .in('stock_code', codes)
+        : Promise.resolve({ data: [] }),
+
+      stockNames.length > 0
+        ? sb.from('stock_prices')
+            .select('stock_code,stock_name,price,change_rate,market_cap,updated_at')
+            .or(stockNames.map(n => `stock_name.eq.${n}`).join(','))
+            .gt('price', 0)
+            .order('market_cap', { ascending: false, nullsFirst: false })
+            .limit(stockNames.length * 3)   // 동음이의어 고려
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const allPrices = [...(codeRes.data || []), ...(nameRes.data || [])];
+
+    // priceMap 구성
+    for (const sp of allPrices) priceMap[sp.stock_code] = sp;
+
+    // stock_code 없는 항목에 매칭 + DB 업데이트
+    const dbUpdates = [];
+    for (const item of noCodeItems) {
+      const sName = parseStockName(item);
+      if (!sName || sName.length < 2) continue;
+
+      // 완전 일치만 사용 (포함 검색은 "드림씨아이에스" 같은 오매칭 발생)
+      const matched = allPrices.find(sp => sp.stock_name === sName);
+
+      if (matched) {
+        item.stock_code = matched.stock_code;
+        priceMap[matched.stock_code] = matched;
+        dbUpdates.push(
+          sb.from('presentations')
+            .update({ stock_code: matched.stock_code })
+            .eq('id', item.id)
+        );
+      }
+    }
+    if (dbUpdates.length > 0) {
+      await Promise.all(dbUpdates);
+      console.log(`✅ stock_code ${dbUpdates.length}건 자동 연결`);
+    }
+
+    // 마지막 업데이트 시각
+    const latest = allPrices
+      .filter(p => p.updated_at)
+      .sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+    if (latest) {
+      const d = new Date(latest.updated_at);
+      document.getElementById('priceUpdatedAt').textContent =
+        `현재가 기준: ${d.toLocaleDateString('ko-KR')} ${d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}`;
+    }
+  } catch(e) {
+    console.warn('현재가 조회 오류:', e.message);
+  }
+
+  renderAll(allData);
+}
+
+function applyFilter() {
+  const member = document.getElementById('filterMember').value;
+  const cat    = document.getElementById('filterCategory').value;
+  renderAll(allData.filter(p =>
+    (!member || p.member_id === member) &&
+    (!cat    || p.category  === cat)
+  ));
+}
+
+function getCurPrice(p) {
+  if (p.stock_code && priceMap[p.stock_code]) return priceMap[p.stock_code];
+  // stock_code 없으면 종목명으로 검색
+  const sName = parseStockName(p);
+  return Object.values(priceMap).find(sp =>
+    sp.stock_name === sName ||
+    sp.stock_name?.includes(sName) ||
+    sName?.includes(sp.stock_name)
+  ) || null;
+}
+
+function getReturn(p) {
+  const cur = getCurPrice(p);
+  if (!p.price_at || !cur?.price) return null;
+  return (cur.price - p.price_at) / p.price_at * 100;
+}
+
+function getCapReturn(p) {
+  const cur = getCurPrice(p);
+  if (!cur?.market_cap) return null;
+  if (p.price_at && cur.price) {
+    const capAt = Math.round(cur.market_cap * (p.price_at / cur.price));
+    return (cur.market_cap - capAt) / capAt * 100;
+  }
+  if (!p.market_cap_at) return null;
+  return (cur.market_cap - p.market_cap_at) / p.market_cap_at * 100;
+}
+
+// 산업명 추출 (topic = "테마명 > 종목명" 또는 "종목명")
+function parseIndustry(p) {
+  if (p.category === 'industry' && p.topic?.includes(' > ')) {
+    return p.topic.split(' > ')[0].trim();
+  }
+  return null;
+}
+
+function parseStockName(p) {
+  if (p.topic?.includes(' > ')) return p.topic.split(' > ')[1].trim();
+  return p.topic || '';
+}
+
+function renderAll(data) {
+  renderSummary(data);
+  renderIndustryCards(data);
+  renderMemberCards(data);
+  renderTable(data);
+}
+
+function renderSummary(data) {
+  const withRet = data.filter(p => getReturn(p) !== null);
+  const returns = withRet.map(p => getReturn(p));
+  const avg     = returns.length ? returns.reduce((s,r) => s+r, 0) / returns.length : null;
+  const pos     = returns.filter(r => r > 0).length;
+  const best    = returns.length ? Math.max(...returns) : null;
+  const bestP   = best !== null ? withRet[returns.indexOf(best)] : null;
+
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="metric">
+      <div class="metric-label">총 발표 종목</div>
+      <div class="metric-value">${data.length}건</div>
+      <div class="metric-sub">주가 비교 가능: ${withRet.length}건</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">평균 수익률</div>
+      <div class="metric-value ${avg === null ? '' : avg >= 0 ? 'up' : 'dn'}">
+        ${avg === null ? '—' : (avg >= 0 ? '+' : '') + avg.toFixed(1) + '%'}
+      </div>
+      <div class="metric-sub">주가 데이터 있는 종목 기준</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">수익 종목 비율</div>
+      <div class="metric-value ${pos > 0 ? 'up' : ''}">
+        ${withRet.length ? Math.round(pos/withRet.length*100) + '%' : '—'}
+      </div>
+      <div class="metric-sub">${pos} / ${withRet.length}건</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">최고 수익</div>
+      <div class="metric-value up">${best !== null ? '+' + best.toFixed(1) + '%' : '—'}</div>
+      <div class="metric-sub">${bestP ? parseStockName(bestP) + ' · ' + (bestP.members?.name||'') : '—'}</div>
+    </div>`;
+}
+
+function renderIndustryCards(data) {
+  // 산업 분석만 필터링 (기업 분석 제외)
+  const industryOnly = data.filter(p => p.category === 'industry');
+  const industryMap = {};
+  industryOnly.forEach(p => {
+    const ind = parseIndustry(p) || '기타';
+    if (!industryMap[ind]) industryMap[ind] = [];
+    industryMap[ind].push(p);
+  });
+
+  const el = document.getElementById('industryCards');
+  const entries = Object.entries(industryMap)
+    .map(([ind, items]) => {
+      const rets = items.map(p => getReturn(p)).filter(r => r !== null);
+      const avg  = rets.length ? rets.reduce((s,r) => s+r, 0) / rets.length : null;
+      return { ind, items, avg, rets };
+    })
+    .sort((a,b) => (b.avg||0) - (a.avg||0));
+
+  if (!entries.length) { el.innerHTML = '<div class="muted">데이터 없음</div>'; return; }
+
+  el.innerHTML = entries.map(({ ind, items, avg, rets }) => {
+    const cls  = avg === null ? '' : avg >= 0 ? 'up' : 'dn';
+    const sign = avg !== null && avg >= 0 ? '+' : '';
+    const isIndustry = ind !== '기업 분석';
+    return `<div class="metric" style="cursor:default;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        ${isIndustry
+          ? `<span class="industry-tag">${ind}</span>`
+          : `<span class="stock-tag">${ind}</span>`}
+      </div>
+      <div class="metric-value ${cls}" style="font-size:20px;">
+        ${avg === null ? '—' : sign + avg.toFixed(1) + '%'}
+      </div>
+      <div class="metric-sub">${items.length}종목 · 비교가능 ${rets.length}건</div>
+    </div>`;
+  }).join('');
+}
+
+function renderMemberCards(data) {
+  const el = document.getElementById('memberCards');
+  if (!el) return;
+
+  // 기업 분석만 필터링
+  const stockOnly = data.filter(p => p.category === 'stock');
+
+  // 발표자별 그룹핑
+  const memberMap = {};
+  stockOnly.forEach(p => {
+    const name = p.members?.name || '—';
+    if (!memberMap[name]) memberMap[name] = { name, memberId: p.member_id, items: [] };
+    memberMap[name].items.push(p);
+  });
+
+  const entries = Object.values(memberMap)
+    .map(({ name, memberId, items }) => {
+      const rets  = items.map(p => getReturn(p)).filter(r => r !== null);
+      const avg   = rets.length ? rets.reduce((s,r) => s+r, 0) / rets.length : null;
+      const avIdx = members.findIndex(m => m.id === memberId) % 6;
+      return { name, memberId, items, avg, rets, avIdx };
+    })
+    .sort((a,b) => (b.avg ?? -Infinity) - (a.avg ?? -Infinity));
+
+  if (!entries.length) {
+    el.innerHTML = '<div class="muted" style="padding:1rem;text-align:center;font-size:13px;">기업 분석 발표 내역이 없습니다</div>';
+    return;
+  }
+
+  el.innerHTML = entries.map(({ name, items, avg, rets, avIdx }) => {
+    const cls  = avg === null ? '' : avg >= 0 ? 'up' : 'dn';
+    const sign = avg !== null && avg >= 0 ? '+' : '';
+    return '<div class="metric" style="cursor:default;">' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+        '<div class="avatar ' + avCls[avIdx] + '" style="width:22px;height:22px;font-size:9px;">' + name.slice(0,2) + '</div>' +
+        '<span style="font-size:13px;font-weight:500;">' + name + '</span>' +
+      '</div>' +
+      '<div class="metric-value ' + cls + '" style="font-size:20px;">' +
+        (avg === null ? '—' : sign + avg.toFixed(1) + '%') +
+      '</div>' +
+      '<div class="metric-sub">' + items.length + '종목 · 비교가능 ' + rets.length + '건</div>' +
+    '</div>';
+  }).join('');
+}
+
+
+function renderTable(data) {
+  const tbody = document.getElementById('histTbody');
+  document.getElementById('countLabel').textContent = `총 ${data.length}건`;
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">발표 내역이 없습니다</td></tr>';
+    return;
+  }
+
+  // 날짜 + 산업별로 그룹핑해서 표시
+  // 같은 날짜+산업이면 시각적으로 묶기
+  let lastGroupKey = null;
+  let rows = '';
+
+  data.forEach((p, i) => {
+    const ret       = getReturn(p);
+    const capRet    = getCapReturn(p);
+    const cur       = getCurPrice(p);
+    const industry  = parseIndustry(p);
+    const stockName = parseStockName(p);
+    // 종목 분석은 날짜별로, 산업 분석은 날짜+산업명으로 그룹핑
+    const groupKey  = p.presented_at + '|' + (industry || '__stock__');
+    const memberName = p.members?.name || '—';
+    const avIdx     = members.findIndex(m => m.id === p.member_id) % 6;
+
+    // 그룹 헤더 (날짜+산업이 바뀔 때)
+    if (groupKey !== lastGroupKey) {
+      const groupItems = data.filter(d =>
+        d.presented_at === p.presented_at &&
+        (parseIndustry(d) || '') === (industry || '')
+      );
+
+      // 헤더 레이블: 산업이면 산업명, 종목 분석이면 "기업 분석"
+      const headerLabel = industry
+        ? industry
+        : '기업 분석';
+      const tagClass = industry ? 'industry-tag' : 'stock-tag';
+
+      rows += `<tr>
+        <td colspan="10" style="padding:0;">
+          <div class="industry-group-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="${tagClass}">${headerLabel}</span>
+              <span style="font-size:11px;color:var(--muted);">${p.presented_at} · ${groupItems.length}종목</span>
+            </div>
+          </div>
+        </td>
+      </tr>`;
+      lastGroupKey = groupKey;
+    }
+
+    // 수익률
+    const retCls = ret === null ? '' : ret >= 0 ? 'up' : 'dn';
+    const retStr = ret === null ? '—' : (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%';
+    const capRetCls = capRet === null ? '' : capRet >= 0 ? 'up' : 'dn';
+    const capRetStr = capRet === null ? '—' : (capRet >= 0 ? '+' : '') + capRet.toFixed(1) + '%';
+
+    rows += `<tr>
+      <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at}</td>
+      <td>
+        <div class="flex">
+          <div class="avatar ${avCls[avIdx]}" style="width:22px;height:22px;font-size:9px;">${memberName.slice(0,2)}</div>
+          <span style="font-size:13px;">${memberName}</span>
+        </div>
+      </td>
+      <td>
+        ${industry
+          ? `<span class="industry-tag">${industry}</span>`
+          : `<span class="stock-tag">기업 분석</span>`}
+      </td>
+      <td style="font-weight:500;">
+        ${stockName}
+        ${p.stock_code ? `<div style="font-size:11px;color:var(--muted);">${p.stock_code}</div>` : ''}
+      </td>
+      <td style="text-align:right;">
+        ${(cur || p.price_at) ? `<div class="price-cell" onclick="editPriceAt('${p.id}', ${p.price_at || 0}, this)"
+          title="클릭하여 발표 당시 주가 입력"
+          style="cursor:pointer;padding:3px 6px;border-radius:4px;display:inline-block;min-width:60px;text-align:right;">
+          ${p.price_at ? p.price_at.toLocaleString() + '원' : '<span style=\"color:var(--accent);font-size:12px;\">입력</span>'}
+        </div>` : '<span style="color:var(--hint);font-size:12px;">—</span>'}
+      </td>
+      <td style="text-align:right;font-weight:500;">${cur?.price ? cur.price.toLocaleString() + '원' : '—'}</td>
+      <td style="text-align:right;" class="${retCls}"><strong>${retStr}</strong></td>
+      <td style="text-align:right;font-size:12px;color:var(--muted);">
+        ${(()=>{
+          // price_at 있고 현재가·현재시총 있으면 비율로 역산
+          if (p.price_at && cur?.price && cur?.market_cap) {
+            const capAt = Math.round(cur.market_cap * (p.price_at / cur.price));
+            return capAt.toLocaleString() + '억';
+          }
+          return p.market_cap_at ? p.market_cap_at.toLocaleString() + '억' : '—';
+        })()}
+      </td>
+      <td style="text-align:right;font-size:12px;color:var(--muted);">${cur?.market_cap ? cur.market_cap.toLocaleString() + '억' : '—'}</td>
+      <td style="text-align:right;" class="${capRetCls}">${capRetStr}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows;
+}
+
+
+// ── 발표 당시가 인라인 편집
+function editPriceAt(id, currentPrice, cell) {
+  // 이미 편집 중이면 무시
+  if (cell.querySelector('.price-edit-input')) return;
+
+  const oldHtml = cell.innerHTML;
+  cell.innerHTML = '';
+
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.className = 'price-edit-input';
+  input.value = currentPrice || '';
+  input.placeholder = '주가 입력';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '저장';
+  saveBtn.style.cssText = 'font-size:11px;margin-left:4px;padding:2px 6px;cursor:pointer;border:0.5px solid var(--border2);border-radius:4px;background:var(--accent);color:#fff;';
+  saveBtn.onclick = (e) => { e.stopPropagation(); savePriceAt(id, input.value, cell); };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = '취소';
+  cancelBtn.style.cssText = 'font-size:11px;margin-left:2px;padding:2px 6px;cursor:pointer;border:0.5px solid var(--border2);border-radius:4px;background:var(--surface);';
+  cancelBtn.onclick = (e) => { e.stopPropagation(); cell.innerHTML = oldHtml; };
+
+  cell.appendChild(input);
+  cell.appendChild(saveBtn);
+  cell.appendChild(cancelBtn);
+
+  input.focus();
+  input.select();
+
+  // Enter 키로 저장
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter')  savePriceAt(id, input.value, cell);
+    if (e.key === 'Escape') { cell.innerHTML = oldHtml; }
+  });
+}
+
+async function savePriceAt(id, priceVal, cell) {
+  const price = parseInt(priceVal);
+  if (!price || price <= 0) { toast('올바른 주가를 입력하세요.'); return; }
+
+  try {
+    // DB 업데이트
+    const { error } = await sb.from('presentations')
+      .update({ price_at: price })
+      .eq('id', id);
+    if (error) throw error;
+
+    // allData 업데이트
+    const item = allData.find(p => p.id === id);
+    if (item) item.price_at = price;
+
+    // 셀 UI 업데이트
+    const newDiv = document.createElement("div");
+    newDiv.className = "price-cell";
+    newDiv.title = "클릭하여 수정";
+    newDiv.style.cssText = "cursor:pointer;padding:3px 6px;border-radius:4px;display:inline-block;min-width:60px;text-align:right;";
+    newDiv.textContent = price.toLocaleString() + "원";
+    newDiv.onclick = function() { editPriceAt(id, price, cell); };
+    cell.innerHTML = "";
+    cell.appendChild(newDiv);
+
+    // 같은 행의 수익률·시총 셀 갱신
+    const row = cell.closest('tr');
+    if (row) updateRowStats(row, id);
+
+    toast('저장되었습니다.');
+
+    // 요약 카드와 산업별 카드 재계산
+    const filtered = getFilteredData();
+    renderSummary(filtered);
+    renderIndustryCards(filtered);
+
+  } catch(e) {
+    toast('저장 오류: ' + e.message);
+  }
+}
+
+function getFilteredData() {
+  const member = document.getElementById('filterMember').value;
+  const cat    = document.getElementById('filterCategory').value;
+  return allData.filter(p =>
+    (!member || p.member_id === member) &&
+    (!cat    || p.category  === cat)
+  );
+}
+
+// 행의 수익률·시총 셀을 재계산해서 업데이트
+function updateRowStats(row, id) {
+  const p   = allData.find(d => d.id === id);
+  if (!p) return;
+  const cur = getCurPrice(p);
+
+  // 수익률 (6번째 td = index 5, 0-based)
+  const tds = row.querySelectorAll('td');
+  if (tds.length < 10) return;
+
+  // 수익률
+  let retStr = '—'; let retCls = '';
+  if (p.price_at && cur?.price) {
+    const ret = (cur.price - p.price_at) / p.price_at * 100;
+    retCls = ret >= 0 ? 'up' : 'dn';
+    retStr = '<strong>' + (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%</strong>';
+  }
+  tds[6].className = retCls;
+  tds[6].style.textAlign = 'right';
+  tds[6].innerHTML = retStr;
+
+  // 시총(발표시) — stock_prices의 shares를 모르므로 직접 입력한 price_at 기준으로
+  // market_cap_at은 별도 입력이 없으면 비율로 추정
+  // 현재 시총이 있으면 비율로 발표 당시 시총 추정
+  if (p.price_at && cur?.price && cur?.market_cap) {
+    const capAt = Math.round(cur.market_cap * (p.price_at / cur.price));
+    tds[7].style.textAlign = 'right'; tds[7].style.fontSize = '12px'; tds[7].style.color = 'var(--muted)';
+    tds[7].textContent = capAt.toLocaleString() + '억';
+    tds[8].style.textAlign = 'right'; tds[8].style.fontSize = '12px'; tds[8].style.color = 'var(--muted)';
+    tds[8].textContent = cur.market_cap.toLocaleString() + '억';
+
+    const capRet = (cur.market_cap - capAt) / capAt * 100;
+    tds[9].className = capRet >= 0 ? 'up' : 'dn';
+    tds[9].style.textAlign = 'right';
+    tds[9].textContent = (capRet >= 0 ? '+' : '') + capRet.toFixed(1) + '%';
+
+    // DB에 market_cap_at도 업데이트
+    sb.from('presentations').update({ market_cap_at: capAt }).eq('id', id);
+    if (p) p.market_cap_at = capAt;
+  }
+}
+
+async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
+init();
+</script>
+</body>
+</html>

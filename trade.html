@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 펀드</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar">
+    <a href="index.html" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="22" height="22" rx="6" fill="#185fa5"/>
+        <text x="11" y="15.5" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="700" fill="white" text-anchor="middle">S</text>
+        <polyline points="3,16 7,11 11,13 17,7" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      </svg>
+      SSS
+    </a>
+    <a href="index.html" class="nav-item"><div class="nav-dot g"></div>대시보드</a>
+    <a href="picks.html" class="nav-item"><div class="nav-dot"></div>탑픽 관리</a>
+    <a href="trade.html" class="nav-item active"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="members.html" class="nav-item"><div class="nav-dot"></div>참여자 현황</a>
+    <a href="settle.html" class="nav-item"><div class="nav-dot a"></div>결산 관리</a>
+    <a href="schedule.html" class="nav-item"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="presentations.html" class="nav-item"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="admin.html" class="nav-item"><div class="nav-dot"></div>사용자 관리</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="btn" style="width:100%;font-size:12px;" onclick="doLogout()">로그아웃</button>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <div class="topbar">
+      <div>
+        <div class="page-title">매수 / 매도</div>
+        <div class="updated">규칙: 매도 요청 15:00 이후 → 익일 시가 처리</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:1.25rem;">
+
+      <!-- 매수 입력 -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title" style="color:var(--up);">매수 입력</div>
+          <span class="badge b-buy">BUY</span>
+        </div>
+        <div class="form-section">
+          <div class="form-group">
+            <label>추천자</label>
+            <select id="buy-member"><option value="">선택</option></select>
+          </div>
+          <div class="form-group">
+            <label>탑픽 종목 (이번 달)</label>
+            <select id="buy-pick"><option value="">추천자 먼저 선택</option></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>체결가 (원)</label>
+              <input type="number" id="buy-price" placeholder="예: 72400" oninput="calcBuyAmount()" />
+            </div>
+            <div class="form-group">
+              <label>수량 (주)</label>
+              <input type="number" id="buy-qty" placeholder="예: 13" oninput="calcBuyAmount()" />
+            </div>
+          </div>
+          <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
+            매수 금액: <strong id="buyAmount">—</strong>
+          </div>
+          <div class="form-group">
+            <label>메모 (선택)</label>
+            <input type="text" id="buy-note" placeholder="예: 09:03 시가 체결" />
+          </div>
+          <button class="btn btn-primary" onclick="submitBuy()">매수 등록</button>
+        </div>
+      </div>
+
+      <!-- 매도 입력 -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title" style="color:var(--dn);">매도 입력</div>
+          <span class="badge b-sell">SELL</span>
+        </div>
+        <div class="form-section">
+          <div class="form-group">
+            <label>추천자</label>
+            <select id="sell-member"><option value="">선택</option></select>
+          </div>
+          <div class="form-group">
+            <label>보유 종목</label>
+            <select id="sell-pick"><option value="">추천자 먼저 선택</option></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>체결가 (원)</label>
+              <input type="number" id="sell-price" placeholder="예: 81300" oninput="calcSellReturn()" />
+            </div>
+            <div class="form-group">
+              <label>수량 (주)</label>
+              <input type="number" id="sell-qty" placeholder="예: 13" oninput="calcSellReturn()" />
+            </div>
+          </div>
+          <!-- 예상 수익률 미리보기 -->
+          <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
+            예상 수익률: <strong id="sellReturn">—</strong>
+            &nbsp;|&nbsp; 예상 손익: <strong id="sellProfit">—</strong>
+          </div>
+          <div class="form-group">
+            <label>메모 (선택)</label>
+            <input type="text" id="sell-note" placeholder="예: 단톡 매도 의사 표시 확인" />
+          </div>
+          <button class="btn btn-danger" onclick="submitSell()">매도 등록</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 전체 매매 내역 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">전체 매매 내역</div>
+        <div style="display:flex;gap:6px;">
+          <select id="tradeFilterMember" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
+            <option value="">전체 참여자</option>
+          </select>
+          <select id="tradeFilterType" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
+            <option value="">전체</option>
+            <option value="buy">매수</option>
+            <option value="sell">매도</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>일시</th><th>추천자</th><th>종목</th><th>구분</th>
+            <th>체결가</th><th>수량</th><th>금액</th><th>메모</th>
+          </tr></thead>
+          <tbody id="tradesTbody">
+            <tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script>
+let members  = [];
+let allPicks = [];
+let allTrades = [];
+
+async function init() {
+  await requireAuth();
+  members   = await fetchMembers();
+  allPicks  = await fetchAllPicks();
+  allTrades = await fetchTrades(50);
+
+  // 셀렉트 채우기
+  ['buy-member','sell-member','tradeFilterMember'].forEach(id => {
+    const el = document.getElementById(id);
+    members.forEach(m => el.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+  });
+
+  document.getElementById('buy-member').addEventListener('change', () => updatePickSelect('buy'));
+  document.getElementById('sell-member').addEventListener('change', () => updatePickSelect('sell'));
+
+  renderTrades(allTrades);
+
+  // URL 파라미터: ?type=sell → 매도 폼으로 스크롤
+  if (new URLSearchParams(location.search).get('type') === 'sell') {
+    document.getElementById('sell-member').focus();
+  }
+}
+
+function updatePickSelect(type) {
+  const memberId = document.getElementById(`${type}-member`).value;
+  const pickSel  = document.getElementById(`${type}-pick`);
+  pickSel.innerHTML = '<option value="">선택</option>';
+  const filtered = allPicks.filter(p =>
+    p.member_id === memberId &&
+    (type === 'buy' ? p.status !== 'sold' : p.status === 'hold' && p.buy_price)
+  );
+  filtered.forEach(p => {
+    pickSel.innerHTML += `<option value="${p.pick_id}" data-buy="${p.buy_price}" data-qty="${p.buy_quantity}">${p.stock_name} (${(p.month||'').replace('-','년 ')}월)</option>`;
+  });
+}
+
+function calcBuyAmount() {
+  const p = parseInt(document.getElementById('buy-price').value) || 0;
+  const q = parseInt(document.getElementById('buy-qty').value)   || 0;
+  document.getElementById('buyAmount').textContent = p && q ? won(p * q) : '—';
+}
+
+function calcSellReturn() {
+  const sp  = parseInt(document.getElementById('sell-price').value) || 0;
+  const sq  = parseInt(document.getElementById('sell-qty').value)   || 0;
+  const pickOpt = document.getElementById('sell-pick').selectedOptions[0];
+  const bp  = parseInt(pickOpt?.dataset?.buy) || 0;
+
+  if (bp && sp && sq) {
+    const r = ((sp - bp) / bp * 100).toFixed(2);
+    const profit = (sp - bp) * sq;
+    document.getElementById('sellReturn').innerHTML = `<span class="${rCls(r)}">${pct(r)}</span>`;
+    document.getElementById('sellProfit').innerHTML = `<span class="${rCls(profit)}">${profit >= 0 ? '+' : ''}${won(profit)}</span>`;
+  } else {
+    document.getElementById('sellReturn').textContent = '—';
+    document.getElementById('sellProfit').textContent = '—';
+  }
+}
+
+async function submitBuy() {
+  const memberId  = document.getElementById('buy-member').value;
+  const pickId    = document.getElementById('buy-pick').value;
+  const price     = parseInt(document.getElementById('buy-price').value);
+  const quantity  = parseInt(document.getElementById('buy-qty').value);
+  const note      = document.getElementById('buy-note').value;
+  const stockName = document.getElementById('buy-pick').selectedOptions[0]?.text?.split(' (')[0] || '';
+
+  if (!memberId || !pickId || !price || !quantity) { toast('모든 필드를 입력하세요.'); return; }
+
+  try {
+    await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'buy',
+      stock_name: stockName, price, quantity, note });
+    toast('매수 등록 완료!');
+    allTrades = await fetchTrades(50);
+    renderTrades(allTrades);
+  } catch(e) { toast('오류: ' + e.message); }
+}
+
+async function submitSell() {
+  const memberId  = document.getElementById('sell-member').value;
+  const pickId    = document.getElementById('sell-pick').value;
+  const price     = parseInt(document.getElementById('sell-price').value);
+  const quantity  = parseInt(document.getElementById('sell-qty').value);
+  const note      = document.getElementById('sell-note').value;
+  const stockName = document.getElementById('sell-pick').selectedOptions[0]?.text?.split(' (')[0] || '';
+
+  if (!memberId || !pickId || !price || !quantity) { toast('모든 필드를 입력하세요.'); return; }
+
+  try {
+    await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'sell',
+      stock_name: stockName, price, quantity, note });
+    toast('매도 등록 완료!');
+    allTrades = await fetchTrades(50);
+    renderTrades(allTrades);
+    calcSellReturn();
+  } catch(e) { toast('오류: ' + e.message); }
+}
+
+function renderTrades(trades) {
+  const tbody = document.getElementById('tradesTbody');
+  if (!trades.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">매매 내역이 없습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = trades.map(t => {
+    const d = new Date(t.traded_at);
+    const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    const typeBadge = t.trade_type === 'buy'
+      ? '<span class="badge b-buy">매수</span>'
+      : '<span class="badge b-sell">매도</span>';
+    return `<tr>
+      <td class="muted" style="white-space:nowrap;">${ds}</td>
+      <td>${t.members?.name || '-'}</td>
+      <td style="font-weight:500;">${t.stock_name}</td>
+      <td>${typeBadge}</td>
+      <td>${won(t.price)}</td>
+      <td>${t.quantity}주</td>
+      <td>${won(t.price * t.quantity)}</td>
+      <td class="muted" style="font-size:12px;">${t.note || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterTrades() {
+  const memberId = document.getElementById('tradeFilterMember').value;
+  const type     = document.getElementById('tradeFilterType').value;
+  const filtered = allTrades.filter(t =>
+    (!memberId || t.member_id === memberId) &&
+    (!type     || t.trade_type === type)
+  );
+  renderTrades(filtered);
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  location.href = 'index.html';
+}
+
+init();
+</script>
+</body>
+</html>

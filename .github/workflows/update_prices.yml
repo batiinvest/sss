@@ -32,19 +32,25 @@ jobs:
             'apikey': SERVICE_KEY,
             'Authorization': 'Bearer ' + SERVICE_KEY,
             'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates',
+            'Prefer': 'resolution=merge-duplicates,return=minimal',
           }
 
+          import urllib.error
           def upsert_batch(rows):
-            data = json.dumps(rows).encode()
+            data = json.dumps(rows).encode('utf-8')
             req = urllib.request.Request(
               SUPABASE_URL + '/rest/v1/stock_prices',
               data=data, headers=sb_headers, method='POST'
             )
-            with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
-              r.read()
+            try:
+              with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+                r.read()
+            except urllib.error.HTTPError as e:
+              body = e.read().decode('utf-8', errors='replace')
+              print(f'HTTP {e.code} 오류: {body[:200]}')
+              raise
 
-          now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+          now_iso = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
           print('KRX 전종목 시세 로딩...')
           kospi  = fdr.StockListing('KOSPI')

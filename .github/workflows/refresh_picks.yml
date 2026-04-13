@@ -33,7 +33,7 @@ jobs:
           headers_write = {
             **headers_read,
             'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates',
+            'Prefer': 'resolution=merge-duplicates,return=minimal',
           }
 
           def sb_get(path):
@@ -73,7 +73,7 @@ jobs:
           codes = list(code_map.keys())
           print(f'즉시 업데이트 대상: {len(codes)}개 → {codes}')
 
-          now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+          now_iso = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
           rows = []
 
           for market_name, df in [('KOSPI', fdr.StockListing('KOSPI')),

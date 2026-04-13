@@ -4,8 +4,8 @@ on:
   schedule:
     - cron: '0 1 * * 1-5'    # KST 10:00 (UTC 01:00)
     - cron: '0 4 * * 1-5'    # KST 13:00 (UTC 04:00)
-    - cron: '30 6 * * 1-5'   # KST 15:30 장 마감 직전 (UTC 06:30)
-  workflow_dispatch:           # 수동 실행 / 대시보드 버튼
+    - cron: '30 6 * * 1-5'   # KST 15:30 (UTC 06:30)
+  workflow_dispatch:
 
 jobs:
   update-picks:
@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: 패키지 설치
-        run: pip install finance-datareader requests -q
+        run: pip install finance-datareader -q
 
       - name: 탑픽 종목 현재가 업데이트
         env:
@@ -24,63 +24,81 @@ jobs:
           python3 - << 'PYEOF'
           import json, os, ssl, time, datetime
           import urllib.request
+          import urllib.error
           import FinanceDataReader as fdr
 
-          SUPABASE_URL = os.environ['SUPABASE_URL']
-          SERVICE_KEY  = os.environ['SUPABASE_SERVICE_KEY']
+          SUPABASE_URL = os.environ.get('SUPABASE_URL', '').rstrip('/')
+          SERVICE_KEY  = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+          if not SUPABASE_URL or not SERVICE_KEY:
+            print('❌ SUPABASE_URL 또는 SUPABASE_SERVICE_KEY 환경변수가 없습니다.')
+            print('   GitHub 저장소 Settings > Secrets and variables > Actions 에서 설정하세요.')
+            exit(1)
+
+          print(f'Supabase URL: {SUPABASE_URL[:40]}...')
+          print(f'Service Key: {SERVICE_KEY[:20]}...')
+
           ctx = ssl.create_default_context()
 
-          headers_read = {
+          HEADERS_READ = {
             'apikey': SERVICE_KEY,
             'Authorization': 'Bearer ' + SERVICE_KEY,
           }
-          headers_write = {
-            **headers_read,
+          HEADERS_WRITE = {
+            **HEADERS_READ,
             'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates',
+            'Prefer': 'resolution=merge-duplicates,return=minimal',
           }
 
           def sb_get(path):
-            req = urllib.request.Request(
-              SUPABASE_URL + path, headers=headers_read
-            )
-            with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
+            req = urllib.request.Request(SUPABASE_URL + path, headers=HEADERS_READ)
+            with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
               return json.loads(r.read())
 
           def sb_upsert(rows):
-            data = json.dumps(rows).encode()
+            data = json.dumps(rows).encode('utf-8')
             req = urllib.request.Request(
               SUPABASE_URL + '/rest/v1/stock_prices',
-              data=data, headers=headers_write, method='POST'
+              data=data, headers=HEADERS_WRITE, method='POST'
             )
-            with urllib.request.urlopen(req, context=ctx, timeout=15) as r:
-              r.read()
+            try:
+              with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
+                r.read()
+                print(f'  HTTP {r.status} OK')
+            except urllib.error.HTTPError as e:
+              body = e.read().decode('utf-8', errors='replace')
+              print(f'  ❌ HTTP {e.code}: {body[:200]}')
+              raise
 
-          # 1. 현재 보유 중인 탑픽 종목 코드 조회 (status = hold)
-          picks = sb_get(
-            '/rest/v1/picks_with_trades'
-            '?select=stock_code,stock_name,market'
-            '&status=eq.hold'
-            '&stock_code=not.is.null'
-          )
+          # 1. 보유 중인 탑픽 조회
+          print('\n📋 보유 탑픽 조회 중...')
+          try:
+            picks = sb_get(
+              '/rest/v1/picks_with_trades'
+              '?select=stock_code,stock_name,market'
+              '&status=eq.hold'
+              '&stock_code=not.is.null'
+            )
+          except urllib.error.HTTPError as e:
+            body = e.read().decode('utf-8', errors='replace')
+            print(f'❌ 탑픽 조회 실패 HTTP {e.code}: {body[:300]}')
+            exit(1)
 
           if not picks:
-            print('보유 중인 탑픽 없음 — 종료')
+            print('보유 중인 탑픽 없음')
             exit(0)
 
-          # 중복 제거
           code_map = {}
           for p in picks:
             code = p.get('stock_code')
             if code:
               code_map[code] = p
+          codes = list(code_map.keys())
+          print(f'탑픽: {len(codes)}개 → {codes}')
 
-          codes  = list(code_map.keys())
-          print(f'탑픽 종목: {len(codes)}개 → {codes}')
+          now_iso = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-          now_iso = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-
-          # 2. KRX 전체 시세에서 해당 종목만 추출
+          # 2. KRX 시세 조회
           rows = []
           for market_name, df in [('KOSPI', fdr.StockListing('KOSPI')),
                                    ('KOSDAQ', fdr.StockListing('KOSDAQ'))]:
@@ -88,20 +106,13 @@ jobs:
               code = str(row.get('Code', '')).strip().zfill(6)
               if code not in code_map:
                 continue
-              try:
-                price = int(float(row.get('Close', 0) or 0))
-              except:
-                price = 0
-              if price == 0:
-                continue
-              try:
-                market_cap = int(float(row.get('Marcap', 0) or 0) // 100_000_000) or None
-              except:
-                market_cap = None
-              try:
-                change_rate = round(float(row.get('ChagesRatio', 0) or 0), 2)
-              except:
-                change_rate = 0.0
+              try: price = int(float(row.get('Close', 0) or 0))
+              except: price = 0
+              if price == 0: continue
+              try: market_cap = int(float(row.get('Marcap', 0) or 0) // 100_000_000) or None
+              except: market_cap = None
+              try: change_rate = round(float(row.get('ChagesRatio', 0) or 0), 2)
+              except: change_rate = 0.0
 
               rows.append({
                 'stock_code':  code,
@@ -115,10 +126,11 @@ jobs:
               print(f'  {code} {code_map[code].get("stock_name")} → {price:,}원 ({change_rate:+.2f}%)')
 
           if not rows:
-            print('업데이트할 가격 데이터 없음')
+            print('KRX에서 가격 데이터 없음')
             exit(0)
 
-          # 3. Supabase 업데이트
+          # 3. Supabase 저장
+          print(f'\n💾 {len(rows)}개 저장 중...')
           sb_upsert(rows)
-          print(f'✅ 탑픽 {len(rows)}개 업데이트 완료')
+          print(f'✅ 완료: {len(rows)}개 업데이트')
           PYEOF

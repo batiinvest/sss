@@ -201,8 +201,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260412"></script>
-<script src="js/db.js?v=20260412"></script>
+<script src="js/config.js?v=20260417"></script>
+<script src="js/db.js?v=20260417"></script>
 <script>
 let schedules = [];
 let members   = [];
@@ -222,13 +222,20 @@ const CAT_CLASS = { industry: 'ev-meeting', stock: 'ev-deadline', dinner: 'ev-di
 const MONTH_KR  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
 async function init() {
-  await requireAuth();
+  try {
+    await requireAuth();
+  } catch(e) {
+    console.error('인증 오류:', e);
+  }
   checkDBConnection();
 
   try {
-    [schedules, members] = await Promise.all([fetchSchedules(), fetchMembers()]);
+    const [sch, mem] = await Promise.all([fetchSchedules(), fetchMembers()]);
+    schedules = sch || [];
+    members   = mem || [];
+    console.log('데이터 로드 완료 - 일정:', schedules.length, '멤버:', members.length);
   } catch(e) {
-    console.error('일정 데이터 로드 오류:', e.message);
+    console.error('데이터 로드 오류:', e);
     schedules = [];
     members   = [];
   }
@@ -236,9 +243,9 @@ async function init() {
   const sel = document.getElementById('s-member');
   if (sel) members.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
 
-  renderCalendar();
-  renderUpcoming();
-  renderScheduleList();
+  try { renderCalendar(); } catch(e) { console.error('renderCalendar 오류:', e); }
+  try { renderUpcoming(); } catch(e) { console.error('renderUpcoming 오류:', e); }
+  try { renderScheduleList(); } catch(e) { console.error('renderScheduleList 오류:', e); }
 }
 
 // ── 달력 렌더링

@@ -54,7 +54,18 @@
         <div class="page-title">발표 히스토리</div>
         <div class="updated" id="priceUpdatedAt">발표 당시 주가 vs 현재 주가 비교</div>
       </div>
-      <div class="btn-row">
+      <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+        <!-- 예정/완료 탭 -->
+        <div style="display:flex;border:0.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;flex-shrink:0;">
+          <button id="tabPlanned" onclick="switchTab('planned')"
+            style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:var(--surface);color:var(--muted);">
+            📋 예정
+          </button>
+          <button id="tabDone" onclick="switchTab('done')"
+            style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;">
+            ✅ 완료
+          </button>
+        </div>
         <select id="filterMember" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
           <option value="">전체 발표자</option>
         </select>
@@ -127,6 +138,24 @@
 let allData  = [];
 let members  = [];
 let priceMap = {};
+
+let currentTab = 'done';  // 'planned' | 'done'
+
+function switchTab(tab) {
+  currentTab = tab;
+  const plannedBtn = document.getElementById('tabPlanned');
+  const doneBtn    = document.getElementById('tabDone');
+  if (tab === 'planned') {
+    plannedBtn.style.background = 'var(--accent)'; plannedBtn.style.color = '#fff';
+    doneBtn.style.background    = 'var(--surface)'; doneBtn.style.color = 'var(--muted)';
+  } else {
+    doneBtn.style.background    = 'var(--accent)'; doneBtn.style.color = '#fff';
+    plannedBtn.style.background = 'var(--surface)'; plannedBtn.style.color = 'var(--muted)';
+  }
+  // 탭에 맞게 데이터 필터링
+  const filtered = allData.filter(p => (p.status || 'done') === tab);
+  renderAll(filtered);
+}
 
 async function init() {
   await requireAuth();
@@ -242,7 +271,9 @@ async function init() {
     console.warn('현재가 조회 오류:', e.message);
   }
 
-  renderAll(allData);
+  // 탭에 맞게 렌더
+  const tabFiltered = allData.filter(p => (p.status || 'done') === currentTab);
+  renderAll(tabFiltered);
 }
 
 function applyFilter() {
@@ -497,11 +528,14 @@ function renderTable(data) {
         ${p.stock_code ? `<div style="font-size:11px;color:var(--muted);">${p.stock_code}</div>` : ''}
       </td>
       <td style="text-align:right;">
-        ${(cur || p.price_at) ? `<div class="price-cell" onclick="editPriceAt('${p.id}', ${p.price_at || 0}, this)"
-          title="클릭하여 발표 당시 주가 입력"
-          style="cursor:pointer;padding:3px 6px;border-radius:4px;display:inline-block;min-width:60px;text-align:right;">
-          ${p.price_at ? p.price_at.toLocaleString() + '원' : '<span style=\"color:var(--accent);font-size:12px;\">입력</span>'}
-        </div>` : '<span style="color:var(--hint);font-size:12px;">—</span>'}
+        ${p.status === 'planned'
+          ? (cur?.price ? '<span style="font-size:13px;font-weight:500;">' + cur.price.toLocaleString() + '원</span>' : '<span style="color:var(--muted);font-size:12px;">—</span>')
+          : (cur || p.price_at) ? `<div class="price-cell" onclick="editPriceAt('${p.id}', ${p.price_at || 0}, this)"
+              title="클릭하여 발표 당시 주가 입력"
+              style="cursor:pointer;padding:3px 6px;border-radius:4px;display:inline-block;min-width:60px;text-align:right;">
+              ${p.price_at ? p.price_at.toLocaleString() + '원' : '<span style=\"color:var(--accent);font-size:12px;\">입력</span>'}
+            </div>` : '<span style="color:var(--hint);font-size:12px;">—</span>'
+        }
       </td>
       <td style="text-align:right;font-weight:500;">${cur?.price ? cur.price.toLocaleString() + '원' : '—'}</td>
       <td style="text-align:right;" class="${retCls}"><strong>${retStr}</strong></td>
@@ -607,6 +641,7 @@ function getFilteredData() {
   const member = document.getElementById('filterMember').value;
   const cat    = document.getElementById('filterCategory').value;
   return allData.filter(p =>
+    (p.status || 'done') === currentTab &&
     (!member || p.member_id === member) &&
     (!cat    || p.category  === cat)
   );

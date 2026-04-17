@@ -150,20 +150,30 @@ window.addEventListener('popstate', (e) => {
 // 로그아웃
 async function doLogout() {
   sessionStorage.removeItem('sideProfileData');
+  sessionStorage.removeItem('app_authenticated');
   await sb.auth.signOut();
   location.reload();
 }
+
+// iframe에서 세션 만료 메시지 수신
+window.addEventListener('message', (e) => {
+  if (e.data === 'session_expired') {
+    doLogout();
+  }
+});
 
 // 초기 실행
 async function initApp() {
   await requireAuth();
   initSidebarAuth();
 
+  // 인증 완료 표시 (iframe에서 세션 공유 확인용)
+  sessionStorage.setItem('app_authenticated', '1');
+
   const hash = location.hash.replace('#', '');
   if (hash && hash !== 'index') {
     loadPage(hash);
   } else {
-    // 초기 active 표시
     document.querySelector('[data-page="index"]')?.classList.add('active');
     history.replaceState({ page: 'index' }, '', '#index');
   }

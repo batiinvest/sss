@@ -581,18 +581,38 @@ async function loadPlannedItems(scheduleId, s) {
     row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg);border-radius:var(--r-md);font-size:13px;';
     row.dataset.id = item.id;
 
-    const statusDot = item.status === 'done'
-      ? '<span style="width:8px;height:8px;border-radius:50%;background:#0f6e56;flex-shrink:0;display:inline-block;"></span>'
-      : '<span style="width:8px;height:8px;border-radius:50%;background:#b5d4f4;border:1px solid #0c447c;flex-shrink:0;display:inline-block;"></span>';
+    const isDone = item.status === 'done';
 
-    row.innerHTML = statusDot +
-      '<span style="font-weight:500;flex:1;">' + topicName + '</span>' +
-      '<span style="color:var(--muted);">' + (item.members?.name || '—') + '</span>' +
-      (item.status === 'planned'
-        ? '<button onclick="deletePlannedItem('' + item.id + '', this.closest('div'))" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;">✕</button>'
-        : '<span style="font-size:11px;color:#0f6e56;padding:1px 6px;background:#e6f7f1;border-radius:4px;">완료</span>');
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-weight:500;flex:1;';
+    nameSpan.textContent = topicName;
+
+    const memberSpan = document.createElement('span');
+    memberSpan.style.color = 'var(--muted)';
+    memberSpan.textContent = item.members?.name || '—';
+
+    const dot = document.createElement('span');
+    dot.style.cssText = isDone
+      ? 'width:8px;height:8px;border-radius:50%;background:#0f6e56;flex-shrink:0;display:inline-block;'
+      : 'width:8px;height:8px;border-radius:50%;background:#b5d4f4;border:1px solid #0c447c;flex-shrink:0;display:inline-block;';
+    row.appendChild(dot);
+    row.appendChild(nameSpan);
+    row.appendChild(memberSpan);
+
+    if (item.status === 'planned') {
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;';
+      delBtn.onclick = () => deletePlannedItem(item.id, row);
+      row.appendChild(delBtn);
+    } else {
+      const doneSpan = document.createElement('span');
+      doneSpan.textContent = '완료';
+      doneSpan.style.cssText = 'font-size:11px;color:#0f6e56;padding:1px 6px;background:#e6f7f1;border-radius:4px;';
+      row.appendChild(doneSpan);
+    }
     listEl.appendChild(row);
-  });
+  });  // items.forEach 닫기
 }
 
 function addPlannedRow() {

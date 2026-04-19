@@ -34,6 +34,8 @@
       .upcoming-date  { min-width: 44px; }
       .upcoming-day   { font-size: 22px; }
     }
+    .pres-drag-item:hover { background: var(--bg) !important; }
+    tr.drag-over { background: var(--bg) !important; outline: 2px dashed var(--accent); }
   </style>
 </head>
 <body>
@@ -157,7 +159,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>메모</th><th style="width:100px;">작업</th>
+            <th>날짜</th><th>제목</th><th>구분</th><th>발표자 · 종목</th><th>시간</th><th>장소</th><th style="width:90px;">작업</th>
           </tr></thead>
           <tbody id="scheduleListTbody">
             <tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
@@ -204,11 +206,14 @@
 <script src="js/config.js?v=20260418"></script>
 <script src="js/db.js?v=20260418"></script>
 <script>
-let schedules = [];
-let members   = [];
+let schedules     = [];
+let members       = [];
+let presentations = [];   // 발표 예정 종목
 let calYear   = new Date().getFullYear();
-let calMonth  = new Date().getMonth(); // 0-indexed
+let calMonth  = new Date().getMonth();
 let editingScheduleId = null;
+let dragSrcMemberId   = null;  // 드래그 중인 발표자 ID
+let dragSrcScheduleId = null;  // 드래그 출발 일정 ID
 
 // 타임존 안전한 날짜 문자열 (UTC 변환 없이 로컬 날짜 사용)
 function toDateStr(date) {
@@ -244,8 +249,8 @@ async function init() {
   if (sel) members.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
 
   try { renderCalendar(); } catch(e) { console.error('renderCalendar 오류:', e); }
-  try { renderUpcoming(); } catch(e) { console.error('renderUpcoming 오류:', e); }
-  try { renderScheduleList(); } catch(e) { console.error('renderScheduleList 오류:', e); }
+  try { await renderUpcoming(); } catch(e) { console.error('renderUpcoming 오류:', e); }
+  try { await renderScheduleList(); } catch(e) { console.error('renderScheduleList 오류:', e); }
 }
 
 // ── 달력 렌더링
@@ -308,16 +313,33 @@ function nextMonth() { calMonth++; if(calMonth>11){calMonth=0;calYear++;} render
 function goToday()   { const t=new Date(); calYear=t.getFullYear(); calMonth=t.getMonth(); renderCalendar(); }
 
 // ── 다가오는 일정
-function renderUpcoming() {
+// 발표 예정 종목 캐시
+let upcomingPresentations = {};
+
+async function loadUpcomingPresentations(scheduleIds) {
+  if (!scheduleIds.length) return;
+  const { data } = await sb.from('presentations')
+    .select('schedule_id, member_id, topic, status, members(name)')
+    .in('schedule_id', scheduleIds)
+    .order('created_at');
+  if (!data) return;
+  scheduleIds.forEach(id => { upcomingPresentations[id] = []; });
+  data.forEach(p => {
+    if (!upcomingPresentations[p.schedule_id]) upcomingPresentations[p.schedule_id] = [];
+    upcomingPresentations[p.schedule_id].push(p);
+  });
+}
+
+async function renderUpcoming() {
   const today = toDateStr(new Date());
   const upcoming = schedules
-    .filter(s => s.event_date >= today)
+    .filter(s => s.event_date >= today && (s.category === 'stock' || s.category === 'industry'))
     .sort((a,b) => a.event_date.localeCompare(b.event_date))
-    .slice(0, 5);
+    .slice(0, 3);
 
   const el = document.getElementById('upcomingList');
   if (!upcoming.length) {
-    el.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;">예정된 일정이 없습니다</div>';
+    el.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;">예정된 스터디가 없습니다</div>';
     return;
   }
 
@@ -327,67 +349,230 @@ function renderUpcoming() {
     const day   = d.getDate();
     const dow   = ['일','월','화','수','목','금','토'][d.getDay()];
     const dDiff = Math.ceil((d - new Date(new Date().toDateString())) / 86400000);
-    const dStr  = dDiff === 0 ? '오늘' : dDiff === 1 ? '내일' : `D-${dDiff}`;
+    const dStr  = dDiff === 0 ? '오늘' : dDiff === 1 ? '내일' : 'D-' + dDiff;
 
-    return `<div class="upcoming-item" onclick="showDetail('${s.id}',event)" style="cursor:pointer;">
-      <div class="upcoming-date">
-        <div class="upcoming-month">${mon}</div>
-        <div class="upcoming-day">${day}</div>
-        <div style="font-size:10px;color:var(--muted);">${dow}요일</div>
-      </div>
-      <div style="flex:1;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-          <span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${CAT_LABEL[s.category]||'기타'}</span>
-          <span style="font-size:11px;color:${dDiff<=3?'#a32d2d':'var(--muted)'};">${dStr}</span>
-        </div>
-        <div style="font-weight:500;font-size:14px;">${s.title}</div>
-        ${s.event_time ? `<div style="font-size:12px;color:var(--muted);">${s.event_time.slice(0,5)}${s.location?' · '+s.location:''}</div>` : (s.location?`<div style="font-size:12px;color:var(--muted);">${s.location}</div>`:'')}
-        ${s.description ? (() => {
-          // 발표 순서 포맷팅: 【...】 헤더 + 번호 목록을 세로로 표시
-          const lines = s.description.split('\n').filter(l => l.trim());
-          return '<div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.8;">' +
-            lines.map(l => {
-              if (l.startsWith('【') && l.endsWith('】')) {
-                return '<span style="font-weight:500;color:var(--text);">' + l + '</span>';
-              }
-              return '<div style="padding-left:4px;">' + l + '</div>';
-            }).join('') +
-          '</div>';
-        })() : ''}
-      </div>
-    </div>`;
+    // 이 일정의 발표 예정 종목
+    const pres = presentations.filter(p => p.schedule_id === s.id)
+      .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+
+    // 발표자별 그룹 (같은 멤버가 여러 종목 발표 가능)
+    const presRows = pres.length
+      ? pres.map((p, idx) => {
+          const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
+          const memberName = p.members?.name || '—';
+          return '<tr style="border-bottom:0.5px solid var(--border);">' +
+            '<td style="padding:5px 8px;font-size:12px;color:var(--muted);white-space:nowrap;">' + (idx+1) + '. ' + memberName + '</td>' +
+            '<td style="padding:5px 8px;font-size:13px;font-weight:500;">' + topicName + '</td>' +
+          '</tr>';
+        }).join('')
+      : '<tr><td colspan="2" style="padding:8px;font-size:12px;color:var(--muted);">발표 종목 미등록 (일정 클릭하여 추가)</td></tr>';
+
+    return '<div class="upcoming-item" style="cursor:pointer;padding:0;" onclick="showDetail('' + s.id + '',event)">' +
+      '<div class="upcoming-date" style="min-width:52px;">' +
+        '<div class="upcoming-month">' + mon + '</div>' +
+        '<div class="upcoming-day">' + day + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">' + dow + '요일</div>' +
+      '</div>' +
+      '<div style="flex:1;padding:10px 4px;">' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+          '<span class="ev-badge ' + (CAT_CLASS[s.category]||'ev-other') + '">' + (CAT_LABEL[s.category]||'기타') + '</span>' +
+          '<span style="font-size:11px;color:' + (dDiff<=3?'#a32d2d':'var(--muted)') + ';">' + dStr + '</span>' +
+          '<span style="font-weight:500;font-size:13px;">' + s.title + '</span>' +
+        '</div>' +
+        '<table style="width:100%;border-collapse:collapse;border:0.5px solid var(--border);border-radius:4px;overflow:hidden;">' +
+          '<thead><tr style="background:var(--bg);">' +
+            '<th style="padding:4px 8px;font-size:11px;color:var(--muted);text-align:left;font-weight:500;width:100px;">발표자</th>' +
+            '<th style="padding:4px 8px;font-size:11px;color:var(--muted);text-align:left;font-weight:500;">발표 종목</th>' +
+          '</tr></thead>' +
+          '<tbody>' + presRows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
 // ── 전체 목록
-function renderScheduleList() {
-  const cat = document.getElementById('filterCat').value;
-  const list = schedules.filter(s => !cat || s.category === cat)
+// 전체 발표 종목 캐시 (테이블용)
+let allPresentationsCache = {};
+
+async function loadAllPresentations() {
+  const ids = schedules.filter(s => s.category === 'industry' || s.category === 'stock').map(s => s.id);
+  if (!ids.length) return;
+  const { data } = await sb.from('presentations')
+    .select('id, schedule_id, member_id, topic, status, members(name)')
+    .in('schedule_id', ids)
+    .order('created_at');
+  allPresentationsCache = {};
+  (data||[]).forEach(p => {
+    if (!allPresentationsCache[p.schedule_id]) allPresentationsCache[p.schedule_id] = [];
+    allPresentationsCache[p.schedule_id].push(p);
+  });
+}
+
+// 드래그앤드롭 상태
+let dragSrcPresId = null;
+let dragSrcScheduleId = null;
+
+async function renderScheduleList() {
+  const cat    = document.getElementById('filterCat').value;
+  const today  = toDateStr(new Date());
+  const list   = schedules
+    .filter(s => !cat || s.category === cat)
     .sort((a,b) => b.event_date.localeCompare(a.event_date));
+
   const tbody = document.getElementById('scheduleListTbody');
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">일정이 없습니다</td></tr>';
     return;
   }
-  const today = toDateStr(new Date());
-  tbody.innerHTML = list.map(s => {
-    const past = s.event_date < today;
-    return `<tr style="${past?'opacity:0.55;':''}">
-      <td style="white-space:nowrap;">${s.event_date}</td>
-      <td style="font-weight:500;">${s.title}</td>
-      <td><span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${CAT_LABEL[s.category]||'기타'}</span></td>
-      <td class="muted">${s.event_time ? s.event_time.slice(0,5) : '-'}</td>
-      <td class="muted">${s.location||'-'}</td>
-      <td class="muted" style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.description||'-'}</td>
-      <td>
-        <div style="display:flex;gap:4px;">
-          <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="editSchedule('${s.id}')">수정</button>
-          <button class="btn" style="font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);" onclick="confirmDelete('${s.id}')">삭제</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
+
+  tbody.innerHTML = '';
+
+  list.forEach(s => {
+    const past   = s.event_date < today;
+    const isTalk = s.category === 'stock' || s.category === 'industry';
+
+    // 이 일정의 발표 예정 종목
+    const pres = presentations
+      .filter(p => p.schedule_id === s.id)
+      .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+
+    const tr = document.createElement('tr');
+    tr.dataset.scheduleId = s.id;
+    tr.style.opacity = past ? '0.55' : '1';
+
+    // 발표자·종목 셀 (드래그앤드랍 대상)
+    let presCell = '';
+    if (isTalk && pres.length) {
+      presCell = pres.map((p, idx) => {
+        const topicName  = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
+        const memberName = p.members?.name || '—';
+        const canDrag    = !past;
+
+        return '<div class="pres-drag-item" ' +
+          'data-pres-id="' + p.id + '" ' +
+          'data-member-id="' + (p.member_id||'') + '" ' +
+          'data-schedule-id="' + s.id + '" ' +
+          (canDrag ? 'draggable="true" ' : '') +
+          'style="display:flex;align-items:center;gap:6px;padding:3px 0;' +
+          (canDrag ? 'cursor:grab;' : 'cursor:default;') + '">' +
+          (canDrag ? '<span style="color:var(--muted);font-size:11px;">⠿</span>' : '<span style="font-size:11px;">' + (idx+1) + '.</span>') +
+          '<span style="font-size:12px;color:var(--muted);min-width:44px;">' + memberName + '</span>' +
+          '<span style="font-size:13px;font-weight:500;">' + topicName + '</span>' +
+        '</div>';
+      }).join('');
+    } else if (isTalk) {
+      presCell = '<span style="font-size:12px;color:var(--muted);">미등록</span>';
+    } else {
+      presCell = '<span style="font-size:12px;color:var(--muted);">—</span>';
+    }
+
+    tr.innerHTML =
+      '<td style="white-space:nowrap;">' + s.event_date + '</td>' +
+      '<td style="font-weight:500;">' + s.title + '</td>' +
+      '<td><span class="ev-badge ' + (CAT_CLASS[s.category]||'ev-other') + '">' + (CAT_LABEL[s.category]||'기타') + '</span></td>' +
+      '<td id="pres-cell-' + s.id + '">' + presCell + '</td>' +
+      '<td class="muted">' + (s.event_time ? s.event_time.slice(0,5) : '-') + '</td>' +
+      '<td class="muted">' + (s.location||'-') + '</td>' +
+      '<td>' +
+        (past ? '<span style="font-size:11px;color:var(--muted);">지난 일정</span>' :
+          '<div style="display:flex;gap:4px;">' +
+            '<button class="btn" style="font-size:11px;padding:3px 8px;" onclick="editSchedule('' + s.id + '')">수정</button>' +
+            '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);" onclick="confirmDelete('' + s.id + '')">삭제</button>' +
+          '</div>') +
+      '</td>';
+
+    tbody.appendChild(tr);
+  });
+
+  // 드래그앤드랍 이벤트 등록
+  initDragDrop();
 }
+
+// ── 드래그앤드랍: 발표자 순서 변경
+function initDragDrop() {
+  const items = document.querySelectorAll('.pres-drag-item[draggable="true"]');
+
+  items.forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragSrcMemberId   = item.dataset.memberId;
+      dragSrcPresId     = item.dataset.presId;
+      dragSrcScheduleId = item.dataset.scheduleId;
+      item.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    item.addEventListener('dragend', e => {
+      item.style.opacity = '1';
+      document.querySelectorAll('.pres-drag-item').forEach(i => i.classList.remove('drag-over'));
+    });
+
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.pres-drag-item').forEach(i => i.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+
+    item.addEventListener('drop', async e => {
+      e.stopPropagation();
+      const tgtPresId     = item.dataset.presId;
+      const tgtScheduleId = item.dataset.scheduleId;
+
+      if (dragSrcPresId === tgtPresId) return;
+
+      // 두 presentations의 schedule_id 교환
+      if (dragSrcPresId && tgtPresId) {
+        await swapPresSchedule(dragSrcPresId, tgtScheduleId, tgtPresId, dragSrcScheduleId);
+      }
+    });
+  });
+}
+
+// ── 두 발표의 schedule_id + presented_at 교환
+async function swapPresSchedule(presId1, newScheduleId1, presId2, newScheduleId2) {
+  // 새 일정 날짜 찾기
+  const sch1 = schedules.find(s => s.id === newScheduleId1);
+  const sch2 = schedules.find(s => s.id === newScheduleId2);
+  if (!sch1 || !sch2) return;
+
+  const today = toDateStr(new Date());
+  if (sch1.event_date < today || sch2.event_date < today) {
+    toast('지난 일정은 변경할 수 없습니다.');
+    return;
+  }
+
+  try {
+    // presId1 → newScheduleId1로 이동
+    await sb.from('presentations').update({
+      schedule_id:  newScheduleId1,
+      presented_at: sch1.event_date,
+    }).eq('id', presId1);
+
+    // presId2 → newScheduleId2로 이동
+    await sb.from('presentations').update({
+      schedule_id:  newScheduleId2,
+      presented_at: sch2.event_date,
+    }).eq('id', presId2);
+
+    toast('✅ 발표 일정이 변경되었습니다.');
+
+    // 데이터 재로드 + 렌더
+    presentations = await sb.from('presentations')
+      .select('*, members(name)')
+      .eq('status', 'planned')
+      .order('created_at')
+      .then(r => r.data || []);
+
+    renderScheduleList();
+    renderUpcoming();
+  } catch(e) {
+    toast('오류: ' + e.message);
+  }
+}
+
+let dragSrcPresId = null;
+
 
 // ── 폼
 function openForm(prefill={}) {
@@ -727,8 +912,16 @@ async function savePlannedItems() {
   }
 
   toast(`✅ ${saved}개 발표 예정 종목 저장`);
+  // 전역 presentations 재로드
+  presentations = await sb.from('presentations')
+    .select('*, members(name)')
+    .eq('status', 'planned')
+    .order('created_at')
+    .then(r => r.data || []);
   await loadPlannedItems(scheduleId, s);
   document.getElementById('plannedSaveRow').style.display = 'none';
+  renderScheduleList();
+  renderUpcoming();
 }
 
 function closeDetail() { document.getElementById('detailModal').style.display = 'none'; }

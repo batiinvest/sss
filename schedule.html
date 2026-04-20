@@ -203,8 +203,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260418"></script>
-<script src="js/db.js?v=20260418"></script>
+<script src="js/config.js?v=20260422"></script>
+<script src="js/db.js?v=20260422"></script>
 <script>
 let schedules     = [];
 let members       = [];
@@ -345,12 +345,14 @@ async function renderUpcoming() {
     .slice(0, 3);
 
   const el = document.getElementById('upcomingList');
+  el.innerHTML = '';
+
   if (!upcoming.length) {
     el.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;">예정된 스터디가 없습니다</div>';
     return;
   }
 
-  el.innerHTML = upcoming.map(s => {
+  upcoming.forEach(s => {
     const d     = new Date(s.event_date + 'T00:00:00');
     const mon   = MONTH_KR[d.getMonth()];
     const day   = d.getDate();
@@ -359,43 +361,74 @@ async function renderUpcoming() {
     const dStr  = dDiff === 0 ? '오늘' : dDiff === 1 ? '내일' : 'D-' + dDiff;
 
     // 이 일정의 발표 예정 종목
-    const pres = presentations.filter(p => p.schedule_id === s.id)
+    const pres = presentations
+      .filter(p => p.schedule_id === s.id)
       .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
 
-    // 발표자별 그룹 (같은 멤버가 여러 종목 발표 가능)
-    const presRows = pres.length
-      ? pres.map((p, idx) => {
-          const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
-          const memberName = p.members?.name || '—';
-          return '<tr style="border-bottom:0.5px solid var(--border);">' +
-            '<td style="padding:5px 8px;font-size:12px;color:var(--muted);white-space:nowrap;">' + (idx+1) + '. ' + memberName + '</td>' +
-            '<td style="padding:5px 8px;font-size:13px;font-weight:500;">' + topicName + '</td>' +
-          '</tr>';
-        }).join('')
-      : '<tr><td colspan="2" style="padding:8px;font-size:12px;color:var(--muted);">발표 종목 미등록 (일정 클릭하여 추가)</td></tr>';
+    // 아이템 컨테이너
+    const item = document.createElement('div');
+    item.className = 'upcoming-item';
+    item.style.cssText = 'cursor:pointer;padding:0;';
+    item.onclick = function(e) { showDetail(s.id, e); };
 
-    return '<div class="upcoming-item" style="cursor:pointer;padding:0;" onclick="showDetail('' + s.id + '',event)">' +
-      '<div class="upcoming-date" style="min-width:52px;">' +
-        '<div class="upcoming-month">' + mon + '</div>' +
-        '<div class="upcoming-day">' + day + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);">' + dow + '요일</div>' +
-      '</div>' +
-      '<div style="flex:1;padding:10px 4px;">' +
-        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
-          '<span class="ev-badge ' + (CAT_CLASS[s.category]||'ev-other') + '">' + (CAT_LABEL[s.category]||'기타') + '</span>' +
-          '<span style="font-size:11px;color:' + (dDiff<=3?'#a32d2d':'var(--muted)') + ';">' + dStr + '</span>' +
-          '<span style="font-weight:500;font-size:13px;">' + s.title + '</span>' +
-        '</div>' +
-        '<table style="width:100%;border-collapse:collapse;border:0.5px solid var(--border);border-radius:4px;overflow:hidden;">' +
-          '<thead><tr style="background:var(--bg);">' +
-            '<th style="padding:4px 8px;font-size:11px;color:var(--muted);text-align:left;font-weight:500;width:100px;">발표자</th>' +
-            '<th style="padding:4px 8px;font-size:11px;color:var(--muted);text-align:left;font-weight:500;">발표 종목</th>' +
-          '</tr></thead>' +
-          '<tbody>' + presRows + '</tbody>' +
-        '</table>' +
-      '</div>' +
-    '</div>';
-  }).join('');
+    // 날짜 영역
+    const dateDiv = document.createElement('div');
+    dateDiv.className = 'upcoming-date';
+    dateDiv.style.minWidth = '52px';
+    dateDiv.innerHTML =
+      '<div class="upcoming-month">' + mon + '</div>' +
+      '<div class="upcoming-day">' + day + '</div>' +
+      '<div style="font-size:10px;color:var(--muted);">' + dow + '요일</div>';
+
+    // 컨텐츠 영역
+    const contentDiv = document.createElement('div');
+    contentDiv.style.cssText = 'flex:1;padding:10px 4px;';
+
+    // 헤더 (배지 + D-day + 제목)
+    const headerDiv = document.createElement('div');
+    headerDiv.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+    headerDiv.innerHTML =
+      '<span class="ev-badge ' + (CAT_CLASS[s.category]||'ev-other') + '">' + (CAT_LABEL[s.category]||'기타') + '</span>' +
+      '<span style="font-size:11px;color:' + (dDiff<=3?'#a32d2d':'var(--muted)') + ';">' + dStr + '</span>' +
+      '<span style="font-weight:500;font-size:13px;">' + s.title + '</span>';
+
+    // 발표 순서 테이블
+    const tbl = document.createElement('table');
+    tbl.style.cssText = 'width:100%;border-collapse:collapse;border:0.5px solid var(--border);border-radius:4px;overflow:hidden;font-size:13px;';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML =
+      '<tr style="background:var(--bg);">' +
+        '<th style="padding:4px 8px;font-size:11px;color:var(--muted);text-align:left;font-weight:500;width:100px;">발표자</th>' +
+        '<th style="padding:4px 8px;font-size:11px;color:var(--muted);text-align:left;font-weight:500;">발표 종목</th>' +
+      '</tr>';
+
+    const tbody = document.createElement('tbody');
+    if (pres.length) {
+      pres.forEach((p, i) => {
+        const topicName  = p.topic && p.topic.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        const memberName = p.members && p.members.name ? p.members.name : '—';
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '0.5px solid var(--border)';
+        tr.innerHTML =
+          '<td style="padding:5px 8px;font-size:12px;color:var(--muted);white-space:nowrap;">' + (i+1) + '. ' + memberName + '</td>' +
+          '<td style="padding:5px 8px;font-weight:500;">' + topicName + '</td>';
+        tbody.appendChild(tr);
+      });
+    } else {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="2" style="padding:8px;font-size:12px;color:var(--muted);">발표 종목 미등록 (일정 클릭하여 추가)</td>';
+      tbody.appendChild(tr);
+    }
+
+    tbl.appendChild(thead);
+    tbl.appendChild(tbody);
+    contentDiv.appendChild(headerDiv);
+    contentDiv.appendChild(tbl);
+    item.appendChild(dateDiv);
+    item.appendChild(contentDiv);
+    el.appendChild(item);
+  });
 }
 
 // ── 전체 목록

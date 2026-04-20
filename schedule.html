@@ -242,7 +242,7 @@ async function init() {
       sb.from('presentations')
         .select('*, members(name)')
         .order('created_at')
-        .then(r => (r.data || []).filter(p => !p.status || p.status === 'planned'))
+        .then(r => r.data || [])
     ]);
     schedules     = sch  || [];
     members       = mem  || [];
@@ -655,7 +655,6 @@ async function swapPresSchedule(presId1, newScheduleId1, presId2, newScheduleId2
     // 데이터 재로드 + 렌더
     presentations = await sb.from('presentations')
       .select('*, members(name)')
-      .eq('status', 'planned')
       .order('created_at')
       .then(r => r.data || []);
 
@@ -1008,7 +1007,6 @@ async function savePlannedItems() {
   // 전역 presentations 재로드
   presentations = await sb.from('presentations')
     .select('*, members(name)')
-    .eq('status', 'planned')
     .order('created_at')
     .then(r => r.data || []);
   await loadPlannedItems(scheduleId, s);

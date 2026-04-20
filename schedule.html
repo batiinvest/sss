@@ -235,14 +235,21 @@ async function init() {
   checkDBConnection();
 
   try {
-    const [sch, mem] = await Promise.all([fetchSchedules(), fetchMembers()]);
-    schedules = sch || [];
-    members   = mem || [];
-    console.log('데이터 로드 완료 - 일정:', schedules.length, '멤버:', members.length);
+    const [sch, mem, pres] = await Promise.all([
+      fetchSchedules(),
+      fetchMembers(),
+      sb.from('presentations')
+        .select('*, members(name)')
+        .order('created_at')
+        .then(r => (r.data || []).filter(p => !p.status || p.status === 'planned'))
+    ]);
+    schedules     = sch  || [];
+    members       = mem  || [];
+    presentations = pres || [];
+    console.log('데이터 로드 - 일정:', schedules.length, '멤버:', members.length, '발표예정:', presentations.length);
   } catch(e) {
     console.error('데이터 로드 오류:', e);
-    schedules = [];
-    members   = [];
+    schedules = []; members = []; presentations = [];
   }
 
   const sel = document.getElementById('s-member');

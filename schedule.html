@@ -452,25 +452,27 @@ async function loadAllPresentations() {
 
 // 드래그앤드롭 상태
 async function renderScheduleList() {
-  const cat    = document.getElementById('filterCat').value;
-  const today  = toDateStr(new Date());
-  const list   = schedules
+  const cat   = document.getElementById('filterCat').value;
+  const today = toDateStr(new Date());
+  const list  = schedules
     .filter(s => !cat || s.category === cat)
     .sort((a,b) => b.event_date.localeCompare(a.event_date));
 
   const tbody = document.getElementById('scheduleListTbody');
+  tbody.innerHTML = '';
+
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">일정이 없습니다</td></tr>';
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">일정이 없습니다</td>';
+    tbody.appendChild(tr);
     return;
   }
-
-  tbody.innerHTML = '';
 
   list.forEach(s => {
     const past   = s.event_date < today;
     const isTalk = s.category === 'stock' || s.category === 'industry';
 
-    // 이 일정의 발표 예정 종목
+    // 발표 예정 종목
     const pres = presentations
       .filter(p => p.schedule_id === s.id)
       .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
@@ -479,51 +481,106 @@ async function renderScheduleList() {
     tr.dataset.scheduleId = s.id;
     tr.style.opacity = past ? '0.55' : '1';
 
-    // 발표자·종목 셀 (드래그앤드랍 대상)
-    let presCell = '';
-    if (isTalk && pres.length) {
-      presCell = pres.map((p, idx) => {
-        const topicName  = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
-        const memberName = p.members?.name || '—';
-        const canDrag    = !past;
+    // 날짜
+    const tdDate = document.createElement('td');
+    tdDate.style.whiteSpace = 'nowrap';
+    tdDate.textContent = s.event_date;
 
-        return '<div class="pres-drag-item" ' +
-          'data-pres-id="' + p.id + '" ' +
-          'data-member-id="' + (p.member_id||'') + '" ' +
-          'data-schedule-id="' + s.id + '" ' +
-          (canDrag ? 'draggable="true" ' : '') +
-          'style="display:flex;align-items:center;gap:6px;padding:3px 0;' +
-          (canDrag ? 'cursor:grab;' : 'cursor:default;') + '">' +
-          (canDrag ? '<span style="color:var(--muted);font-size:11px;">⠿</span>' : '<span style="font-size:11px;">' + (idx+1) + '.</span>') +
-          '<span style="font-size:12px;color:var(--muted);min-width:44px;">' + memberName + '</span>' +
-          '<span style="font-size:13px;font-weight:500;">' + topicName + '</span>' +
-        '</div>';
-      }).join('');
+    // 제목
+    const tdTitle = document.createElement('td');
+    tdTitle.style.fontWeight = '500';
+    tdTitle.textContent = s.title;
+
+    // 구분
+    const tdCat = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'ev-badge ' + (CAT_CLASS[s.category]||'ev-other');
+    badge.textContent = CAT_LABEL[s.category]||'기타';
+    tdCat.appendChild(badge);
+
+    // 발표자·종목
+    const tdPres = document.createElement('td');
+    tdPres.id = 'pres-cell-' + s.id;
+    if (isTalk && pres.length) {
+      pres.forEach((p, i) => {
+        const topicName  = p.topic && p.topic.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        const memberName = p.members && p.members.name ? p.members.name : '—';
+        const row = document.createElement('div');
+        row.className = 'pres-drag-item';
+        row.dataset.presId      = p.id;
+        row.dataset.memberId    = p.member_id || '';
+        row.dataset.scheduleId  = s.id;
+        if (!past) {
+          row.draggable = true;
+          row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 4px;cursor:grab;border-radius:4px;';
+          const handle = document.createElement('span');
+          handle.style.cssText = 'color:var(--muted);font-size:11px;';
+          handle.textContent = '⠿';
+          row.appendChild(handle);
+        } else {
+          row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 4px;';
+          const num = document.createElement('span');
+          num.style.cssText = 'font-size:11px;';
+          num.textContent = (i+1) + '.';
+          row.appendChild(num);
+        }
+        const mSpan = document.createElement('span');
+        mSpan.style.cssText = 'font-size:12px;color:var(--muted);min-width:44px;';
+        mSpan.textContent = memberName;
+        const tSpan = document.createElement('span');
+        tSpan.style.cssText = 'font-size:13px;font-weight:500;';
+        tSpan.textContent = topicName;
+        row.appendChild(mSpan);
+        row.appendChild(tSpan);
+        tdPres.appendChild(row);
+      });
     } else if (isTalk) {
-      presCell = '<span style="font-size:12px;color:var(--muted);">미등록</span>';
+      tdPres.innerHTML = '<span style="font-size:12px;color:var(--muted);">미등록</span>';
     } else {
-      presCell = '<span style="font-size:12px;color:var(--muted);">—</span>';
+      tdPres.innerHTML = '<span style="font-size:12px;color:var(--muted);">—</span>';
     }
 
-    tr.innerHTML =
-      '<td style="white-space:nowrap;">' + s.event_date + '</td>' +
-      '<td style="font-weight:500;">' + s.title + '</td>' +
-      '<td><span class="ev-badge ' + (CAT_CLASS[s.category]||'ev-other') + '">' + (CAT_LABEL[s.category]||'기타') + '</span></td>' +
-      '<td id="pres-cell-' + s.id + '">' + presCell + '</td>' +
-      '<td class="muted">' + (s.event_time ? s.event_time.slice(0,5) : '-') + '</td>' +
-      '<td class="muted">' + (s.location||'-') + '</td>' +
-      '<td>' +
-        (past ? '<span style="font-size:11px;color:var(--muted);">지난 일정</span>' :
-          '<div style="display:flex;gap:4px;">' +
-            '<button class="btn" style="font-size:11px;padding:3px 8px;" onclick="editSchedule('' + s.id + '')">수정</button>' +
-            '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);" onclick="confirmDelete('' + s.id + '')">삭제</button>' +
-          '</div>') +
-      '</td>';
+    // 시간
+    const tdTime = document.createElement('td');
+    tdTime.className = 'muted';
+    tdTime.textContent = s.event_time ? s.event_time.slice(0,5) : '-';
 
+    // 장소
+    const tdLoc = document.createElement('td');
+    tdLoc.className = 'muted';
+    tdLoc.textContent = s.location || '-';
+
+    // 작업
+    const tdAct = document.createElement('td');
+    if (past) {
+      tdAct.innerHTML = '<span style="font-size:11px;color:var(--muted);">지난 일정</span>';
+    } else {
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn';
+      editBtn.style.cssText = 'font-size:11px;padding:3px 8px;margin-right:4px;';
+      editBtn.textContent = '수정';
+      editBtn.onclick = () => editSchedule(s.id);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn';
+      delBtn.style.cssText = 'font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);';
+      delBtn.textContent = '삭제';
+      delBtn.onclick = () => confirmDelete(s.id);
+
+      tdAct.appendChild(editBtn);
+      tdAct.appendChild(delBtn);
+    }
+
+    tr.appendChild(tdDate);
+    tr.appendChild(tdTitle);
+    tr.appendChild(tdCat);
+    tr.appendChild(tdPres);
+    tr.appendChild(tdTime);
+    tr.appendChild(tdLoc);
+    tr.appendChild(tdAct);
     tbody.appendChild(tr);
   });
 
-  // 드래그앤드랍 이벤트 등록
   initDragDrop();
 }
 

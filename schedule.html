@@ -45,10 +45,23 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">스터디 일정</div>
-        <div class="updated">산업 분석 · 종목 분석 · 회식 · 발표 순서 관리</div>
+        <div class="page-title" id="pageTitle">스터디 일정</div>
+        <div class="updated" id="pageSubtitle">산업 분석 · 종목 분석 · 회식 · 발표 순서 관리</div>
       </div>
-      <button class="btn btn-primary" onclick="openForm()">+ 일정 추가</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <!-- 탭 -->
+        <div style="display:flex;border:0.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
+          <button id="tabSchedule" onclick="switchMainTab('schedule')"
+            style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;">
+            📅 일정 관리
+          </button>
+          <button id="tabPresOrder" onclick="switchMainTab('presOrder')"
+            style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--surface);color:var(--muted);">
+            📋 발표 순서
+          </button>
+        </div>
+        <button class="btn btn-primary" id="addScheduleBtn" onclick="openForm()">+ 일정 추가</button>
+      </div>
     </div>
 
     <!-- 일정 추가/수정 폼 -->
@@ -115,6 +128,7 @@
       </div>
     </div>
 
+    <div id="tabScheduleContent">
     <div class="grid-2">
 
       <!-- 달력 -->
@@ -167,6 +181,41 @@
         </table>
       </div>
     </div>
+    </div><!-- end tabScheduleContent -->
+
+    <!-- 발표 순서 탭 -->
+    <div id="tabPresOrderContent" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:1.25rem;">
+
+        <!-- 왼쪽: 달력 (드랍 타겟) -->
+        <div class="card">
+          <div class="card-head">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <button class="btn" style="padding:4px 10px;font-size:16px;" onclick="prevMonth()">‹</button>
+              <div class="card-title" id="calTitle2" style="min-width:100px;text-align:center;">—</div>
+              <button class="btn" style="padding:4px 10px;font-size:16px;" onclick="nextMonth()">›</button>
+            </div>
+            <button class="btn" style="font-size:12px;" onclick="goToday()">오늘</button>
+          </div>
+          <div class="cal-grid" id="calGrid2">
+            <div class="cal-head">일</div><div class="cal-head">월</div><div class="cal-head">화</div>
+            <div class="cal-head">수</div><div class="cal-head">목</div><div class="cal-head">금</div>
+            <div class="cal-head">토</div>
+          </div>
+        </div>
+
+        <!-- 오른쪽: 멤버 패널 -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">발표자 · 종목 설정</div>
+            <div style="font-size:11px;color:var(--muted);">종목 입력 후 달력으로 드래그</div>
+          </div>
+          <div id="memberPresPanel" style="display:flex;flex-direction:column;gap:8px;padding:0 1rem 1rem;"></div>
+        </div>
+
+      </div>
+    </div>
+
 
   </main>
 </div>
@@ -226,6 +275,298 @@ function toDateStr(date) {
 const CAT_LABEL = { industry: '산업 분석', stock: '종목 분석', dinner: '회식', other: '기타' };
 const CAT_CLASS = { industry: 'ev-meeting', stock: 'ev-deadline', dinner: 'ev-dinner', other: 'ev-other' };
 const MONTH_KR  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+// ════════════════════════════════════════
+// 탭 전환
+// ════════════════════════════════════════
+function switchMainTab(tab) {
+  const isSched = tab === 'schedule';
+  document.getElementById('tabScheduleContent').style.display   = isSched ? 'block' : 'none';
+  document.getElementById('tabPresOrderContent').style.display  = isSched ? 'none'  : 'block';
+  document.getElementById('addScheduleBtn').style.display       = isSched ? ''      : 'none';
+
+  const schedBtn    = document.getElementById('tabSchedule');
+  const presBtn     = document.getElementById('tabPresOrder');
+  schedBtn.style.background = isSched ? 'var(--accent)' : 'var(--surface)';
+  schedBtn.style.color      = isSched ? '#fff'          : 'var(--muted)';
+  presBtn.style.background  = isSched ? 'var(--surface)': 'var(--accent)';
+  presBtn.style.color       = isSched ? 'var(--muted)'  : '#fff';
+
+  if (!isSched) {
+    renderPresOrderCalendar();
+    renderMemberPresPanel();
+  }
+}
+
+// ════════════════════════════════════════
+// 발표 순서 달력
+// ════════════════════════════════════════
+function renderPresOrderCalendar() {
+  const titleEl = document.getElementById('calTitle2');
+  const grid    = document.getElementById('calGrid2');
+  if (!titleEl || !grid) return;
+
+  titleEl.textContent = calYear + '년 ' + MONTH_KR[calMonth];
+
+  // 헤더 7개 유지
+  const headers = Array.from(grid.children).slice(0, 7);
+  grid.innerHTML = '';
+  headers.forEach(h => grid.appendChild(h));
+
+  const today = new Date();
+  const first = new Date(calYear, calMonth, 1);
+  const last  = new Date(calYear, calMonth + 1, 0);
+
+  // 이전 달 빈 칸
+  for (let i = 0; i < first.getDay(); i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day other-month';
+    cell.innerHTML = '<div class="cal-day-num">' + new Date(calYear, calMonth, -first.getDay()+i+1).getDate() + '</div>';
+    grid.appendChild(cell);
+  }
+
+  // 이번 달
+  for (let d = 1; d <= last.getDate(); d++) {
+    const date    = new Date(calYear, calMonth, d);
+    const dateStr = toDateStr(date);
+    const isToday = toDateStr(date) === toDateStr(today);
+    const isPast  = dateStr < toDateStr(today);
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-day' + (isToday ? ' today' : '');
+    cell.dataset.date = dateStr;
+
+    const numDiv = document.createElement('div');
+    numDiv.className = 'cal-day-num';
+    numDiv.textContent = d;
+    cell.appendChild(numDiv);
+
+    // 이 날의 일정
+    const dayScheds = schedules.filter(s =>
+      s.event_date === dateStr && (s.category === 'stock' || s.category === 'industry')
+    );
+
+    dayScheds.forEach(s => {
+      const evDiv = document.createElement('div');
+      evDiv.className = 'cal-event ' + (CAT_CLASS[s.category]||'ev-other');
+      evDiv.textContent = s.title;
+      evDiv.dataset.scheduleId = s.id;
+      cell.appendChild(evDiv);
+
+      // 이 일정의 발표자+종목
+      const pres = presentations.filter(p =>
+        p.schedule_id === s.id || (!p.schedule_id && p.presented_at === dateStr)
+      );
+      pres.forEach(p => {
+        const pDiv = document.createElement('div');
+        pDiv.style.cssText = 'font-size:9px;color:var(--muted);padding:1px 3px;';
+        const name  = p.members?.name || '';
+        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        pDiv.textContent = name + ' · ' + topic;
+        cell.appendChild(pDiv);
+      });
+    });
+
+    // 드랍 타겟 (미래 일정만)
+    if (!isPast && dayScheds.length > 0) {
+      cell.addEventListener('dragover', e => {
+        e.preventDefault();
+        cell.style.outline = '2px dashed var(--accent)';
+      });
+      cell.addEventListener('dragleave', () => {
+        cell.style.outline = '';
+      });
+      cell.addEventListener('drop', async e => {
+        e.preventDefault();
+        cell.style.outline = '';
+        const memberId   = e.dataTransfer.getData('memberId');
+        const memberName = e.dataTransfer.getData('memberName');
+        const stockName  = e.dataTransfer.getData('stockName');
+        const stockCode  = e.dataTransfer.getData('stockCode');
+        const priceAt    = parseInt(e.dataTransfer.getData('priceAt')) || null;
+        const capAt      = parseInt(e.dataTransfer.getData('capAt'))   || null;
+
+        if (!memberId || !stockName) { toast('멤버와 종목을 확인하세요.'); return; }
+
+        // 이 날의 첫 번째 일정에 등록
+        const sched = dayScheds[0];
+        const topic = sched.category === 'industry' ? (sched.title + ' > ' + stockName) : stockName;
+
+        // 기존 같은 멤버 발표 있으면 업데이트, 없으면 insert
+        const existing = presentations.find(p =>
+          (p.schedule_id === sched.id || p.presented_at === dateStr) && p.member_id === memberId
+        );
+
+        if (existing) {
+          await sb.from('presentations').update({
+            topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
+            schedule_id: sched.id, presented_at: dateStr,
+          }).eq('id', existing.id);
+          toast(memberName + ' 발표 종목 업데이트: ' + stockName);
+        } else {
+          await sb.from('presentations').insert({
+            schedule_id: sched.id, member_id: memberId,
+            category: sched.category, topic,
+            stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
+            presented_at: dateStr, status: 'planned',
+          });
+          toast(memberName + ' → ' + stockName + ' 등록!');
+        }
+
+        // 재로드
+        presentations = await sb.from('presentations')
+          .select('*, members(name)').order('created_at')
+          .then(r => r.data || []);
+        renderPresOrderCalendar();
+        renderMemberPresPanel();
+        renderUpcoming();
+        renderScheduleList();
+      });
+    }
+
+    grid.appendChild(cell);
+  }
+
+  // 나머지 빈 칸
+  const remaining = 7 - ((first.getDay() + last.getDate()) % 7);
+  if (remaining < 7) {
+    for (let d = 1; d <= remaining; d++) {
+      const cell = document.createElement('div');
+      cell.className = 'cal-day other-month';
+      cell.innerHTML = '<div class="cal-day-num">' + d + '</div>';
+      grid.appendChild(cell);
+    }
+  }
+}
+
+// ════════════════════════════════════════
+// 멤버 패널 (오른쪽: 종목 입력 + 드래그)
+// ════════════════════════════════════════
+function renderMemberPresPanel() {
+  const panel = document.getElementById('memberPresPanel');
+  if (!panel) return;
+  panel.innerHTML = '';
+
+  members.forEach(m => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);';
+
+    // 아바타 + 이름
+    const avDiv = document.createElement('div');
+    avDiv.className = 'avatar av1';
+    avDiv.style.cssText = 'width:28px;height:28px;font-size:11px;flex-shrink:0;';
+    avDiv.textContent = m.name.slice(0, 2);
+
+    const nameSpan = document.createElement('div');
+    nameSpan.style.cssText = 'font-size:13px;font-weight:500;min-width:48px;';
+    nameSpan.textContent = m.name;
+
+    // 종목 검색 입력
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'flex:1;position:relative;';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '종목 검색...';
+    input.style.cssText = 'width:100%;font-size:12px;padding:5px 8px;';
+    input.dataset.memberId   = m.id;
+    input.dataset.memberName = m.name;
+    input.dataset.stockCode  = '';
+    input.dataset.priceAt    = '';
+    input.dataset.capAt      = '';
+
+    const dd = document.createElement('div');
+    dd.className = 'pres-stock-dropdown';
+    dd.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:400;' +
+      'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
+      'box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;';
+
+    input.oninput = function() { memberStockSearch(this, dd); };
+
+    wrap.appendChild(input);
+    wrap.appendChild(dd);
+
+    // 드래그 핸들 (종목이 있을 때만 활성)
+    const dragBtn = document.createElement('div');
+    dragBtn.title = '달력의 일정으로 드래그하세요';
+    dragBtn.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;padding:0 4px;user-select:none;';
+    dragBtn.textContent = '⠿';
+    dragBtn.draggable = true;
+    dragBtn.addEventListener('dragstart', e => {
+      const stockName = input.value.trim();
+      if (!stockName) { e.preventDefault(); toast('종목을 먼저 입력하세요.'); return; }
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData('memberId',   m.id);
+      e.dataTransfer.setData('memberName', m.name);
+      e.dataTransfer.setData('stockName',  stockName);
+      e.dataTransfer.setData('stockCode',  input.dataset.stockCode || '');
+      e.dataTransfer.setData('priceAt',    input.dataset.priceAt   || '');
+      e.dataTransfer.setData('capAt',      input.dataset.capAt     || '');
+      dragBtn.style.opacity = '0.4';
+    });
+    dragBtn.addEventListener('dragend', () => { dragBtn.style.opacity = '1'; });
+
+    row.appendChild(avDiv);
+    row.appendChild(nameSpan);
+    row.appendChild(wrap);
+    row.appendChild(dragBtn);
+    panel.appendChild(row);
+  });
+}
+
+// 멤버 패널용 종목 자동완성
+let _memberSearchTimer = null;
+function memberStockSearch(input, dd) {
+  clearTimeout(_memberSearchTimer);
+  const q = input.value.trim();
+  input.dataset.stockCode = '';
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+
+  _memberSearchTimer = setTimeout(async () => {
+    const { data } = await sb.from('stock_prices')
+      .select('stock_code,stock_name,price,change_rate,market_cap')
+      .or('stock_name.ilike.%' + q + '%,stock_code.ilike.%' + q + '%')
+      .gt('price', 0)
+      .order('market_cap', { ascending: false, nullsFirst: false })
+      .limit(8);
+
+    dd.innerHTML = '';
+    if (!data || !data.length) {
+      dd.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--muted);">검색 결과 없음</div>';
+      dd.style.display = 'block';
+      return;
+    }
+    data.forEach(s => {
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;';
+      const sign = (s.change_rate||0) >= 0 ? '+' : '';
+      const cl   = (s.change_rate||0) >= 0 ? '#0f6e56' : '#a32d2d';
+      item.innerHTML =
+        '<div><span style="font-weight:500;">' + s.stock_name + '</span>' +
+        '<span style="color:var(--muted);margin-left:6px;">' + s.stock_code + '</span></div>' +
+        '<div style="color:' + cl + '">' + sign + (s.change_rate||0).toFixed(1) + '%</div>';
+      item.addEventListener('mouseenter', () => item.style.background = 'var(--bg)');
+      item.addEventListener('mouseleave', () => item.style.background = '');
+      item.addEventListener('click', () => {
+        input.value = s.stock_name;
+        input.dataset.stockCode = s.stock_code;
+        input.dataset.priceAt   = s.price || '';
+        input.dataset.capAt     = s.market_cap || '';
+        dd.style.display = 'none';
+      });
+      dd.appendChild(item);
+    });
+    dd.style.display = 'block';
+  }, 250);
+}
+
+// 외부 클릭 시 드롭다운 닫기 (기존 + 멤버패널)
+document.addEventListener('click', e => {
+  if (!e.target.closest('.pres-stock-input') && !e.target.closest('.pres-stock-dropdown') &&
+      !e.target.closest('input[data-member-id]')) {
+    document.querySelectorAll('.pres-stock-dropdown').forEach(d => d.style.display = 'none');
+  }
+});
 
 async function init() {
   try {
@@ -362,8 +703,9 @@ async function renderUpcoming() {
     const dStr  = dDiff === 0 ? '오늘' : dDiff === 1 ? '내일' : 'D-' + dDiff;
 
     // 이 일정의 발표 예정 종목
+    // schedule_id 직접 매칭 또는 날짜 매칭 (schedule_id가 NULL인 경우 폴백)
     const pres = presentations
-      .filter(p => p.schedule_id === s.id)
+      .filter(p => p.schedule_id === s.id || (!p.schedule_id && p.presented_at === s.event_date))
       .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
 
     // 아이템 컨테이너
@@ -473,8 +815,9 @@ async function renderScheduleList() {
     const isTalk = s.category === 'stock' || s.category === 'industry';
 
     // 발표 예정 종목
+    // schedule_id 직접 매칭 또는 날짜 매칭 (schedule_id가 NULL인 경우 폴백)
     const pres = presentations
-      .filter(p => p.schedule_id === s.id)
+      .filter(p => p.schedule_id === s.id || (!p.schedule_id && p.presented_at === s.event_date))
       .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
 
     const tr = document.createElement('tr');

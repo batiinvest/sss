@@ -36,6 +36,7 @@
           <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
+            <button class="btn btn-primary" style="font-size:12px;padding:4px 10px;" onclick="goToPresOrder()">📋 발표종목 입력</button>
             <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
           </div>
         </div>
@@ -73,11 +74,26 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260412"></script>
-<script src="js/db.js?v=20260412"></script>
+<script src="js/config.js?v=20260417"></script>
+<script src="js/db.js?v=20260417"></script>
 <script>
 let currentPicks = [];
 let currentMembers = [];
+
+function goToPresOrder() {
+  // app.html에서 접속 중이면 loadPage, 직접이면 이동
+  if (window.parent && window.parent.loadPage) {
+    window.parent.loadPage('schedule');
+    setTimeout(() => {
+      const frame = window.parent.document.getElementById('page-frame');
+      if (frame && frame.contentWindow && frame.contentWindow.switchMainTab) {
+        frame.contentWindow.switchMainTab('presOrder');
+      }
+    }, 800);
+  } else {
+    location.href = 'schedule.html#presOrder';
+  }
+}
 
 async function init() {
   await requireAuth();
@@ -90,14 +106,14 @@ async function init() {
   const [members, picks, allPicks, trades, allTradesData] = await Promise.all([
     fetchMemberStats(),
     fetchPicksByMonth(currentMonth()),
-    fetchAllPicks(),           // 전체 보유 종목 (평가손익용)
+    fetchAllPicks({ status: 'hold' }),
     fetchTrades(8),
     fetchAllTrades()
   ]);
 
-  currentMembers = members;
-  currentPicks   = picks;
-  allCurrentPicks = allPicks; // 전체 picks 저장
+  currentMembers  = members;
+  currentPicks    = picks;
+  allCurrentPicks = allPicks;
 
   renderMetrics(members, picks, allTradesData);
   renderPicksTable(picks, {});
@@ -105,7 +121,6 @@ async function init() {
   renderNotices(members, picks);
   renderTradesTable(trades);
 
-  // 비동기로 현재가 조회 (전체 보유 종목 기준)
   refreshPrices();
 }
 
@@ -120,6 +135,7 @@ async function triggerAndRefresh() {
   const repo = window.GH_REPO || '';
 
   if (!pat || repo.includes('YOUR_GITHUB_ID')) {
+    // PAT 없으면 Actions 없이 DB 직접 조회 (토스트 없음)
     btn.textContent = '조회 중...';
     await refreshPrices();
     btn.disabled = false;
@@ -154,7 +170,7 @@ async function triggerAndRefresh() {
       throw new Error(`HTTP ${res.status}`);
     }
   } catch(e) {
-    toast('Actions 실패, DB에서 조회합니다.');
+    toast('현재가를 DB에서 조회합니다.', 2000);
     await refreshPrices();
     btn.disabled = false;
     btn.textContent = '현재가 갱신';
@@ -162,61 +178,82 @@ async function triggerAndRefresh() {
 }
 
 async function refreshPrices() {
-  // 이번 달 탑픽이 아닌 전체 보유 종목 기준으로 평가손익 계산
-  const holdPicks = (allCurrentPicks.length ? allCurrentPicks : currentPicks)
-    .filter(p => p.status === 'hold' && p.stock_code);
-
-  // 보유 종목 없어도 평가손익 초기화
-  if (!holdPicks.length) {
-    const pnlEl  = document.getElementById('unrealizedPnl');
-    const rateEl = document.getElementById('unrealizedRate');
-    if (pnlEl)  { pnlEl.textContent = '—'; pnlEl.className = 'metric-value'; }
-    if (rateEl) rateEl.textContent = '보유 종목 없음';
-    return;
-  }
-
-  const codes = [...new Set(holdPicks.map(p => p.stock_code))];
-  document.getElementById('priceUpdated').textContent = '현재가 조회 중...';
-  const prices = await fetchCurrentPrices(codes);
-  renderPicksTable(currentPicks, prices);
-  const t = new Date();
-  document.getElementById('priceUpdated').textContent =
-    `현재가 ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
-
-  // 평가손익 계산
-  let totalBuyAmt = 0, totalCurAmt = 0, matched = 0;
-  holdPicks.forEach(p => {
-    const curPrice = prices[p.stock_code]?.price;
-    console.log('평가손익 계산:', p.stock_name, 
-      'buy_price:', p.buy_price, 
-      'buy_quantity:', p.buy_quantity,
-      'curPrice:', curPrice);
-    if (p.buy_price && p.buy_quantity && curPrice) {
-      totalBuyAmt += p.buy_price * p.buy_quantity;
-      totalCurAmt += curPrice * p.buy_quantity;
-      matched++;
-    }
-  });
-  console.log('평가손익 결과: matched', matched, 'buyAmt', totalBuyAmt, 'curAmt', totalCurAmt);
-
   const pnlEl  = document.getElementById('unrealizedPnl');
   const rateEl = document.getElementById('unrealizedRate');
-  if (!pnlEl) return;
 
-  if (matched === 0) {
-    pnlEl.textContent  = '—';
-    pnlEl.className    = 'metric-value';
-    rateEl.textContent = '매수가 데이터 없음';
-    return;
+  try {
+    // 1. 현재 보유 중인 탑픽 (매도 안 된 것) - 전체 picks에서 hold 상태
+    const { data: holdPicks } = await sb.from('picks_with_trades')
+      .select('pick_id, stock_name, stock_code, buy_price, buy_quantity, status')
+      .eq('status', 'hold')
+      .not('stock_code', 'is', null)
+      .gt('buy_price', 0);
+
+    if (!holdPicks || !holdPicks.length) {
+      renderPicksTable(currentPicks, {});
+      if (pnlEl)  { pnlEl.textContent = '—'; pnlEl.className = 'metric-value'; }
+      if (rateEl) rateEl.textContent = '보유 종목 없음';
+      return;
+    }
+
+    // 2. 현재가 조회
+    const codes = [...new Set(holdPicks.map(p => p.stock_code).filter(Boolean))];
+    if (!codes.length) {
+      if (pnlEl)  { pnlEl.textContent = '—'; pnlEl.className = 'metric-value'; }
+      if (rateEl) rateEl.textContent = '종목 코드 없음';
+      return;
+    }
+
+    document.getElementById('priceUpdated').textContent = '현재가 조회 중...';
+    const { data: priceRows } = await sb.from('stock_prices')
+      .select('stock_code, price, change_rate')
+      .in('stock_code', codes);
+
+    // prices 맵 구성
+    const prices = {};
+    for (const row of (priceRows || [])) {
+      if (row.price > 0) prices[row.stock_code] = { price: row.price, change: row.change_rate || 0 };
+    }
+
+    // 이번 달 탑픽 테이블 갱신
+    renderPicksTable(currentPicks, prices);
+    const t = new Date();
+    document.getElementById('priceUpdated').textContent =
+      `현재가 ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
+
+    // 3. 평가손익 계산
+    let totalBuyAmt = 0, totalCurAmt = 0, matched = 0;
+    for (const p of holdPicks) {
+      const cur = prices[p.stock_code];
+      if (cur && p.buy_price > 0 && p.buy_quantity > 0) {
+        totalBuyAmt += p.buy_price * p.buy_quantity;
+        totalCurAmt += cur.price   * p.buy_quantity;
+        matched++;
+      }
+    }
+
+    if (!pnlEl) return;
+
+    if (matched === 0) {
+      pnlEl.textContent  = '—';
+      pnlEl.className    = 'metric-value';
+      rateEl.textContent = `보유 ${holdPicks.length}종목 · 현재가 없음`;
+      return;
+    }
+
+    const pnl  = totalCurAmt - totalBuyAmt;
+    const rate = totalBuyAmt > 0 ? (pnl / totalBuyAmt * 100) : 0;
+    const sign = pnl >= 0 ? '+' : '';
+    pnlEl.textContent  = sign + won(pnl);
+    pnlEl.className    = 'metric-value ' + rCls(rate);
+    rateEl.textContent = `${sign}${rate.toFixed(1)}% · ${matched}/${holdPicks.length}종목`;
+
+  } catch(e) {
+    console.error('refreshPrices 오류:', e);
+    if (pnlEl)  { pnlEl.textContent = '오류'; pnlEl.className = 'metric-value'; }
+    if (rateEl) rateEl.textContent = e.message;
   }
-  const pnl  = totalCurAmt - totalBuyAmt;
-  const rate = totalBuyAmt > 0 ? (pnl / totalBuyAmt * 100) : 0;
-  const sign = pnl >= 0 ? '+' : '';
-  pnlEl.textContent = sign + won(pnl);
-  pnlEl.className   = 'metric-value ' + rCls(rate);
-  rateEl.textContent = `${sign}${rate.toFixed(1)}% · ${matched}/${holdPicks.length}종목`;
 }
-
 
 function renderMetrics(members, picks, allTrades = []) {
   const totalBase   = members.reduce((s,m) => s + m.base_amount, 0);

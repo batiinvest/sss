@@ -674,26 +674,28 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt) {
   );
 
   if (existing) {
-    await sb.from('presentations').update({
+    const { error } = await sb.from('presentations').update({
       topic,
       stock_code:    stockCode || null,
       price_at:      parseInt(priceAt) || null,
       market_cap_at: parseInt(capAt)   || null,
       category:      cat,
     }).eq('id', existing.id);
+    if (error) { toast('❌ 저장 오류: ' + error.message); console.error(error); return; }
   } else {
-    await sb.from('presentations').insert({
+    const { error } = await sb.from('presentations').insert({
       member_id:     memberId,
       category:      cat,
       topic,
       stock_code:    stockCode || null,
       price_at:      parseInt(priceAt) || null,
       market_cap_at: parseInt(capAt)   || null,
-      status:        'draft',   // 아직 일정 미배정
+      status:        'draft',
     });
+    if (error) { toast('❌ 저장 오류: ' + error.message); console.error(error); return; }
   }
 
-  toast('✅ 임시저장 · 달력 일정으로 드래그하세요', 2000);
+  toast('✅ 저장됨 · 달력 일정으로 드래그하여 배정하세요', 2500);
 
   presentations = await sb.from('presentations')
     .select('*, members(name)').order('created_at').then(r => r.data || []);

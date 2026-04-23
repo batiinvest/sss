@@ -17,6 +17,7 @@
       </div>
       <div class="btn-row">
         <a href="trade.html?type=sell" class="btn">매도 요청</a>
+        <button class="btn" onclick="goToPresOrder()" style="font-size:13px;">📋 발표종목 입력</button>
         <a href="picks.html?action=new" class="btn btn-primary">+ 탑픽 제출</a>
       </div>
     </div>
@@ -36,7 +37,6 @@
           <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
           <div style="display:flex;align-items:center;gap:8px;">
             <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
-            <button class="btn btn-primary" style="font-size:12px;padding:4px 10px;" onclick="goToPresOrder()">📋 발표종목 입력</button>
             <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
           </div>
         </div>

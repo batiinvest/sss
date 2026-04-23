@@ -357,7 +357,7 @@ function guessNextTurn() {
 // 초기화: 선택한 일정의 발표 배정 삭제
 async function resetPresOrder() {
   // draft(임시저장) 항목 전체 삭제
-  const drafts = presentations.filter(p => p.status === 'draft');
+  const drafts = presentations.filter(p => p.status === 'planned' && !p.schedule_id);
   if (!drafts.length) { toast('초기화할 임시 데이터가 없습니다.'); return; }
   if (!confirm('입력된 발표 종목을 모두 초기화할까요?')) return;
 
@@ -474,7 +474,7 @@ function renderPresOrderCalendar() {
 
         // draft(임시저장) 항목이 있으면 schedule_id 연결, 없으면 새로 insert
         const draft = presentations.find(p =>
-          !p.schedule_id && p.member_id === memberId && (p.status === 'draft' || p.status === 'planned')
+          !p.schedule_id && p.member_id === memberId && p.status === 'planned'
         );
         const alreadyAssigned = presentations.find(p =>
           p.schedule_id === sched.id && p.member_id === memberId
@@ -583,7 +583,7 @@ function renderMemberPresPanel() {
 
     // DB의 draft 항목에서 복원
     const draft = presentations.find(p =>
-      p.member_id === m.id && p.status === 'draft'
+      p.member_id === m.id && p.status === 'planned' && !p.schedule_id
     );
     if (draft) {
       const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic || '');
@@ -638,7 +638,7 @@ function renderMemberPresPanel() {
       const memberId = input.dataset.memberId;
       // draft 항목 DB 삭제
       const draft = presentations.find(p =>
-        p.member_id === memberId && p.status === 'draft'
+        p.member_id === memberId && p.status === 'planned' && !p.schedule_id
       );
       if (draft) {
         await sb.from('presentations').delete().eq('id', draft.id);
@@ -670,7 +670,7 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt) {
 
   // 이미 schedule_id 없이 저장된 항목이 있으면 update
   const existing = presentations.find(p =>
-    !p.schedule_id && p.member_id === memberId && (p.status === 'draft' || p.status === 'planned')
+    !p.schedule_id && p.member_id === memberId && (p.status === 'planned' && !p.schedule_id || p.status === 'planned')
   );
 
   if (existing) {
@@ -690,7 +690,7 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt) {
       stock_code:    stockCode || null,
       price_at:      parseInt(priceAt) || null,
       market_cap_at: parseInt(capAt)   || null,
-      status:        'draft',
+      status:        'planned',
     });
     if (error) { toast('❌ 저장 오류: ' + error.message); console.error(error); return; }
   }

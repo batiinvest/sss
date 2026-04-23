@@ -441,9 +441,8 @@ function renderPresOrderCalendar() {
       });
     });
 
-    // 드랍 타겟 (산업/기업 일정 있는 날 - 지난 일정도 클릭으로 저장 가능)
-    if (dayScheds.length > 0) {
-      cell.style.cursor = 'pointer';
+    // 드랍 타겟: 과거가 아닌 모든 날 (빈 날 = 일정 자동 생성)
+    if (!isPast) {
       cell.addEventListener('dragover', e => {
         e.preventDefault();
         cell.style.outline = '2px dashed var(--accent)';
@@ -467,12 +466,30 @@ function renderPresOrderCalendar() {
 
         if (!memberId || !stockName) { toast('종목을 먼저 입력하세요.'); return; }
 
-        const sched   = dayScheds[0];
-        const cat     = document.getElementById('thisTurnCategory').value;
-        const industry = document.getElementById('thisTurnIndustry').value.trim();
-        const topic   = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
+        const cat      = document.getElementById('thisTurnCategory').value;
+        const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
+        const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
+        const catLabel = cat === 'industry' ? (industry || '산업 분석') : '기업 분석';
 
-        // draft(임시저장) 항목이 있으면 schedule_id 연결, 없으면 새로 insert
+        let sched = dayScheds[0] || null;
+
+        // ── 일정이 없으면 자동 생성
+        if (!sched) {
+          const schedTitle = industry || (cat === 'industry' ? '산업 분석' : '기업 분석');
+          const { data: newSched, error: schedErr } = await sb.from('schedules').insert({
+            title:      schedTitle,
+            category:   cat,
+            event_date: dateStr,
+            event_time: '20:00:00',  // 기본 20시
+          }).select().single();
+
+          if (schedErr) { toast('일정 생성 오류: ' + schedErr.message); return; }
+          sched = newSched;
+          schedules.push(sched);  // 전역 배열 업데이트
+          toast('📅 ' + dateStr + ' ' + schedTitle + ' 일정 자동 생성');
+        }
+
+        // ── draft(임시저장) 항목이 있으면 schedule_id 연결
         const draft = presentations.find(p =>
           !p.schedule_id && p.member_id === memberId && p.status === 'planned'
         );
@@ -481,43 +498,45 @@ function renderPresOrderCalendar() {
         );
 
         if (draft) {
-          // 임시저장 항목에 일정 연결
           await sb.from('presentations').update({
-            schedule_id:  sched.id,
-            presented_at: dateStr,
-            status:       'planned',
+            schedule_id:   sched.id,
+            presented_at:  dateStr,
+            status:        'planned',
             topic,
-            stock_code:   stockCode || draft.stock_code,
-            price_at:     priceAt   || draft.price_at,
-            market_cap_at: capAt    || draft.market_cap_at,
+            stock_code:    stockCode || draft.stock_code,
+            price_at:      priceAt   || draft.price_at,
+            market_cap_at: capAt     || draft.market_cap_at,
           }).eq('id', draft.id);
           toast('✅ ' + memberName + ' → ' + stockName + ' 배정!');
         } else if (alreadyAssigned) {
-          // 이미 배정된 경우 업데이트
           await sb.from('presentations').update({
             topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
           }).eq('id', alreadyAssigned.id);
           toast(memberName + ' 발표 종목 변경: ' + stockName);
         } else {
-          // 새로 insert
           await sb.from('presentations').insert({
-            schedule_id: sched.id, member_id: memberId, category: cat,
-            topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
-            presented_at: dateStr, status: 'planned',
+            schedule_id:   sched.id,
+            member_id:     memberId,
+            category:      cat,
+            topic,
+            stock_code:    stockCode,
+            price_at:      priceAt,
+            market_cap_at: capAt,
+            presented_at:  dateStr,
+            status:        'planned',
           });
           toast('✅ ' + memberName + ' → ' + stockName + ' 등록!');
         }
 
         presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at')
-          .then(r => r.data || []);
+          .select('*, members(name)').order('created_at').then(r => r.data || []);
+        schedules = await fetchSchedules();
         renderPresOrderCalendar();
         renderPresScheduleList();
         renderUpcoming();
         renderScheduleList();
       });
     }
-
     grid.appendChild(cell);
   }
 

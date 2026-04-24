@@ -9,93 +9,138 @@
 </head>
 <body>
 <div class="layout layout-page"><main class="main">
-    <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
+  <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
-    <div class="topbar">
-      <div>
-        <div class="page-title">대시보드</div>
-        <div class="updated" id="updatedAt">불러오는 중...</div>
-      </div>
-      <div class="btn-row">
-        <a href="trade.html?type=sell" class="btn">매도 요청</a>
-        <button class="btn" onclick="goToPresOrder()" style="font-size:13px;">📋 발표종목 입력</button>
-        <a href="picks.html?action=new" class="btn btn-primary">+ 탑픽 제출</a>
-      </div>
+  <div class="topbar">
+    <div>
+      <div class="page-title">대시보드</div>
+      <div class="updated" id="updatedAt">불러오는 중...</div>
     </div>
-
-    <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(100px,1fr));">
-      <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
-      <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
-      <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
-      <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
-      <div class="metric"><div class="metric-label">이번 달 탑픽 제출</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
-      <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
+    <div class="btn-row">
+      <a href="trade.html?type=sell" class="btn">매도 요청</a>
+      <button class="btn" onclick="goToPresOrder()" style="font-size:13px;">📋 발표종목 입력</button>
+      <a href="picks.html?action=new" class="btn btn-primary">+ 탑픽 제출</a>
     </div>
+  </div>
 
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
-            <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률</th><th>목표가</th><th>상태</th></tr></thead>
-            <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
-          </table>
+  <!-- ── 전체 펀드 메트릭 ── -->
+  <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(100px,1fr));">
+    <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
+    <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
+    <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
+    <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
+    <div class="metric"><div class="metric-label">이번 달 탑픽 제출</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
+    <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
+  </div>
+
+  <!-- ── 이번 달 탑픽 + 참여자 수익률 ── -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
+          <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-head"><div class="card-title">참여자 수익률</div></div>
-        <div id="memberBars" style="display:flex;flex-direction:column;gap:8px;"></div>
-        <div style="margin-top:14px;border-top:0.5px solid var(--border);padding-top:12px;">
-          <div class="notice-list" id="notices"></div>
-        </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률</th><th>목표가</th><th>상태</th></tr></thead>
+          <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
+        </table>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-head">
-        <div class="card-title">최근 매매 내역</div>
-        <a href="trade.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+      <div class="card-head"><div class="card-title">참여자 수익률</div></div>
+      <div id="memberBars" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="margin-top:14px;border-top:0.5px solid var(--border);padding-top:12px;">
+        <div class="notice-list" id="notices"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ── 내 탑픽 + 내 발표종목 ── -->
+  <div class="grid-2" id="mySection" style="display:none;">
+
+    <!-- 내 탑픽 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">내 탑픽</div>
+        <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+      </div>
+
+      <!-- 이번 달 제출 여부 배너 -->
+      <div id="myPickBanner" style="display:none;margin-bottom:10px;"></div>
+
+      <!-- 보유 중 종목 -->
+      <div id="myPickCards" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- 내 발표종목 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">내 발표종목</div>
+        <a href="presentations.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+      </div>
+
+      <!-- 예정 발표 -->
+      <div id="myPresPlanned" style="display:none;margin-bottom:12px;"></div>
+
+      <!-- 최근 발표 이력 -->
       <div class="table-wrap">
         <table>
-          <thead><tr><th>일시</th><th>추천자</th><th>종목</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th></tr></thead>
-          <tbody id="tradesTbody"><tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr></tbody>
+          <thead><tr><th>발표일</th><th>종목</th><th>발표가</th><th>현재가</th><th>수익률</th></tr></thead>
+          <tbody id="myPresTbody"><tr><td colspan="5" class="empty-cell">불러오는 중...</td></tr></tbody>
         </table>
       </div>
     </div>
-  </main>
-</div>
+  </div>
+
+  <!-- 로그인 멤버 없을 때 안내 -->
+  <div id="myMemberNotice" style="display:none;" class="info-banner mb-card">
+    멤버 정보와 연동되지 않은 계정입니다. 관리자에게 이메일 등록을 요청하면 내 탑픽·발표종목이 표시됩니다.
+  </div>
+
+  <!-- ── 최근 매매 내역 ── -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">최근 매매 내역</div>
+      <a href="trade.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>일시</th><th>추천자</th><th>종목</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th></tr></thead>
+        <tbody id="tradesTbody"><tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main></div>
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260424"></script>
 <script src="js/db.js?v=20260424"></script>
 <script>
-let currentPicks = [];
+let currentPicks   = [];
 let currentMembers = [];
+let allCurrentPicks = [];
+let globalPriceMap = {};   // 현재가 캐시 (내 섹션에서도 재사용)
 
+// ── iframe 페이지 이동 헬퍼
 function goToPresOrder() {
-  // app.html에서 접속 중이면 loadPage, 직접이면 이동
   if (window.parent && window.parent.loadPage) {
     window.parent.loadPage('schedule');
     setTimeout(() => {
       const frame = window.parent.document.getElementById('page-frame');
-      if (frame && frame.contentWindow && frame.contentWindow.switchMainTab) {
-        frame.contentWindow.switchMainTab('presOrder');
-      }
+      if (frame?.contentWindow?.switchMainTab) frame.contentWindow.switchMainTab('presOrder');
     }, 800);
   } else {
     location.href = 'schedule.html#presOrder';
   }
 }
 
+// ── 초기화
 async function init() {
   await requireAuth();
   checkDBConnection();
@@ -122,10 +167,216 @@ async function init() {
   renderNotices(members, picks);
   renderTradesTable(trades);
 
-  refreshPrices();
+  // 현재가 갱신 (완료 후 내 섹션도 갱신)
+  await refreshPrices();
+
+  // 내 섹션 (로그인 멤버 기준)
+  await renderMySection();
 }
 
-// ── 현재가 갱신: GitHub Actions → DB 조회
+// ════════════════════════════════════════
+// 내 탑픽 + 내 발표종목
+// ════════════════════════════════════════
+async function renderMySection() {
+  const me = await getCurrentMember();
+  if (!me) {
+    document.getElementById('myMemberNotice').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('mySection').style.display = '';
+
+  await Promise.all([
+    renderMyPicks(me),
+    renderMyPresentations(me)
+  ]);
+}
+
+// ── 내 탑픽
+async function renderMyPicks(me) {
+  // 전체 picks (hold + sold 모두) 내 것만
+  const { data: myPicks } = await sb.from('picks_with_trades')
+    .select('*')
+    .eq('member_id', me.id)
+    .order('month', { ascending: false });
+
+  const picks = myPicks || [];
+
+  // ① 이번 달 제출 여부 배너
+  const thisMonth  = currentMonth();
+  const submitted  = picks.find(p => p.month === thisMonth);
+  const bannerEl   = document.getElementById('myPickBanner');
+  if (submitted) {
+    bannerEl.style.display = 'block';
+    bannerEl.innerHTML =
+      `<div style="background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--green);">
+        ✅ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 제출 완료 — ${submitted.stock_name}
+       </div>`;
+  } else {
+    bannerEl.style.display = 'block';
+    bannerEl.innerHTML =
+      `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;justify-content:space-between;align-items:center;">
+        <span>⚠️ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 미제출</span>
+        <a href="picks.html?action=new" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">제출하기 →</a>
+       </div>`;
+  }
+
+  // ② 보유 중 종목 카드 (hold 상태만)
+  const holdPicks = picks.filter(p => p.status === 'hold');
+  const cardsEl   = document.getElementById('myPickCards');
+
+  if (!holdPicks.length) {
+    cardsEl.innerHTML =
+      `<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">보유 중인 탑픽이 없습니다</div>`;
+    return;
+  }
+
+  cardsEl.innerHTML = holdPicks.map(p => {
+    const cur     = globalPriceMap[p.stock_code];
+    const curPrice = cur?.price;
+    const dayChg   = cur?.change;
+
+    // 평가손익
+    const pnl     = (p.buy_price && p.buy_quantity && curPrice)
+      ? (curPrice - p.buy_price) * p.buy_quantity : null;
+    const pnlRate = (p.buy_price && curPrice)
+      ? ((curPrice - p.buy_price) / p.buy_price * 100) : null;
+
+    // 목표가까지 상승여력
+    const upside  = (p.target_price && curPrice)
+      ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
+
+    const pnlColor  = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
+    const dayColor  = dayChg  === null ? '' : dayChg  >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
+
+    return `<div style="background:var(--bg);border-radius:var(--r-md);padding:10px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div>
+          <span style="font-size:14px;font-weight:500;">${p.stock_name}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:6px;">${p.stock_code||''} · ${(p.month||'').replace('-','년 ')}월</span>
+        </div>
+        <span class="badge b-hold">보유중</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">매수가</div>
+          <div style="font-weight:500;">${p.buy_price ? p.buy_price.toLocaleString()+'원' : '—'}</div>
+        </div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">현재가</div>
+          <div style="font-weight:500;">${curPrice ? curPrice.toLocaleString()+'원' : '—'}
+            ${dayChg !== null && dayChg !== undefined
+              ? `<span style="font-size:10px;${dayColor}">(${dayChg>=0?'+':''}${Number(dayChg).toFixed(1)}%)</span>` : ''}
+          </div>
+        </div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
+          <div style="font-weight:500;${pnlColor}">
+            ${pnl !== null
+              ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원'
+              : '—'}
+            ${pnlRate !== null
+              ? `<span style="font-size:10px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>` : ''}
+          </div>
+        </div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">목표가</div>
+          <div style="font-weight:500;color:var(--green);">
+            ${p.target_price ? p.target_price.toLocaleString()+'원' : '—'}
+            ${upside !== null ? `<span style="font-size:10px;">(+${upside}%)</span>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 내 발표종목
+async function renderMyPresentations(me) {
+  let presData = [];
+  try {
+    const { data } = await sb.from('presentations')
+      .select('*')
+      .eq('member_id', me.id)
+      .order('presented_at', { ascending: false })
+      .limit(10);
+    presData = data || [];
+  } catch(e) {
+    document.getElementById('myPresTbody').innerHTML =
+      '<tr><td colspan="5" class="empty-cell">발표 데이터를 불러올 수 없습니다</td></tr>';
+    return;
+  }
+
+  // ① 예정 발표 (status = 'planned')
+  const planned   = presData.filter(p => p.status === 'planned');
+  const plannedEl = document.getElementById('myPresPlanned');
+  if (planned.length) {
+    plannedEl.style.display = 'block';
+    plannedEl.innerHTML = planned.map(p => {
+      const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
+      const catBadge  = p.category === 'industry'
+        ? '<span class="industry-tag">산업</span>'
+        : '<span class="stock-tag">기업</span>';
+      return `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px;">
+        📋 ${catBadge}
+        <strong style="color:var(--text);">${topicName}</strong>
+        <span style="color:var(--muted);">${p.presented_at || '일정 미정'} 예정</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ② 완료 발표 이력
+  const done  = presData.filter(p => p.status === 'done' || !p.status);
+  const tbody = document.getElementById('myPresTbody');
+
+  if (!done.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">발표 이력이 없습니다</td></tr>';
+    return;
+  }
+
+  // 현재가 조회 (stock_code 있는 것만)
+  const codes = [...new Set(done.filter(p => p.stock_code).map(p => p.stock_code))];
+  let pressPriceMap = { ...globalPriceMap };
+
+  if (codes.length) {
+    const missingCodes = codes.filter(c => !pressPriceMap[c]);
+    if (missingCodes.length) {
+      const { data: priceRows } = await sb.from('stock_prices')
+        .select('stock_code,price,change_rate')
+        .in('stock_code', missingCodes);
+      for (const r of (priceRows || [])) {
+        if (r.price > 0) pressPriceMap[r.stock_code] = { price: r.price, change: r.change_rate || 0 };
+      }
+    }
+  }
+
+  tbody.innerHTML = done.slice(0, 6).map(p => {
+    const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
+    const cur       = p.stock_code ? pressPriceMap[p.stock_code] : null;
+    const curPrice  = cur?.price;
+    const ret       = (p.price_at && curPrice)
+      ? ((curPrice - p.price_at) / p.price_at * 100) : null;
+
+    const catBadge = p.category === 'industry'
+      ? '<span class="industry-tag">산업</span>'
+      : '<span class="stock-tag">기업</span>';
+
+    return `<tr>
+      <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at || '—'}</td>
+      <td>${catBadge} <span style="font-weight:500;">${topicName}</span></td>
+      <td>${p.price_at ? p.price_at.toLocaleString()+'원' : '—'}</td>
+      <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
+      <td class="${ret !== null ? rCls(ret) : ''}" style="font-weight:500;">
+        ${ret !== null ? (ret>=0?'+':'')+ret.toFixed(1)+'%' : '—'}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════
+// 기존 함수들 (변경 없음)
+// ════════════════════════════════════════
+
 async function triggerAndRefresh() {
   const btn = document.getElementById('priceRefreshBtn');
   if (!btn) return;
@@ -136,7 +387,6 @@ async function triggerAndRefresh() {
   const repo = window.GH_REPO || '';
 
   if (!pat || repo.includes('YOUR_GITHUB_ID')) {
-    // PAT 없으면 Actions 없이 DB 직접 조회 (토스트 없음)
     btn.textContent = '조회 중...';
     await refreshPrices();
     btn.disabled = false;
@@ -183,21 +433,19 @@ async function refreshPrices() {
   const rateEl = document.getElementById('unrealizedRate');
 
   try {
-    // 1. 현재 보유 중인 탑픽 (매도 안 된 것) - 전체 picks에서 hold 상태
     const { data: holdPicks } = await sb.from('picks_with_trades')
-      .select('pick_id, stock_name, stock_code, buy_price, buy_quantity, status')
+      .select('pick_id, stock_name, stock_code, buy_price, buy_quantity, status, member_id')
       .eq('status', 'hold')
       .not('stock_code', 'is', null)
       .gt('buy_price', 0);
 
-    if (!holdPicks || !holdPicks.length) {
+    if (!holdPicks?.length) {
       renderPicksTable(currentPicks, {});
       if (pnlEl)  { pnlEl.textContent = '—'; pnlEl.className = 'metric-value'; }
       if (rateEl) rateEl.textContent = '보유 종목 없음';
       return;
     }
 
-    // 2. 현재가 조회
     const codes = [...new Set(holdPicks.map(p => p.stock_code).filter(Boolean))];
     if (!codes.length) {
       if (pnlEl)  { pnlEl.textContent = '—'; pnlEl.className = 'metric-value'; }
@@ -210,22 +458,21 @@ async function refreshPrices() {
       .select('stock_code, price, change_rate')
       .in('stock_code', codes);
 
-    // prices 맵 구성
-    const prices = {};
+    // 전역 현재가 캐시 갱신
+    globalPriceMap = {};
     for (const row of (priceRows || [])) {
-      if (row.price > 0) prices[row.stock_code] = { price: row.price, change: row.change_rate || 0 };
+      if (row.price > 0) globalPriceMap[row.stock_code] = { price: row.price, change: row.change_rate || 0 };
     }
 
-    // 이번 달 탑픽 테이블 갱신
-    renderPicksTable(currentPicks, prices);
+    renderPicksTable(currentPicks, globalPriceMap);
     const t = new Date();
     document.getElementById('priceUpdated').textContent =
       `현재가 ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
 
-    // 3. 평가손익 계산
+    // 전체 평가손익
     let totalBuyAmt = 0, totalCurAmt = 0, matched = 0;
     for (const p of holdPicks) {
-      const cur = prices[p.stock_code];
+      const cur = globalPriceMap[p.stock_code];
       if (cur && p.buy_price > 0 && p.buy_quantity > 0) {
         totalBuyAmt += p.buy_price * p.buy_quantity;
         totalCurAmt += cur.price   * p.buy_quantity;
@@ -234,7 +481,6 @@ async function refreshPrices() {
     }
 
     if (!pnlEl) return;
-
     if (matched === 0) {
       pnlEl.textContent  = '—';
       pnlEl.className    = 'metric-value';
@@ -264,9 +510,8 @@ function renderMetrics(members, picks, allTrades = []) {
   document.getElementById('totalProfit').textContent = `초기 대비 ${totalProfit>=0?'+':''}${won(totalProfit)}`;
   document.getElementById('memberCount').textContent = members.length + '명';
 
-  // 투자금 / 잔액
-  const totalBuyAmt  = allTrades.filter(t => t.trade_type==='buy').reduce((s,t) => s+t.price*t.quantity, 0);
-  const totalSellAmt = allTrades.filter(t => t.trade_type==='sell').reduce((s,t) => s+t.price*t.quantity, 0);
+  const totalBuyAmt   = allTrades.filter(t => t.trade_type==='buy').reduce((s,t) => s+t.price*t.quantity, 0);
+  const totalSellAmt  = allTrades.filter(t => t.trade_type==='sell').reduce((s,t) => s+t.price*t.quantity, 0);
   const totalInvested = totalBuyAmt - totalSellAmt;
   const totalCash     = totalBase - totalInvested;
 
@@ -276,7 +521,6 @@ function renderMetrics(members, picks, allTrades = []) {
   document.getElementById('totalCash').className       = 'metric-value ' + rCls(totalCash);
   document.getElementById('cashSub').textContent       = `총자산 ${won(totalBase)} - 투자금 ${won(totalInvested)}`;
 
-  // 평가손익 초기값
   document.getElementById('unrealizedPnl').textContent  = '계산 중...';
   document.getElementById('unrealizedRate').textContent = '현재가 로드 후 계산';
 
@@ -299,7 +543,6 @@ function renderPicksTable(picks, prices) {
     const curPrice  = priceInfo?.price;
     const dayChange = priceInfo?.change;
 
-    // 현재가가 있으면 실시간 수익률, 없으면 확정 수익률
     let rateVal, rateStr;
     if (p.status === 'hold' && curPrice && p.buy_price) {
       rateVal = ((curPrice - p.buy_price) / p.buy_price * 100);

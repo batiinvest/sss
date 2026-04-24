@@ -210,13 +210,12 @@
 <script src="js/db.js?v=20260421"></script>
 <script>
 const REGULAR_FEE = 20000;
+function feeWon(n) { return Math.abs(Math.round(n)).toLocaleString() + '원'; }
 const CAT_LABEL = { room:'스터디룸', drink:'음료', dinner:'회식', other:'기타' };
 const CAT_CLASS  = { room:'cat-room', drink:'cat-drink', dinner:'cat-dinner', other:'cat-other' };
 
 let members = [], fees = [], expenses = [], currentMember = null, isAdminUser = false;
 let feeCurrentMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
-
-function won(n) { return Math.abs(Math.round(n)).toLocaleString() + '원'; }
 
 // ── 월 이동
 function changeMonth(delta) {
@@ -236,10 +235,10 @@ function renderSummary() {
   const thisMonthFees = fees.filter(f => f.month === feeCurrentMonth);
   const thisMonthPaid = thisMonthFees.reduce((s,f) => s + f.amount, 0);
 
-  document.getElementById('totalBalance').textContent  = (balance >= 0 ? '' : '-') + won(balance);
-  document.getElementById('totalFees').textContent     = won(totalFeeAmt);
-  document.getElementById('totalExpenses').textContent = won(totalExpAmt);
-  document.getElementById('thisMonthPaid').textContent = won(thisMonthPaid);
+  document.getElementById('totalBalance').textContent  = (balance >= 0 ? '' : '-') + feeWon(balance);
+  document.getElementById('totalFees').textContent     = feeWon(totalFeeAmt);
+  document.getElementById('totalExpenses').textContent = feeWon(totalExpAmt);
+  document.getElementById('thisMonthPaid').textContent = feeWon(thisMonthPaid);
 }
 
 function renderFees() {
@@ -253,7 +252,7 @@ function renderFees() {
   const prog = document.getElementById('feeProgress');
   prog.innerHTML =
     '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">' +
-    '<span>정기 납부 현황</span><span>' + won(totalPaid) + ' / ' + won(target) + '</span></div>' +
+    '<span>정기 납부 현황</span><span>' + feeWon(totalPaid) + ' / ' + feeWon(target) + '</span></div>' +
     '<div class="total-bar"><div class="total-bar-fill" style="width:' + pct + '%"></div></div>';
 
   // 멤버별 납부 상태
@@ -284,7 +283,7 @@ function renderFees() {
     if (hasPaid) {
       const b = document.createElement('span');
       b.className = 'fee-badge fee-paid';
-      b.textContent = '✅ ' + won(regular.reduce((s,f)=>s+f.amount,0));
+      b.textContent = '✅ ' + feeWon(regular.reduce((s,f)=>s+f.amount,0));
       badgeWrap.appendChild(b);
     } else {
       const b = document.createElement('span');
@@ -295,7 +294,7 @@ function renderFees() {
     if (extra.length > 0) {
       const b = document.createElement('span');
       b.className = 'fee-badge fee-extra';
-      b.textContent = '+' + won(extra.reduce((s,f)=>s+f.amount,0));
+      b.textContent = '+' + feeWon(extra.reduce((s,f)=>s+f.amount,0));
       badgeWrap.appendChild(b);
     }
 
@@ -350,7 +349,7 @@ function renderExpenses() {
 
     const amtDiv = document.createElement('div');
     amtDiv.style.cssText = 'font-size:13px;font-weight:500;color:#a32d2d;white-space:nowrap;';
-    amtDiv.textContent = '-' + won(e.amount);
+    amtDiv.textContent = '-' + feeWon(e.amount);
 
     const actDiv = document.createElement('div');
     if (isAdminUser) {
@@ -400,7 +399,7 @@ function renderMonthlySummary() {
     const barH = Math.max(4, Math.round(paid / maxPaid * 80));
     col.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
-        '<div style="font-size:11px;color:var(--muted);">' + won(paid) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + feeWon(paid) + '</div>' +
         '<div style="width:32px;height:80px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden;">' +
           '<div style="width:100%;height:' + barH + 'px;background:' + (month===feeCurrentMonth?'#185fa5':'#93c5fd') + ';border-radius:4px;transition:.3s;"></div>' +
         '</div>' +

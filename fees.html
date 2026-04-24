@@ -1,44 +1,16 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 회비</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
-  <style>
-    html.in-iframe .sidebar, html.in-iframe .hamburger { display:none!important; }
-    html.in-iframe .layout { display:block!important; }
 
-    .fee-badge { display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500; }
-    .fee-paid   { background:#e6f7f1;color:#0f6e56; }
-    .fee-unpaid { background:#fef2f2;color:#a32d2d; }
-    .fee-extra  { background:#eff6ff;color:#1e40af; }
-    .cat-room   { background:#f0fdf4;color:#166534; }
-    .cat-drink  { background:#fef9c3;color:#854d0e; }
-    .cat-dinner { background:#fdf2f8;color:#86198f; }
-    .cat-other  { background:#f1f5f9;color:#475569; }
-
-    .balance-card { background:linear-gradient(135deg,#185fa5 0%,#1e7fcb 100%);color:#fff;border-radius:var(--r-lg);padding:1.5rem;margin-bottom:1.25rem; }
-    .balance-card .label { font-size:12px;opacity:.8;margin-bottom:4px; }
-    .balance-card .value { font-size:28px;font-weight:700; }
-    .balance-sub { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:1rem; }
-    .balance-sub-item { background:rgba(255,255,255,.15);border-radius:8px;padding:8px 12px; }
-    .balance-sub-item .sub-label { font-size:10px;opacity:.8;margin-bottom:2px; }
-    .balance-sub-item .sub-value { font-size:15px;font-weight:600; }
-
-    .member-fee-row { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:.5px solid var(--border); }
-    .month-nav { display:flex;align-items:center;gap:8px; }
-    .month-nav button { background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px; }
-
-    .expense-row { display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:.5px solid var(--border);font-size:13px; }
-    .total-bar { height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px; }
-    .total-bar-fill { height:100%;background:#185fa5;border-radius:3px;transition:width .4s; }
-  </style>
 </head>
 <body>
-<div class="layout" style="display:block;">
+<div class="layout layout-page">
 <main class="main">
   <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
@@ -54,7 +26,7 @@
   </div>
 
   <!-- 잔액 카드 -->
-  <div class="balance-card">
+  <div class="balance-card mb-card">
     <div class="label">현재 잔액</div>
     <div class="value" id="totalBalance">계산 중...</div>
     <div class="balance-sub">
@@ -122,10 +94,10 @@
 </div>
 
 <!-- 납부 등록 모달 -->
-<div id="feeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:500;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:420px;border:.5px solid var(--border);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-      <div style="font-size:15px;font-weight:500;">납부 등록</div>
+<div id="feeModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">납부 등록</div>
       <button class="btn" onclick="closeFeeModal()">닫기</button>
     </div>
     <div class="form-section">
@@ -165,10 +137,10 @@
 </div>
 
 <!-- 지출 등록 모달 -->
-<div id="expenseModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:500;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:420px;border:.5px solid var(--border);">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-      <div style="font-size:15px;font-weight:500;">지출 등록</div>
+<div id="expenseModal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">지출 등록</div>
       <button class="btn" onclick="closeExpenseModal()">닫기</button>
     </div>
     <div class="form-section">
@@ -206,8 +178,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260421"></script>
-<script src="js/db.js?v=20260421"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 const REGULAR_FEE = 20000;
 function feeWon(n) { return Math.abs(Math.round(n)).toLocaleString() + '원'; }
@@ -504,7 +476,6 @@ async function init() {
   await loadData();
 }
 
-async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
 
 init();
 </script>

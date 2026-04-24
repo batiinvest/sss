@@ -4,19 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
-  <style>
-    .price-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .price-cell { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; }
-    .price-cell-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
-    .price-cell-value { font-size: 18px; font-weight: 500; }
-    .price-cell-value.small { font-size: 14px; }
-    .upside-preview { background: var(--greenbg); border: 0.5px solid #9fe1cb; border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; color: var(--green); }
-  </style>
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
+
 </head>
 <body>
 
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">
@@ -48,14 +42,14 @@
         </div>
 
         <!-- 종목명 자동완성 검색 -->
-        <div class="form-group" style="position:relative;">
+        <div class="form-group autocomplete-wrap">
           <label>종목명 검색 * <span style="color:var(--muted);font-weight:400;">— 2글자 이상 입력하면 종목 리스트가 표시됩니다</span></label>
           <input type="text" id="f-stock" placeholder="예: 삼성  또는  005930"
             autocomplete="off"
             oninput="onStockSearch(this.value)"
             onkeydown="onStockSearchKey(event)" />
           <!-- 자동완성 드롭다운 -->
-          <div id="stockDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);box-shadow:0 4px 16px rgba(0,0,0,0.12);max-height:240px;overflow-y:auto;margin-top:2px;"></div>
+          <div id="stockDropdown" class="autocomplete-dropdown"></div>
         </div>
 
         <!-- 선택된 종목 표시 (hidden inputs) -->
@@ -65,13 +59,13 @@
         <input type="hidden" id="f-db-cap" />
 
         <!-- 선택 확인 배지 -->
-        <div id="selectedStock" style="display:none;padding:10px 14px;background:var(--greenbg);border-radius:var(--r-md);border:0.5px solid #9fe1cb;font-size:13px;display:none;">
+        <div id="selectedStock" class="upside-preview" style="display:none;">
           <span id="selectedStockText"></span>
           <button onclick="clearSelectedStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);margin-left:8px;font-size:12px;">✕ 다시 선택</button>
         </div>
 
         <!-- 현재가 조회 결과 박스 -->
-        <div id="lookupLoading" style="display:none;padding:10px 14px;background:var(--bg);border-radius:var(--r-md);font-size:13px;color:var(--muted);">
+        <div id="lookupLoading" class="fs-13 color-muted" style="display:none;padding:10px 14px;background:var(--bg);border-radius:var(--r-md);">
           <span id="loadingDots">현재가 조회 중</span>
         </div>
 
@@ -96,7 +90,7 @@
           </div>
         </div>
 
-        <div id="lookupError" style="display:none;padding:12px 14px;background:var(--amberbg);border-radius:var(--r-md);font-size:13px;color:var(--amber);line-height:1.7;border:0.5px solid #f0c070;">
+        <div id="lookupError" class="warn-banner" style="display:none;">
           <strong>현재가 자동 조회를 사용하려면 Edge Function 배포가 필요합니다</strong><br>
           Supabase 대시보드 → Edge Functions → New Function → 이름: <code style="background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:3px;">stock-price</code><br>
           → <code style="background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:3px;">edge_function_stock_price.ts</code> 내용 붙여넣기 → Deploy<br>
@@ -147,7 +141,7 @@
           <textarea id="f-reason" placeholder="매수 근거, 투자 thesis, 리스크 등을 자유롭게 작성하세요" style="min-height:90px;"></textarea>
         </div>
 
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <div class="flex-end">
           <button class="btn" onclick="toggleForm()">취소</button>
           <button class="btn btn-primary" id="submitBtn" onclick="submitPickForm()">제출</button>
         </div>
@@ -155,7 +149,7 @@
     </div>
 
     <!-- 월별 탭 + 테이블 -->
-    <div class="card" style="margin-bottom:1.25rem;">
+    <div class="card mb-card">
       <div class="card-head">
         <div class="card-title">월별 탑픽</div>
         <div class="tab-row" id="monthTabs"></div>
@@ -168,7 +162,7 @@
             <th>목표가</th><th>시총 상승여력</th><th>상태</th>
           </tr></thead>
           <tbody id="monthPicksTbody">
-            <tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+            <tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -177,7 +171,7 @@
     <!-- 매수 사유 카드 -->
     <div class="card">
       <div class="card-head"><div class="card-title">매수 사유</div></div>
-      <div id="reasonCards" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;"></div>
+      <div id="reasonCards" class="grid-2" style="grid-template-columns:repeat(2,minmax(0,1fr));"></div>
     </div>
 
     <!-- 전체 히스토리 -->
@@ -209,7 +203,7 @@
             <th>매수 사유</th>
           </tr></thead>
           <tbody id="historyTbody">
-            <tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+            <tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -220,8 +214,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260412"></script>
-<script src="js/db.js?v=20260412"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 let allPicks = [];
 let members  = [];
@@ -514,7 +508,7 @@ function renderMonthPicks(month) {
   const picks = allPicks.filter(p => p.month === month);
   const tbody = document.getElementById('monthPicksTbody');
   if (!picks.length) {
-    tbody.innerHTML = `<tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">${month} 탑픽 없음</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-cell">${month} 탑픽 없음</td></tr>`;
     document.getElementById('reasonCards').innerHTML = '';
     return;
   }
@@ -551,7 +545,7 @@ function renderHistory(filtered) {
   const picks = filtered || allPicks;
   const tbody = document.getElementById('historyTbody');
   if (!picks.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">데이터 없음</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-cell">데이터 없음</td></tr>';
     return;
   }
   tbody.innerHTML = picks.map((p, i) => {
@@ -649,10 +643,6 @@ async function submitPickForm() {
   }
 }
 
-async function doLogout() {
-  await sb.auth.signOut();
-  location.href = 'index.html';
-}
 
 init();
 if (new URLSearchParams(location.search).get('action') === 'new') {

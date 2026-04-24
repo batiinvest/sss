@@ -4,49 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
-  <style>
-    .industry-group-header {
-      background: var(--bg);
-      padding: 6px 10px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      border-bottom: 0.5px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .industry-tag {
-      display: inline-block;
-      background: #e8f4fd;
-      color: #0c447c;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: var(--r-md);
-      font-weight: 500;
-      white-space: nowrap;
-    }
-    .stock-tag {
-      display: inline-block;
-      background: #eaf3de;
-      color: #27500a;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: var(--r-md);
-      font-weight: 500;
-    }
-    .price-cell:hover { background: var(--bg); outline: 1px dashed var(--border2); }
-    .price-edit-input {
-      width: 90px; text-align: right; font-size: 13px;
-      border: 1px solid var(--accent); border-radius: 4px;
-      padding: 2px 6px; outline: none;
-    }
-  </style>
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
+
 </head>
 <body>
 
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">
@@ -56,13 +20,11 @@
       </div>
       <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
         <!-- 예정/완료 탭 -->
-        <div style="display:flex;border:0.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;flex-shrink:0;">
-          <button id="tabPlanned" onclick="switchTab('planned')"
-            style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:var(--surface);color:var(--muted);">
+        <div class="tab-toggle">
+          <button id="tabPlanned" onclick="switchTab('planned')">
             📋 예정
           </button>
-          <button id="tabDone" onclick="switchTab('done')"
-            style="padding:5px 14px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;">
+          <button id="tabDone" onclick="switchTab('done')" class="active">
             ✅ 완료
           </button>
         </div>
@@ -78,10 +40,10 @@
     </div>
 
     <!-- 요약 카드 -->
-    <div id="summaryCards" class="metric-grid" style="margin-bottom:1.25rem;"></div>
+    <div id="summaryCards" class="metric-grid" class="mb-card"></div>
 
     <!-- 산업별 수익률 -->
-    <div class="card" style="margin-bottom:1.25rem;" id="industrySection">
+    <div class="card" class="mb-card" id="industrySection">
       <div class="card-head">
         <div class="card-title">산업별 평균 수익률</div>
         <div style="font-size:12px;color:var(--muted);">산업 분석 기준</div>
@@ -90,7 +52,7 @@
     </div>
 
     <!-- 기업별 수익률 -->
-    <div class="card" style="margin-bottom:1.25rem;" id="memberSection">
+    <div class="card" class="mb-card" id="memberSection">
       <div class="card-head">
         <div class="card-title">기업별 평균 수익률</div>
         <div style="font-size:12px;color:var(--muted);">발표자별 · 기업 분석 종목 기준</div>
@@ -121,7 +83,7 @@
             </tr>
           </thead>
           <tbody id="histTbody">
-            <tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">불러오는 중...</td></tr>
+            <tr><td colspan="10" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -132,8 +94,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260417"></script>
-<script src="js/db.js?v=20260417"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 let allData  = [];
 let members  = [];
@@ -143,18 +105,9 @@ let currentTab = 'done';  // 'planned' | 'done'
 
 function switchTab(tab) {
   currentTab = tab;
-  const plannedBtn = document.getElementById('tabPlanned');
-  const doneBtn    = document.getElementById('tabDone');
-  if (tab === 'planned') {
-    plannedBtn.style.background = 'var(--accent)'; plannedBtn.style.color = '#fff';
-    doneBtn.style.background    = 'var(--surface)'; doneBtn.style.color = 'var(--muted)';
-  } else {
-    doneBtn.style.background    = 'var(--accent)'; doneBtn.style.color = '#fff';
-    plannedBtn.style.background = 'var(--surface)'; plannedBtn.style.color = 'var(--muted)';
-  }
-  // 탭에 맞게 데이터 필터링
-  const filtered = allData.filter(p => (p.status || 'done') === tab);
-  renderAll(filtered);
+  document.getElementById('tabPlanned').classList.toggle('active', tab === 'planned');
+  document.getElementById('tabDone').classList.toggle('active', tab === 'done');
+  renderAll(allData.filter(p => (p.status || 'done') === tab));
 }
 
 async function init() {
@@ -175,13 +128,13 @@ async function init() {
     ]);
   } catch(e) {
     console.error('데이터 로드 오류:', e.message);
-    tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">데이터 로드 오류: ' + e.message + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-cell">데이터 로드 오류: ' + e.message + '</td></tr>';
     return;
   }
 
   // presentations 테이블이 없는 경우
   if (presRes === undefined) {
-    tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">presentations 테이블을 먼저 생성하세요. (supabase_add_presentations.sql 실행)</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-cell">presentations 테이블을 먼저 생성하세요. (supabase_add_presentations.sql 실행)</td></tr>';
     return;
   }
 
@@ -458,7 +411,7 @@ function renderTable(data) {
   document.getElementById('countLabel').textContent = `총 ${data.length}건`;
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:2rem;">발표 내역이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-cell">발표 내역이 없습니다</td></tr>';
     return;
   }
 
@@ -530,7 +483,7 @@ function renderTable(data) {
       <td style="text-align:right;">
         ${p.status === 'planned'
           ? (cur?.price ? '<span style="font-size:13px;font-weight:500;">' + cur.price.toLocaleString() + '원</span>' : '<span style="color:var(--muted);font-size:12px;">—</span>')
-          : (cur || p.price_at) ? `<div class="price-cell" onclick="editPriceAt('${p.id}', ${p.price_at || 0}, this)"
+          : (cur || p.price_at) ? `<div class="price-cell price-cell-editable" onclick="editPriceAt('${p.id}', ${p.price_at || 0}, this)"
               title="클릭하여 발표 당시 주가 입력"
               style="cursor:pointer;padding:3px 6px;border-radius:4px;display:inline-block;min-width:60px;text-align:right;">
               ${p.price_at ? p.price_at.toLocaleString() + '원' : '<span style=\"color:var(--accent);font-size:12px;\">입력</span>'}
@@ -689,7 +642,6 @@ function updateRowStats(row, id) {
   }
 }
 
-async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
 init();
 </script>
 </body>

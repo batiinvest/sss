@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">
@@ -22,7 +23,7 @@
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(100px,1fr));gap:10px;margin-bottom:1.25rem;">
+    <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(100px,1fr));">
       <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
       <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
       <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
@@ -43,7 +44,7 @@
         <div class="table-wrap">
           <table>
             <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률</th><th>목표가</th><th>상태</th></tr></thead>
-            <tbody id="picksTbody"><tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr></tbody>
+            <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -65,7 +66,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr><th>일시</th><th>추천자</th><th>종목</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th></tr></thead>
-          <tbody id="tradesTbody"><tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr></tbody>
+          <tbody id="tradesTbody"><tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -74,8 +75,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260417"></script>
-<script src="js/db.js?v=20260417"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 let currentPicks = [];
 let currentMembers = [];

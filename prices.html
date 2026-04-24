@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
 <div class="layout">
@@ -42,13 +43,13 @@
     </div>
 
     <!-- 탑픽 종목 현재가 -->
-    <div class="card" style="margin-bottom:1.25rem;">
+    <div class="card" class="mb-card">
       <div class="card-head">
         <div class="card-title">탑픽 종목 현재가</div>
         <div style="font-size:12px;color:var(--muted);" id="pickUpdatedAt"></div>
       </div>
       <div id="pickList">
-        <div class="muted" style="text-align:center;padding:2rem;">불러오는 중...</div>
+        <div class="empty-cell">불러오는 중...</div>
       </div>
     </div>
 
@@ -88,7 +89,7 @@ async function loadPickStocks() {
 
   if (!picks || !picks.length) {
     document.getElementById('pickList').innerHTML =
-      '<div class="muted" style="text-align:center;padding:2rem;">탑픽 종목이 없습니다</div>';
+      '<div class="empty-cell">탑픽 종목이 없습니다</div>';
     return;
   }
 
@@ -177,7 +178,6 @@ async function searchStocks(query) {
   }, 400);
 }
 
-async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
 init();
 </script>
 </body>

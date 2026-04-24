@@ -480,3 +480,270 @@ textarea { resize: vertical; min-height: 72px; }
   padding: 12px 16px 4px;
   opacity: 0.6;
 }
+
+/* ============================================================
+   유틸리티 클래스 (리팩토링 v4 추가)
+   인라인 스타일을 대체하는 공통 클래스
+   ============================================================ */
+
+/* ── iframe 내 사이드바 숨김 (공통 패턴) ── */
+html.in-iframe .sidebar,
+html.in-iframe .hamburger { display: none !important; }
+html.in-iframe .layout    { display: block !important; }
+html.in-iframe .main      { min-height: 100vh; }
+
+/* ── 레이아웃: iframe 전용 (사이드바 없는 페이지 공통) ── */
+.layout-page { display: block; }
+
+/* ── 텍스트 유틸 ── */
+.text-right  { text-align: right; }
+.text-center { text-align: center; }
+.fw-500      { font-weight: 500; }
+.fs-11       { font-size: 11px; }
+.fs-12       { font-size: 12px; }
+.fs-13       { font-size: 13px; }
+.fs-18       { font-size: 18px; }
+.fs-20       { font-size: 20px; }
+.fs-28       { font-size: 28px; }
+.lh-17       { line-height: 1.7; }
+.ls-005      { letter-spacing: 0.05em; }
+
+/* ── 색상 유틸 ── */
+.color-muted   { color: var(--muted); }
+.color-green   { color: var(--green); }
+.color-amber   { color: var(--amber); }
+.color-accent  { color: var(--accent); }
+
+/* ── 간격 유틸 ── */
+.mb-4   { margin-bottom: 4px; }
+.mb-6   { margin-bottom: 6px; }
+.mb-8   { margin-bottom: 8px; }
+.mb-10  { margin-bottom: 10px; }
+.mb-12  { margin-bottom: 12px; }
+.mb-14  { margin-bottom: 14px; }
+.mb-1r  { margin-bottom: 1rem; }
+.mb-card { margin-bottom: 1.25rem; }
+.mt-4   { margin-top: 4px; }
+.mt-10  { margin-top: 10px; }
+.mt-1r  { margin-top: 1rem; }
+.mt-card { margin-top: 1.25rem; }
+.pt-1r  { padding-top: 1rem; }
+.gap-8  { gap: 8px; }
+
+/* ── 플렉스 유틸 ── */
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-end     { display: flex; justify-content: flex-end; gap: 8px; }
+.flex-col     { display: flex; flex-direction: column; gap: 14px; }
+.flex-wrap    { flex-wrap: wrap; }
+
+/* ── 그리드 유틸 ── */
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
+/* ── 카드 내부 구분선 ── */
+.card-divider { border-top: 0.5px solid var(--border); padding-top: 1rem; margin-top: 0.5rem; }
+
+/* ── 안내 배너 ── */
+.info-banner {
+  background: #e8f4fd;
+  border: 0.5px solid #b5d4f4;
+  border-radius: var(--r-lg);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #0c447c;
+  line-height: 1.7;
+}
+.warn-banner {
+  background: var(--amberbg);
+  border: 0.5px solid #f0c070;
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--amber);
+  line-height: 1.7;
+}
+
+/* ── 빈 상태 ── */
+.empty-cell { text-align: center; padding: 1.5rem; color: var(--muted); }
+
+/* ── 아바타 크기 변형 ── */
+.av-sm { width: 22px; height: 22px; font-size: 9px; }
+.av-md { width: 30px; height: 30px; font-size: 11px; }
+.av-lg { width: 40px; height: 40px; font-size: 14px; }
+.av-xl { width: 52px; height: 52px; font-size: 18px; }
+
+/* ── 탭 버튼 (토글 스타일) ── */
+.tab-toggle {
+  display: flex;
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.tab-toggle button {
+  padding: 5px 14px;
+  font-size: 12px;
+  border: none;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--muted);
+}
+.tab-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── 모달 오버레이 ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 500;
+  align-items: center;
+  justify-content: center;
+}
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 420px;
+  border: 0.5px solid var(--border);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.modal-title { font-size: 15px; font-weight: 500; }
+
+/* ── 자동완성 드롭다운 ── */
+.autocomplete-wrap { position: relative; }
+.autocomplete-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--surface);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+.dd-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 14px;
+  cursor: pointer;
+  border-bottom: 0.5px solid var(--border);
+  font-size: 13px;
+}
+.dd-item:hover { background: var(--bg); }
+.dd-item:last-child { border-bottom: none; }
+
+/* ── 수익률 프리뷰 ── */
+.upside-preview {
+  background: var(--greenbg);
+  border: 0.5px solid #9fe1cb;
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--green);
+}
+
+/* ── 현재가 조회 결과 그리드 ── */
+.price-result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.price-cell {
+  background: var(--surface);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+.price-cell-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.price-cell-value { font-size: 18px; font-weight: 500; }
+.price-cell-value.small { font-size: 14px; }
+
+/* ── 섹션 라벨 ── */
+.section-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+/* ── 발표 히스토리 태그 ── */
+.industry-tag {
+  display: inline-block;
+  background: #e8f4fd;
+  color: #0c447c;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--r-md);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.stock-tag {
+  display: inline-block;
+  background: #eaf3de;
+  color: #27500a;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--r-md);
+  font-weight: 500;
+}
+
+/* ── 발표 히스토리 그룹 헤더 ── */
+.industry-group-header {
+  background: var(--bg);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── 인라인 편집 셀 ── */
+.price-cell-editable:hover { background: var(--bg); outline: 1px dashed var(--border2); }
+.price-edit-input {
+  width: 90px;
+  text-align: right;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+}
+
+/* ── 회비 페이지 전용 ── */
+.fee-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.fee-paid   { background: #e6f7f1; color: #0f6e56; }
+.fee-unpaid { background: #fef2f2; color: #a32d2d; }
+.fee-extra  { background: #eff6ff; color: #1e40af; }
+.cat-room   { background: #f0fdf4; color: #166534; }
+.cat-drink  { background: #fef9c3; color: #854d0e; }
+.cat-dinner { background: #fdf2f8; color: #86198f; }
+.cat-other  { background: #f1f5f9; color: #475569; }
+.balance-card { background: linear-gradient(135deg,#185fa5 0%,#1e7fcb 100%); color: #fff; border-radius: var(--r-lg); padding: 1.5rem; }
+.balance-card .label { font-size: 12px; opacity: .8; margin-bottom: 4px; }
+.balance-card .value { font-size: 28px; font-weight: 700; }
+.balance-sub { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-top: 1rem; }
+.balance-sub-item { background: rgba(255,255,255,.15); border-radius: 8px; padding: 8px 12px; }
+.balance-sub-item .sub-label { font-size: 10px; opacity: .8; margin-bottom: 2px; }
+.balance-sub-item .sub-value { font-size: 15px; font-weight: 600; }
+.member-fee-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: .5px solid var(--border); }
+.month-nav { display: flex; align-items: center; gap: 8px; }
+.month-nav button { background: none; border: .5px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 14px; }
+.expense-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: .5px solid var(--border); font-size: 13px; }
+.total-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.total-bar-fill { height: 100%; background: #185fa5; border-radius: 3px; transition: width .4s; }

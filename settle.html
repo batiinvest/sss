@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
 
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
 
     <div class="topbar">
       <div>
@@ -19,23 +20,23 @@
 
 
     <!-- 자동 결산 안내 -->
-    <div style="background:#e8f4fd;border:0.5px solid #b5d4f4;border-radius:var(--r-lg);padding:12px 16px;margin-bottom:1.25rem;font-size:13px;color:#0c447c;line-height:1.7;">
+    <div class="info-banner mb-card">
       <strong>자동 결산</strong>: 매수/매도 페이지에서 매도를 입력하면 결산이 자동으로 생성됩니다.<br>
       수수료는 거래금액의 0.3%로 자동 계산됩니다.
     </div>
 
     <!-- 연말 결산 섹션 -->
-    <div class="card" style="margin-bottom:1.25rem;" id="annualSection">
+    <div class="card mb-card" id="annualSection">
       <div class="card-head">
         <div>
           <div class="card-title">연말 결산</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px;">1등 시상 후 나머지 균등 재배분</div>
+          <div class="fs-12 color-muted mt-4">1등 시상 후 나머지 균등 재배분</div>
         </div>
         <button class="btn btn-primary" onclick="openAnnualForm()">+ 연말 결산 실행</button>
       </div>
 
       <!-- 연말 결산 폼 -->
-      <div id="annualForm" style="display:none;border-top:0.5px solid var(--border);padding-top:1rem;margin-top:0.5rem;">
+      <div id="annualForm" class="card-divider" style="display:none;">
         <div class="form-section">
           <div class="form-row">
             <div class="form-group">
@@ -58,7 +59,7 @@
             <div id="annualPreviewBody"></div>
           </div>
 
-          <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <div class="flex-end">
             <button class="btn" onclick="closeAnnualForm()">취소</button>
             <button class="btn" onclick="calcAnnualPreview()">계산해보기</button>
             <button class="btn btn-primary" id="annualConfirmBtn" style="display:none;" onclick="executeAnnualSettlement()">결산 확정</button>
@@ -83,7 +84,7 @@
             <th>순손익</th><th>수익률</th><th>결산 후 기준금액</th>
           </tr></thead>
           <tbody id="settleTbody">
-            <tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+            <tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -95,8 +96,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260412"></script>
-<script src="js/db.js?v=20260412"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 let allSettles = [];
 
@@ -117,7 +118,7 @@ async function init() {
 function renderSettles(settles) {
   const tbody = document.getElementById('settleTbody');
   if (!settles.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="muted" style="text-align:center;padding:1.5rem;">결산 내역이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-cell">결산 내역이 없습니다</td></tr>';
     return;
   }
   tbody.innerHTML = settles.map(s => {
@@ -342,10 +343,6 @@ async function loadAnnualHistory() {
   }
 }
 
-async function doLogout() {
-  await sb.auth.signOut();
-  location.href = 'index.html';
-}
 
 init();
 </script>

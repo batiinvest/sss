@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>투자 스터디 · 일정 관리</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
   <style>
     .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
     .cal-head { background: var(--bg); padding: 8px 4px; text-align: center; font-size: 12px; font-weight: 500; color: var(--muted); }
@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">
@@ -45,9 +45,8 @@
         <div class="updated">산업 분석 · 종목 분석 · 회식 · 발표 순서 관리</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <div style="display:flex;border:0.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
-          <button id="tabSchedule" onclick="switchMainTab('schedule')"
-            style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;">📅 일정 관리</button>
+        <div class="tab-toggle">
+          <button id="tabSchedule" onclick="switchMainTab('schedule')" class="active">📅 일정 관리</button>
           <button id="tabPresOrder" onclick="switchMainTab('presOrder')"
             style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--surface);color:var(--muted);">📋 발표 순서</button>
         </div>
@@ -112,7 +111,7 @@
           <label>메모</label>
           <textarea id="s-desc" placeholder="안건, 준비사항 등을 자유롭게 작성하세요" style="min-height:60px;"></textarea>
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <div class="flex-end">
           <button class="btn" onclick="closeForm()">취소</button>
           <button class="btn btn-primary" id="saveScheduleBtn" onclick="saveSchedule()">저장</button>
         </div>
@@ -143,7 +142,7 @@
       <div class="card">
         <div class="card-head"><div class="card-title">다가오는 일정</div></div>
         <div id="upcomingList">
-          <div class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</div>
+          <div class="empty-cell">불러오는 중...</div>
         </div>
       </div>
 
@@ -167,7 +166,7 @@
             <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>메모</th><th style="width:100px;">작업</th>
           </tr></thead>
           <tbody id="scheduleListTbody">
-            <tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+            <tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -178,7 +177,7 @@
     <!-- 발표 순서 탭 -->
     <div id="tabPresOrderContent" style="display:none;">
 
-      <div class="grid-2" style="margin-bottom:1.25rem;">
+      <div class="grid-2" class="mb-card">
 
         <!-- 달력 -->
         <div class="card">
@@ -244,7 +243,7 @@
               <th>날짜</th><th>제목</th><th>구분</th><th>발표자 · 종목</th><th>시간</th><th style="width:80px;">작업</th>
             </tr></thead>
             <tbody id="scheduleListTbody2">
-              <tr><td colspan="6" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+              <tr><td colspan="6" class="empty-cell">불러오는 중...</td></tr>
             </tbody>
           </table>
         </div>
@@ -277,7 +276,7 @@
       </div>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;gap:8px;">
+    <div class="flex-end">
       <button class="btn" id="detailEditBtn">수정</button>
       <button class="btn btn-danger" id="detailDeleteBtn">삭제</button>
     </div>
@@ -287,8 +286,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260420"></script>
-<script src="js/db.js?v=20260420"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 // 타임존 안전한 날짜 문자열
 function toDateStr(date) {
@@ -1004,7 +1003,7 @@ function renderUpcoming() {
 
   const el = document.getElementById('upcomingList');
   if (!upcoming.length) {
-    el.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;">예정된 일정이 없습니다</div>';
+    el.innerHTML = '<div class="empty-cell">예정된 일정이 없습니다</div>';
     return;
   }
 
@@ -1042,7 +1041,7 @@ function renderScheduleList() {
     .sort((a,b) => b.event_date.localeCompare(a.event_date));
   const tbody = document.getElementById('scheduleListTbody');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">일정이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">일정이 없습니다</td></tr>';
     return;
   }
   const today = new Date().toISOString().slice(0,10);
@@ -1685,7 +1684,6 @@ document.addEventListener('click', (e) => {
   }
 });
 
-async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
 
 init();
 </script>

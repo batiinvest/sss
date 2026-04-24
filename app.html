@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; display: flex; overflow: hidden; }
@@ -112,14 +112,14 @@
   </nav>
 
   <!-- iframe: 각 페이지 컨텐츠 -->
-  <iframe id="page-frame" src="index.html?v=20260417" title="페이지 컨텐츠" scrolling="yes" style="flex:1;border:none;width:100%;height:100vh;background:var(--bg);"></iframe>
+  <iframe id="page-frame" src="index.html?v=20260424" title="페이지 컨텐츠" scrolling="yes" style="flex:1;border:none;width:100%;height:100vh;background:var(--bg);"></iframe>
 
 </div>
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260417"></script>
-<script src="js/db.js?v=20260417"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 let currentPage = 'index';
 
@@ -140,7 +140,7 @@ function loadPage(pageName) {
   frame.classList.add('switching');
 
   setTimeout(() => {
-    frame.src = pageName + '.html?v=20260417';
+    frame.src = pageName + '.html?v=20260424';
     frame.onload = () => {
       frame.classList.remove('switching');
       // 모바일: 햄버거 닫기

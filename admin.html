@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
 
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">
@@ -20,7 +21,7 @@
     </div>
 
     <!-- 관리자 전용 안내 배너 (비관리자에게만 표시) -->
-    <div id="adminBanner" style="display:none;background:#faeeda;border:0.5px solid #f0c070;border-radius:var(--r-md);padding:10px 14px;margin-bottom:1.25rem;font-size:13px;color:#633806;align-items:center;gap:8px;"></div>
+    <div id="adminBanner" class="warn-banner mb-card flex-wrap gap-8" style="display:none;"></div>
 
     <!-- 추가/수정 폼 -->
     <div id="memberForm" class="card" style="display:none;margin-bottom:1.25rem;">
@@ -57,7 +58,7 @@
           <label>메모 (선택)</label>
           <input type="text" id="f-note" placeholder="예: 2기 참여자" />
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <div class="flex-end">
           <button class="btn" onclick="closeForm()">취소</button>
           <button class="btn btn-primary" id="saveBtn" onclick="saveMember()">저장</button>
         </div>
@@ -78,22 +79,22 @@
             <th style="width:130px;">작업</th>
           </tr></thead>
           <tbody id="membersTbody">
-            <tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+            <tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:1.25rem;" id="summaryCards"></div>
+    <div class="grid-3 mt-card" id="summaryCards"></div>
   </main>
 </div>
 
 <!-- 탈퇴 확인 모달 -->
-<div id="confirmModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:500;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:320px;border:0.5px solid var(--border);">
-    <div style="font-size:15px;font-weight:500;margin-bottom:8px;">참여자 탈퇴 처리</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;" id="confirmMsg"></div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;">
+<div id="confirmModal" class="modal-overlay">
+  <div class="modal-box" style="max-width:320px;">
+    <div class="modal-title mb-8">참여자 탈퇴 처리</div>
+    <div class="fs-13 color-muted mb-card" id="confirmMsg"></div>
+    <div class="flex-end">
       <button class="btn" onclick="closeModal()">취소</button>
       <button class="btn btn-danger" id="confirmBtn">탈퇴 처리</button>
     </div>
@@ -103,8 +104,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260412"></script>
-<script src="js/db.js?v=20260412"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 // 현재 수정 중인 멤버 ID를 전역 변수로 관리 (hidden input 대신)
 let editingMemberId = null;
@@ -151,7 +152,7 @@ function renderMembers() {
   document.getElementById('memberCountLabel').textContent = `총 ${members.length}명 활성`;
   const tbody = document.getElementById('membersTbody');
   if (!members.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">참여자가 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">참여자가 없습니다</td></tr>';
     return;
   }
   tbody.innerHTML = members.map((m, i) => {

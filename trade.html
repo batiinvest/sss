@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
 
-<div class="layout" style="display:block;"><main class="main">
+<div class="layout layout-page"><main class="main">
 
     <div class="topbar">
       <div>
@@ -17,7 +18,7 @@
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:1.25rem;">
+    <div class="grid-2 mb-card">
 
       <!-- 매수 입력 -->
       <div class="card">
@@ -117,7 +118,7 @@
             <th>체결가</th><th>수량</th><th>금액</th><th>메모</th>
           </tr></thead>
           <tbody id="tradesTbody">
-            <tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+            <tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -129,8 +130,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260412"></script>
-<script src="js/db.js?v=20260412"></script>
+<script src="js/config.js?v=20260424"></script>
+<script src="js/db.js?v=20260424"></script>
 <script>
 let members  = [];
 let allPicks = [];
@@ -263,7 +264,7 @@ async function submitSell() {
 function renderTrades(trades) {
   const tbody = document.getElementById('tradesTbody');
   if (!trades.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">매매 내역이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">매매 내역이 없습니다</td></tr>';
     return;
   }
   tbody.innerHTML = trades.map(t => {
@@ -295,10 +296,6 @@ function filterTrades() {
   renderTrades(filtered);
 }
 
-async function doLogout() {
-  await sb.auth.signOut();
-  location.href = 'index.html';
-}
 
 init();
 </script>

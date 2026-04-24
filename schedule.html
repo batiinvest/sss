@@ -939,22 +939,54 @@ function renderCalendar() {
 
 function makeDay(date, otherMonth, isToday=false) {
   const cell = document.createElement('div');
-  cell.className = `cal-day${otherMonth?' other-month':''}${isToday?' today':''}`;
-  const dateStr = date.toISOString().slice(0,10);
+  cell.className = 'cal-day' + (otherMonth?' other-month':'') + (isToday?' today':'');
+  const dateStr = toDateStr(date);
   const dayEvents = schedules.filter(s => s.event_date === dateStr);
 
-  // 더블클릭으로 일정 추가
   cell.addEventListener('dblclick', (e) => {
     if (e.target.closest('.cal-event')) return;
     openForm({ event_date: dateStr });
   });
   cell.title = '더블클릭: 일정 추가';
 
-  cell.innerHTML = `<div class="cal-day-num">${date.getDate()}</div>` +
-    dayEvents.slice(0,3).map(ev =>
-      `<div class="cal-event ${CAT_CLASS[ev.category]||'ev-other'}" onclick="showDetail('${ev.id}',event)">${ev.title}</div>`
-    ).join('') +
-    (dayEvents.length > 3 ? `<div style="font-size:10px;color:var(--muted);">+${dayEvents.length-3}개</div>` : '');
+  const numDiv = document.createElement('div');
+  numDiv.className = 'cal-day-num';
+  numDiv.textContent = date.getDate();
+  cell.appendChild(numDiv);
+
+  dayEvents.slice(0,3).forEach(ev => {
+    const evDiv = document.createElement('div');
+    evDiv.className = 'cal-event ' + (CAT_CLASS[ev.category]||'ev-other');
+    evDiv.textContent = ev.title;
+    evDiv.style.cursor = 'pointer';
+    evDiv.draggable = false;
+    evDiv.addEventListener('click', e => { e.stopPropagation(); showDetail(ev.id, e); });
+    cell.appendChild(evDiv);
+
+    // 발표자+종목 표시 (산업/기업 분석 일정만)
+    if (ev.category === 'stock' || ev.category === 'industry') {
+      const pres = presentations.filter(p =>
+        p.schedule_id === ev.id ||
+        (!p.schedule_id && p.presented_at === dateStr && p.status === 'planned')
+      );
+      pres.forEach(p => {
+        const pDiv = document.createElement('div');
+        pDiv.style.cssText = 'font-size:9px;color:var(--muted);padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;';
+        const name  = p.members?.name?.slice(0,2) || '';
+        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        pDiv.textContent = name + ' · ' + topic;
+        cell.appendChild(pDiv);
+      });
+    }
+  });
+
+  if (dayEvents.length > 3) {
+    const more = document.createElement('div');
+    more.style.cssText = 'font-size:10px;color:var(--muted);';
+    more.textContent = '+' + (dayEvents.length-3) + '개';
+    cell.appendChild(more);
+  }
+
   return cell;
 }
 
@@ -1048,6 +1080,28 @@ function openForm(prefill={}) {
   document.getElementById('s-member').value   = prefill.created_by  || '';
   document.getElementById('s-desc').value     = prefill.description || '';
   clearPresenterList();
+
+  // 수정 시 기존 발표자+종목 데이터 로드
+  if (prefill.id && (prefill.category === 'stock' || prefill.category === 'industry')) {
+    const existingPres = presentations.filter(p =>
+      p.schedule_id === prefill.id ||
+      (!p.schedule_id && p.presented_at === prefill.event_date && p.status === 'planned')
+    );
+    existingPres.forEach(p => {
+      const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+      addPresenter();
+      const rows = document.querySelectorAll('.presenter-row');
+      const lastRow = rows[rows.length - 1];
+      if (!lastRow) return;
+      const mSel   = lastRow.querySelector('.pres-member');
+      const sTxtEl = lastRow.querySelector('.pres-stock-input');
+      const sCodeEl= lastRow.querySelector('.pres-stock-code');
+      if (mSel && p.member_id)   mSel.value = p.member_id;
+      if (sTxtEl && topicName)   sTxtEl.value = topicName;
+      if (sCodeEl && p.stock_code) sCodeEl.value = p.stock_code;
+    });
+  }
+
   document.getElementById('scheduleForm').style.display = 'block';
   document.getElementById('scheduleForm').scrollIntoView({behavior:'smooth',block:'start'});
 }

@@ -127,7 +127,18 @@
 let currentPage = 'index';
 
 function loadPage(pageName) {
-  if (currentPage === pageName) return;
+  const frame = document.getElementById('page-frame');
+  const isSamePage = currentPage === pageName;
+
+  // 같은 페이지라도 iframe 내부가 다른 곳으로 이동했으면 reload 필요
+  // (예: 대시보드 → 탑픽 제출 → 사이드바 대시보드 클릭)
+  if (isSamePage) {
+    const currentSrc = frame.src || '';
+    const expectedSrc = pageName + '.html';
+    // iframe이 해당 페이지를 정확히 보여주고 있으면 아무것도 안 함
+    if (currentSrc.includes(expectedSrc)) return;
+  }
+
   currentPage = pageName;
 
   // active 메뉴 표시
@@ -139,7 +150,6 @@ function loadPage(pageName) {
   history.pushState({ page: pageName }, '', '#' + pageName);
 
   // iframe fade 전환
-  const frame = document.getElementById('page-frame');
   frame.classList.add('switching');
 
   setTimeout(() => {

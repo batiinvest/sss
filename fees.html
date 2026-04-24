@@ -214,16 +214,16 @@ const CAT_LABEL = { room:'스터디룸', drink:'음료', dinner:'회식', other:
 const CAT_CLASS  = { room:'cat-room', drink:'cat-drink', dinner:'cat-dinner', other:'cat-other' };
 
 let members = [], fees = [], expenses = [], currentMember = null, isAdminUser = false;
-let currentMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
+let feeCurrentMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
 
 function won(n) { return Math.abs(Math.round(n)).toLocaleString() + '원'; }
 
 // ── 월 이동
 function changeMonth(delta) {
-  const [y, m] = currentMonth.split('-').map(Number);
+  const [y, m] = feeCurrentMonth.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
-  currentMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-  document.getElementById('currentMonthLabel').textContent = currentMonth.replace('-','년 ') + '월';
+  feeCurrentMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  document.getElementById('feeCurrentMonthLabel').textContent = feeCurrentMonth.replace('-','년 ') + '월';
   renderFees();
 }
 
@@ -233,7 +233,7 @@ function renderSummary() {
   const totalExpAmt = expenses.reduce((s,e) => s + e.amount, 0);
   const balance     = totalFeeAmt - totalExpAmt;
 
-  const thisMonthFees = fees.filter(f => f.month === currentMonth);
+  const thisMonthFees = fees.filter(f => f.month === feeCurrentMonth);
   const thisMonthPaid = thisMonthFees.reduce((s,f) => s + f.amount, 0);
 
   document.getElementById('totalBalance').textContent  = (balance >= 0 ? '' : '-') + won(balance);
@@ -243,8 +243,8 @@ function renderSummary() {
 }
 
 function renderFees() {
-  document.getElementById('currentMonthLabel').textContent = currentMonth.replace('-', '년 ') + '월';
-  const monthFees = fees.filter(f => f.month === currentMonth);
+  document.getElementById('feeCurrentMonthLabel').textContent = feeCurrentMonth.replace('-', '년 ') + '월';
+  const monthFees = fees.filter(f => f.month === feeCurrentMonth);
   const totalPaid = monthFees.reduce((s,f) => s + f.amount, 0);
   const target    = members.length * REGULAR_FEE;
   const pct       = target > 0 ? Math.min(100, Math.round(totalPaid / target * 100)) : 0;
@@ -306,7 +306,7 @@ function renderFees() {
       delBtn.textContent = '✕';
       delBtn.title = '이번 달 납부 삭제';
       delBtn.onclick = async () => {
-        if (!confirm(m.name + '님의 ' + currentMonth + ' 납부 내역을 삭제할까요?')) return;
+        if (!confirm(m.name + '님의 ' + feeCurrentMonth + ' 납부 내역을 삭제할까요?')) return;
         for (const f of mFees) {
           await sb.from('study_fees').delete().eq('id', f.id);
         }
@@ -395,14 +395,14 @@ function renderMonthlySummary() {
 
     const col = document.createElement('div');
     col.style.cssText = 'flex:1;min-width:80px;cursor:pointer;';
-    col.onclick = () => { currentMonth = month; renderFees(); };
+    col.onclick = () => { feeCurrentMonth = month; renderFees(); };
 
     const barH = Math.max(4, Math.round(paid / maxPaid * 80));
     col.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
         '<div style="font-size:11px;color:var(--muted);">' + won(paid) + '</div>' +
         '<div style="width:32px;height:80px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden;">' +
-          '<div style="width:100%;height:' + barH + 'px;background:' + (month===currentMonth?'#185fa5':'#93c5fd') + ';border-radius:4px;transition:.3s;"></div>' +
+          '<div style="width:100%;height:' + barH + 'px;background:' + (month===feeCurrentMonth?'#185fa5':'#93c5fd') + ';border-radius:4px;transition:.3s;"></div>' +
         '</div>' +
         '<div style="font-size:10px;color:var(--muted);">' + month.slice(5) + '월</div>' +
         '<div style="font-size:10px;color:#0f6e56;">' + paidCount + '/' + members.length + '명</div>' +
@@ -431,7 +431,7 @@ async function loadData() {
 function openFeeModal() {
   const sel = document.getElementById('fee-member');
   sel.innerHTML = members.map(m => '<option value="'+m.id+'">'+m.name+'</option>').join('');
-  document.getElementById('fee-month').value  = currentMonth;
+  document.getElementById('fee-month').value  = feeCurrentMonth;
   document.getElementById('fee-amount').value = REGULAR_FEE;
   document.getElementById('fee-type').value   = 'regular';
   document.getElementById('fee-note').value   = '';

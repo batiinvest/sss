@@ -1079,7 +1079,6 @@ function openForm(prefill={}) {
   document.getElementById('s-location').value = prefill.location    || '';
   document.getElementById('s-member').value   = prefill.created_by  || '';
   document.getElementById('s-desc').value     = prefill.description || '';
-  clearPresenterList();
 
   // 수정 시 기존 발표자+종목 데이터 로드
   if (prefill.category === 'stock' || prefill.category === 'industry') {
@@ -1093,7 +1092,7 @@ function openForm(prefill={}) {
       existingPres.forEach(p => {
         const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
         addPresenter();
-        const rows = document.querySelectorAll('.presenter-row');
+        const rows = document.querySelectorAll('.pres-card');
         const lastRow = rows[rows.length - 1];
         if (!lastRow) return;
         const mSel    = lastRow.querySelector('.pres-member');
@@ -1133,7 +1132,7 @@ function openForm(prefill={}) {
         }
 
         addPresenter();
-        const rows = document.querySelectorAll('.presenter-row');
+        const rows = document.querySelectorAll('.pres-card');
         const lastRow = rows[rows.length - 1];
         if (!lastRow) return;
         const mSel   = lastRow.querySelector('.pres-member');

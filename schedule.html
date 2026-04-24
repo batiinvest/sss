@@ -601,7 +601,8 @@ function renderMemberPresPanel() {
   members.forEach((m, mi) => {
     const avColors = ['av1','av2','av3','av4','av1','av2'];
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);';
+    row.className = 'pres-member-row';
+    row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);';
 
     // 아바타
     const av = document.createElement('div');
@@ -702,7 +703,7 @@ function renderMemberPresPanel() {
       input.dataset.priceAt = ''; input.dataset.capAt = '';
       input.dataset.targetCap = ''; input.dataset.reason = ''; input.dataset.risk = '';
       // 추가 입력 영역 숨김
-      const extraWrap = row.querySelector('.pres-extra-wrap');
+      const extraWrap = input.closest('.pres-member-row')?.querySelector('.pres-extra-wrap');
       if (extraWrap) extraWrap.style.display = 'none';
     };
 
@@ -787,10 +788,6 @@ function renderMemberPresPanel() {
       input.dataset.reason    = draft.reason     || '';
       input.dataset.risk      = draft.risk       || '';
     }
-
-    // 종목 선택 시 추가 영역 펼치기 (memberStockSearch에서 호출)
-    input._extraWrap   = extraWrap;
-    input._curCapInput = curCapInput;
 
     // 전체 행: 1행(아바타+이름+검색+핸들+X) + 2행(추가 입력)
     const rowInner = document.createElement('div');
@@ -888,13 +885,12 @@ function memberStockSearch(input, dd) {
         input.dataset.capAt     = s.market_cap || '';
         dd.style.display = 'none';
 
-        // 추가 입력 영역 펼치기 + 현재 시총 자동 채우기
-        if (input._extraWrap) {
-          input._extraWrap.style.display = 'block';
-          if (input._curCapInput && s.market_cap) {
-            input._curCapInput.value = s.market_cap;
-          }
-        }
+        // 추가 입력 영역 펼치기 — DOM으로 직접 탐색
+        const rowEl    = input.closest('.pres-member-row');
+        const extraEl  = rowEl?.querySelector('.pres-extra-wrap');
+        const curCapEl = rowEl?.querySelector('[data-field="curCap"]');
+        if (extraEl)  extraEl.style.display = 'block';
+        if (curCapEl && s.market_cap) curCapEl.value = s.market_cap;
 
         // 종목 선택 즉시 임시저장
         await saveOnePres(input.dataset.memberId, s.stock_name, s.stock_code,

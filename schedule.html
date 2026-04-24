@@ -1082,24 +1082,69 @@ function openForm(prefill={}) {
   clearPresenterList();
 
   // 수정 시 기존 발표자+종목 데이터 로드
-  if (prefill.id && (prefill.category === 'stock' || prefill.category === 'industry')) {
-    const existingPres = presentations.filter(p =>
+  if (prefill.category === 'stock' || prefill.category === 'industry') {
+    // 1순위: presentations 테이블
+    const existingPres = prefill.id ? presentations.filter(p =>
       p.schedule_id === prefill.id ||
       (!p.schedule_id && p.presented_at === prefill.event_date && p.status === 'planned')
-    );
-    existingPres.forEach(p => {
-      const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
-      addPresenter();
-      const rows = document.querySelectorAll('.presenter-row');
-      const lastRow = rows[rows.length - 1];
-      if (!lastRow) return;
-      const mSel   = lastRow.querySelector('.pres-member');
-      const sTxtEl = lastRow.querySelector('.pres-stock-input');
-      const sCodeEl= lastRow.querySelector('.pres-stock-code');
-      if (mSel && p.member_id)   mSel.value = p.member_id;
-      if (sTxtEl && topicName)   sTxtEl.value = topicName;
-      if (sCodeEl && p.stock_code) sCodeEl.value = p.stock_code;
-    });
+    ) : [];
+
+    if (existingPres.length > 0) {
+      existingPres.forEach(p => {
+        const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        addPresenter();
+        const rows = document.querySelectorAll('.presenter-row');
+        const lastRow = rows[rows.length - 1];
+        if (!lastRow) return;
+        const mSel    = lastRow.querySelector('.pres-member');
+        const sTxtEl  = lastRow.querySelector('.pres-stock-input');
+        const sCodeEl = lastRow.querySelector('.pres-stock-code');
+        if (mSel && p.member_id)     mSel.value = p.member_id;
+        if (sTxtEl && topicName)     sTxtEl.value = topicName;
+        if (sCodeEl && p.stock_code) sCodeEl.value = p.stock_code;
+      });
+    } else if (prefill.description) {
+      // 2순위: description 텍스트 파싱 (기존 데이터)
+      // 형식: "종목 — 발표자" 또는 "1. 종목 — 발표자"
+      const rawLines = prefill.description ? prefill.description.split(String.fromCharCode(10)) : [];
+      const lines = rawLines.map(l => l.trim()).filter(l => l.includes('—') || l.includes('-'));
+
+      lines.forEach(line => {
+        // "1. 비에이치 — 이태진" → 종목: 비에이치, 발표자: 이태진
+        const clean = line.replace(/^\d+\.\s*/, '').trim();
+        const parts = clean.split(/\s*[—-]+\s*/);
+        if (parts.length < 2) return;
+
+        // 종목명이 앞인지 뒤인지 판단 (멤버 이름 매칭)
+        const part0 = parts[0].trim();
+        const part1 = parts[1].trim();
+        const memberByName = members.find(m => m.name === part1 || m.name === part0);
+
+        let stockName, memberName;
+        if (memberByName && memberByName.name === part1) {
+          stockName  = part0;
+          memberName = part1;
+        } else if (memberByName && memberByName.name === part0) {
+          stockName  = part1;
+          memberName = part0;
+        } else {
+          stockName  = part0;
+          memberName = part1;
+        }
+
+        addPresenter();
+        const rows = document.querySelectorAll('.presenter-row');
+        const lastRow = rows[rows.length - 1];
+        if (!lastRow) return;
+        const mSel   = lastRow.querySelector('.pres-member');
+        const sTxtEl = lastRow.querySelector('.pres-stock-input');
+        if (sTxtEl) sTxtEl.value = stockName;
+        if (mSel) {
+          const member = members.find(m => m.name === memberName);
+          if (member) mSel.value = member.id;
+        }
+      });
+    }
   }
 
   document.getElementById('scheduleForm').style.display = 'block';
@@ -1168,11 +1213,17 @@ async function saveSchedule() {
     }
 
     // 산업/종목 분석이면 presentations 테이블에 저장
-    if ((category === 'industry' || category === 'stock') && savedSchedule) {
+    const targetScheduleId = editingScheduleId || savedSchedule?.id;
+    if ((category === 'industry' || category === 'stock') && targetScheduleId) {
       const presCards = document.querySelectorAll('.pres-card');
       const industryName = category === 'industry'
         ? (document.getElementById('industryName')?.value?.trim() || '')
         : null;
+
+      // 수정 시 기존 presentations 삭제 후 재저장
+      if (editingScheduleId) {
+        await sb.from('presentations').delete().eq('schedule_id', editingScheduleId);
+      }
 
       for (const card of presCards) {
         const stockName = card.querySelector('.pres-stock-input')?.value?.trim() || '';
@@ -1184,11 +1235,10 @@ async function saveSchedule() {
 
         if (!stockName || !memberId) continue;
 
-        // 산업 분석이면 topic = "테마명 > 종목명", 종목 분석이면 topic = "종목명"
         const topic = industryName ? industryName + ' > ' + stockName : stockName;
 
         await sb.from('presentations').insert({
-          schedule_id:   savedSchedule.id,
+          schedule_id:   targetScheduleId,
           member_id:     memberId,
           category:      category,
           topic:         topic,
@@ -1196,8 +1246,13 @@ async function saveSchedule() {
           price_at:      priceAt,
           market_cap_at: capAt,
           presented_at:  date,
+          status:        'planned',
         });
       }
+
+      // presentations 전역 데이터 갱신
+      presentations = await sb.from('presentations')
+        .select('*, members(name)').order('created_at').then(r => r.data || []);
     }
 
     closeForm();

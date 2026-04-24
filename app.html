@@ -29,6 +29,7 @@
       .layout {
         flex-direction: column;
         height: 100vh;
+        height: 100dvh; /* 동적 뷰포트 — 주소창/툴바 높이 변화 대응 */
         overflow: hidden;
       }
       .sidebar {
@@ -40,8 +41,10 @@
       }
       #page-frame {
         flex: 1;
-        height: 0; /* flex child가 남은 공간 채우도록 */
+        height: 0;    /* flex child가 남은 공간을 채우도록 */
         min-height: 0;
+        overflow-y: auto;                  /* iframe 자체 스크롤 활성화 */
+        -webkit-overflow-scrolling: touch; /* iOS 관성 스크롤 */
       }
     }
   </style>

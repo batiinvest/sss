@@ -490,7 +490,16 @@ textarea { resize: vertical; min-height: 72px; }
 html.in-iframe .sidebar,
 html.in-iframe .hamburger { display: none !important; }
 html.in-iframe .layout    { display: block !important; }
-html.in-iframe .main      { min-height: 100vh; }
+html.in-iframe,
+html.in-iframe body {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-y: auto !important;
+}
+html.in-iframe .main {
+  min-height: unset;
+  padding-bottom: 2rem;
+}
 
 /* ── 레이아웃: iframe 전용 (사이드바 없는 페이지 공통) ── */
 .layout-page { display: block; }

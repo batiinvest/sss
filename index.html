@@ -23,43 +23,6 @@
     </div>
   </div>
 
-  <!-- ── 전체 펀드 메트릭 ── -->
-  <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(100px,1fr));">
-    <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
-    <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
-    <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
-    <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
-    <div class="metric"><div class="metric-label">이번 달 탑픽 제출</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
-    <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
-  </div>
-
-  <!-- ── 이번 달 탑픽 + 참여자 수익률 ── -->
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
-          <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률</th><th>목표가</th><th>상태</th></tr></thead>
-          <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><div class="card-title">참여자 수익률</div></div>
-      <div id="memberBars" style="display:flex;flex-direction:column;gap:8px;"></div>
-      <div style="margin-top:14px;border-top:0.5px solid var(--border);padding-top:12px;">
-        <div class="notice-list" id="notices"></div>
-      </div>
-    </div>
-  </div>
-
   <!-- ── 내 탑픽 + 내 발표종목 ── -->
   <div class="grid-2" id="mySection" style="display:none;">
 
@@ -100,6 +63,43 @@
   <!-- 로그인 멤버 없을 때 안내 -->
   <div id="myMemberNotice" style="display:none;" class="info-banner mb-card">
     멤버 정보와 연동되지 않은 계정입니다. 관리자에게 이메일 등록을 요청하면 내 탑픽·발표종목이 표시됩니다.
+  </div>
+
+  <!-- ── 전체 펀드 메트릭 ── -->
+  <div class="metric-grid" style="grid-template-columns:repeat(3,minmax(100px,1fr));">
+    <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
+    <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
+    <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
+    <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
+    <div class="metric"><div class="metric-label">이번 달 탑픽 제출</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
+    <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
+  </div>
+
+  <!-- ── 이번 달 탑픽 + 참여자 수익률 ── -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
+          <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률</th><th>목표가</th><th>상태</th></tr></thead>
+          <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-title">참여자 수익률</div></div>
+      <div id="memberBars" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="margin-top:14px;border-top:0.5px solid var(--border);padding-top:12px;">
+        <div class="notice-list" id="notices"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ── 최근 매매 내역 ── -->

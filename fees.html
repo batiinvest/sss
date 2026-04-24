@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 스터디 회비</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
+  <style>
+    html.in-iframe .sidebar, html.in-iframe .hamburger { display:none!important; }
+    html.in-iframe .layout { display:block!important; }
+
+    .fee-badge { display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500; }
+    .fee-paid   { background:#e6f7f1;color:#0f6e56; }
+    .fee-unpaid { background:#fef2f2;color:#a32d2d; }
+    .fee-extra  { background:#eff6ff;color:#1e40af; }
+    .cat-room   { background:#f0fdf4;color:#166534; }
+    .cat-drink  { background:#fef9c3;color:#854d0e; }
+    .cat-dinner { background:#fdf2f8;color:#86198f; }
+    .cat-other  { background:#f1f5f9;color:#475569; }
+
+    .balance-card { background:linear-gradient(135deg,#185fa5 0%,#1e7fcb 100%);color:#fff;border-radius:var(--r-lg);padding:1.5rem;margin-bottom:1.25rem; }
+    .balance-card .label { font-size:12px;opacity:.8;margin-bottom:4px; }
+    .balance-card .value { font-size:28px;font-weight:700; }
+    .balance-sub { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:1rem; }
+    .balance-sub-item { background:rgba(255,255,255,.15);border-radius:8px;padding:8px 12px; }
+    .balance-sub-item .sub-label { font-size:10px;opacity:.8;margin-bottom:2px; }
+    .balance-sub-item .sub-value { font-size:15px;font-weight:600; }
+
+    .member-fee-row { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:.5px solid var(--border); }
+    .month-nav { display:flex;align-items:center;gap:8px; }
+    .month-nav button { background:none;border:.5px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px; }
+
+    .expense-row { display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:.5px solid var(--border);font-size:13px; }
+    .total-bar { height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px; }
+    .total-bar-fill { height:100%;background:#185fa5;border-radius:3px;transition:width .4s; }
+  </style>
+</head>
+<body>
+<div class="layout" style="display:block;">
+<main class="main">
+  <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
+
+  <div class="topbar">
+    <div>
+      <div class="page-title">스터디 회비</div>
+      <div class="updated" id="updatedAt">월 20,000원 정기 · 회식 추가 수시</div>
+    </div>
+    <div class="btn-row" id="adminBtns" style="display:none;">
+      <button class="btn" onclick="openFeeModal()">+ 납부 등록</button>
+      <button class="btn" onclick="openExpenseModal()">+ 지출 등록</button>
+    </div>
+  </div>
+
+  <!-- 잔액 카드 -->
+  <div class="balance-card">
+    <div class="label">현재 잔액</div>
+    <div class="value" id="totalBalance">계산 중...</div>
+    <div class="balance-sub">
+      <div class="balance-sub-item">
+        <div class="sub-label">총 납부액</div>
+        <div class="sub-value" id="totalFees">—</div>
+      </div>
+      <div class="balance-sub-item">
+        <div class="sub-label">총 지출액</div>
+        <div class="sub-value" id="totalExpenses">—</div>
+      </div>
+      <div class="balance-sub-item">
+        <div class="sub-label">이번 달 납부</div>
+        <div class="sub-value" id="thisMonthPaid">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+
+    <!-- 월별 납부 현황 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">납부 현황</div>
+        <div class="month-nav">
+          <button onclick="changeMonth(-1)">‹</button>
+          <span id="currentMonthLabel" style="font-size:13px;font-weight:500;min-width:70px;text-align:center;"></span>
+          <button onclick="changeMonth(1)">›</button>
+        </div>
+      </div>
+      <div style="padding:0 1rem 1rem;">
+        <div id="feeProgress" style="margin-bottom:12px;"></div>
+        <div id="memberFeeList"></div>
+      </div>
+    </div>
+
+    <!-- 지출 내역 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">지출 내역</div>
+        <select id="expenseFilter" onchange="renderExpenses()" style="font-size:12px;padding:4px 8px;width:auto;">
+          <option value="">전체</option>
+          <option value="room">스터디룸</option>
+          <option value="drink">음료</option>
+          <option value="dinner">회식</option>
+          <option value="other">기타</option>
+        </select>
+      </div>
+      <div style="padding:0 1rem 1rem;">
+        <div id="expenseList"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 월별 요약 -->
+  <div class="card" style="margin-top:1.25rem;">
+    <div class="card-head"><div class="card-title">월별 납부 요약</div></div>
+    <div style="padding:0 1rem 1rem;overflow-x:auto;">
+      <div id="monthlySummary" style="display:flex;gap:12px;min-width:600px;padding-top:8px;"></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- 납부 등록 모달 -->
+<div id="feeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:420px;border:.5px solid var(--border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div style="font-size:15px;font-weight:500;">납부 등록</div>
+      <button class="btn" onclick="closeFeeModal()">닫기</button>
+    </div>
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>멤버</label>
+          <select id="fee-member" style="font-size:13px;"></select>
+        </div>
+        <div class="form-group">
+          <label>납부 월</label>
+          <input type="month" id="fee-month" style="font-size:13px;" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>금액</label>
+          <input type="number" id="fee-amount" value="20000" step="1000" style="font-size:13px;" />
+        </div>
+        <div class="form-group">
+          <label>유형</label>
+          <select id="fee-type" style="font-size:13px;">
+            <option value="regular">정기 (20,000원)</option>
+            <option value="extra">추가 (회식 등)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>메모</label>
+        <input type="text" id="fee-note" placeholder="예: 4월 정기 회비" style="font-size:13px;" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+        <button class="btn" onclick="closeFeeModal()">취소</button>
+        <button class="btn btn-primary" onclick="saveFee()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 지출 등록 모달 -->
+<div id="expenseModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:500;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:420px;border:.5px solid var(--border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div style="font-size:15px;font-weight:500;">지출 등록</div>
+      <button class="btn" onclick="closeExpenseModal()">닫기</button>
+    </div>
+    <div class="form-section">
+      <div class="form-row">
+        <div class="form-group">
+          <label>카테고리</label>
+          <select id="exp-category" style="font-size:13px;">
+            <option value="room">스터디룸</option>
+            <option value="drink">음료</option>
+            <option value="dinner">회식</option>
+            <option value="other">기타</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>지출일</label>
+          <input type="date" id="exp-date" style="font-size:13px;" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>금액</label>
+        <input type="number" id="exp-amount" placeholder="0" step="100" style="font-size:13px;" />
+      </div>
+      <div class="form-group">
+        <label>메모</label>
+        <input type="text" id="exp-note" placeholder="예: 스터디룸 4월 이용료" style="font-size:13px;" />
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+        <button class="btn" onclick="closeExpenseModal()">취소</button>
+        <button class="btn btn-primary" onclick="saveExpense()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20260420"></script>
+<script src="js/db.js?v=20260420"></script>
+<script>
+const REGULAR_FEE = 20000;
+const CAT_LABEL = { room:'스터디룸', drink:'음료', dinner:'회식', other:'기타' };
+const CAT_CLASS  = { room:'cat-room', drink:'cat-drink', dinner:'cat-dinner', other:'cat-other' };
+
+let members = [], fees = [], expenses = [], currentMember = null, isAdminUser = false;
+let currentMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
+
+function won(n) { return Math.abs(Math.round(n)).toLocaleString() + '원'; }
+
+// ── 월 이동
+function changeMonth(delta) {
+  const [y, m] = currentMonth.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  currentMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  document.getElementById('currentMonthLabel').textContent = currentMonth.replace('-','년 ') + '월';
+  renderFees();
+}
+
+// ── 데이터 렌더
+function renderSummary() {
+  const totalFeeAmt = fees.reduce((s,f) => s + f.amount, 0);
+  const totalExpAmt = expenses.reduce((s,e) => s + e.amount, 0);
+  const balance     = totalFeeAmt - totalExpAmt;
+
+  const thisMonthFees = fees.filter(f => f.month === currentMonth);
+  const thisMonthPaid = thisMonthFees.reduce((s,f) => s + f.amount, 0);
+
+  document.getElementById('totalBalance').textContent  = (balance >= 0 ? '' : '-') + won(balance);
+  document.getElementById('totalFees').textContent     = won(totalFeeAmt);
+  document.getElementById('totalExpenses').textContent = won(totalExpAmt);
+  document.getElementById('thisMonthPaid').textContent = won(thisMonthPaid);
+}
+
+function renderFees() {
+  document.getElementById('currentMonthLabel').textContent = currentMonth.replace('-', '년 ') + '월';
+  const monthFees = fees.filter(f => f.month === currentMonth);
+  const totalPaid = monthFees.reduce((s,f) => s + f.amount, 0);
+  const target    = members.length * REGULAR_FEE;
+  const pct       = target > 0 ? Math.min(100, Math.round(totalPaid / target * 100)) : 0;
+
+  // 진행률 바
+  const prog = document.getElementById('feeProgress');
+  prog.innerHTML =
+    '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">' +
+    '<span>정기 납부 현황</span><span>' + won(totalPaid) + ' / ' + won(target) + '</span></div>' +
+    '<div class="total-bar"><div class="total-bar-fill" style="width:' + pct + '%"></div></div>';
+
+  // 멤버별 납부 상태
+  const list = document.getElementById('memberFeeList');
+  list.innerHTML = '';
+  members.forEach(m => {
+    const mFees   = monthFees.filter(f => f.member_id === m.id);
+    const regular = mFees.filter(f => f.fee_type === 'regular');
+    const extra   = mFees.filter(f => f.fee_type === 'extra');
+    const paid    = mFees.reduce((s,f) => s + f.amount, 0);
+    const hasPaid = regular.length > 0;
+
+    const row = document.createElement('div');
+    row.className = 'member-fee-row';
+
+    const av = document.createElement('div');
+    av.className = 'avatar av1';
+    av.style.cssText = 'width:28px;height:28px;font-size:11px;flex-shrink:0;';
+    av.textContent = m.name.slice(0,2);
+
+    const nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'flex:1;font-size:13px;font-weight:500;';
+    nameDiv.textContent = m.name;
+
+    const badgeWrap = document.createElement('div');
+    badgeWrap.style.cssText = 'display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end;';
+
+    if (hasPaid) {
+      const b = document.createElement('span');
+      b.className = 'fee-badge fee-paid';
+      b.textContent = '✅ ' + won(regular.reduce((s,f)=>s+f.amount,0));
+      badgeWrap.appendChild(b);
+    } else {
+      const b = document.createElement('span');
+      b.className = 'fee-badge fee-unpaid';
+      b.textContent = '❌ 미납';
+      badgeWrap.appendChild(b);
+    }
+    if (extra.length > 0) {
+      const b = document.createElement('span');
+      b.className = 'fee-badge fee-extra';
+      b.textContent = '+' + won(extra.reduce((s,f)=>s+f.amount,0));
+      badgeWrap.appendChild(b);
+    }
+
+    // 관리자: 납부 삭제 버튼
+    if (isAdminUser && mFees.length > 0) {
+      const delBtn = document.createElement('button');
+      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;';
+      delBtn.textContent = '✕';
+      delBtn.title = '이번 달 납부 삭제';
+      delBtn.onclick = async () => {
+        if (!confirm(m.name + '님의 ' + currentMonth + ' 납부 내역을 삭제할까요?')) return;
+        for (const f of mFees) {
+          await sb.from('study_fees').delete().eq('id', f.id);
+        }
+        await loadData();
+      };
+      badgeWrap.appendChild(delBtn);
+    }
+
+    row.appendChild(av);
+    row.appendChild(nameDiv);
+    row.appendChild(badgeWrap);
+    list.appendChild(row);
+  });
+}
+
+function renderExpenses() {
+  const cat  = document.getElementById('expenseFilter').value;
+  const list = cat ? expenses.filter(e => e.category === cat) : [...expenses];
+  list.sort((a,b) => b.spent_at.localeCompare(a.spent_at));
+
+  const el = document.getElementById('expenseList');
+  el.innerHTML = '';
+
+  if (!list.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">지출 내역이 없습니다</div>';
+    return;
+  }
+
+  list.slice(0,30).forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'expense-row';
+
+    const catBadge = document.createElement('span');
+    catBadge.className = 'fee-badge ' + (CAT_CLASS[e.category]||'cat-other');
+    catBadge.textContent = CAT_LABEL[e.category]||e.category;
+
+    const noteDiv = document.createElement('div');
+    noteDiv.style.cssText = 'font-size:13px;min-width:0;';
+    noteDiv.innerHTML = '<div style="font-weight:500;">' + (e.note||'—') + '</div>' +
+      '<div style="font-size:11px;color:var(--muted);">' + e.spent_at + '</div>';
+
+    const amtDiv = document.createElement('div');
+    amtDiv.style.cssText = 'font-size:13px;font-weight:500;color:#a32d2d;white-space:nowrap;';
+    amtDiv.textContent = '-' + won(e.amount);
+
+    const actDiv = document.createElement('div');
+    if (isAdminUser) {
+      const delBtn = document.createElement('button');
+      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;';
+      delBtn.textContent = '✕';
+      delBtn.onclick = async () => {
+        if (!confirm('지출 내역을 삭제할까요?')) return;
+        await sb.from('study_expenses').delete().eq('id', e.id);
+        await loadData();
+      };
+      actDiv.appendChild(delBtn);
+    }
+
+    row.appendChild(catBadge);
+    row.appendChild(noteDiv);
+    row.appendChild(amtDiv);
+    row.appendChild(actDiv);
+    el.appendChild(row);
+  });
+}
+
+function renderMonthlySummary() {
+  // 최근 6개월 요약
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    months.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  }
+
+  const el = document.getElementById('monthlySummary');
+  el.innerHTML = '';
+  const maxPaid = Math.max(...months.map(m => fees.filter(f=>f.month===m).reduce((s,f)=>s+f.amount,0)), 1);
+
+  months.forEach(month => {
+    const mFees = fees.filter(f => f.month === month);
+    const mExps = expenses.filter(e => e.spent_at.slice(0,7) === month);
+    const paid  = mFees.reduce((s,f)=>s+f.amount,0);
+    const spent = mExps.reduce((s,e)=>s+e.amount,0);
+    const paidCount = new Set(mFees.filter(f=>f.fee_type==='regular').map(f=>f.member_id)).size;
+
+    const col = document.createElement('div');
+    col.style.cssText = 'flex:1;min-width:80px;cursor:pointer;';
+    col.onclick = () => { currentMonth = month; renderFees(); };
+
+    const barH = Math.max(4, Math.round(paid / maxPaid * 80));
+    col.innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
+        '<div style="font-size:11px;color:var(--muted);">' + won(paid) + '</div>' +
+        '<div style="width:32px;height:80px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden;">' +
+          '<div style="width:100%;height:' + barH + 'px;background:' + (month===currentMonth?'#185fa5':'#93c5fd') + ';border-radius:4px;transition:.3s;"></div>' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--muted);">' + month.slice(5) + '월</div>' +
+        '<div style="font-size:10px;color:#0f6e56;">' + paidCount + '/' + members.length + '명</div>' +
+      '</div>';
+
+    el.appendChild(col);
+  });
+}
+
+// ── 데이터 로드
+async function loadData() {
+  const [feesRes, expRes] = await Promise.all([
+    sb.from('study_fees').select('*, members(name)').order('paid_at', {ascending:false}),
+    sb.from('study_expenses').select('*').order('spent_at', {ascending:false}),
+  ]);
+  fees     = feesRes.data  || [];
+  expenses = expRes.data   || [];
+
+  renderSummary();
+  renderFees();
+  renderExpenses();
+  renderMonthlySummary();
+}
+
+// ── 납부 등록 모달
+function openFeeModal() {
+  const sel = document.getElementById('fee-member');
+  sel.innerHTML = members.map(m => '<option value="'+m.id+'">'+m.name+'</option>').join('');
+  document.getElementById('fee-month').value  = currentMonth;
+  document.getElementById('fee-amount').value = REGULAR_FEE;
+  document.getElementById('fee-type').value   = 'regular';
+  document.getElementById('fee-note').value   = '';
+  document.getElementById('feeModal').style.display = 'flex';
+}
+function closeFeeModal() { document.getElementById('feeModal').style.display = 'none'; }
+
+async function saveFee() {
+  const memberId = document.getElementById('fee-member').value;
+  const month    = document.getElementById('fee-month').value;
+  const amount   = parseInt(document.getElementById('fee-amount').value);
+  const feeType  = document.getElementById('fee-type').value;
+  const note     = document.getElementById('fee-note').value.trim() || null;
+
+  if (!memberId || !month || !amount) { toast('모든 필드를 입력하세요.'); return; }
+
+  const { error } = await sb.from('study_fees').insert({
+    member_id: memberId, month, amount, fee_type: feeType, note,
+  });
+  if (error) { toast('오류: ' + error.message); return; }
+  toast('✅ 납부 등록 완료');
+  closeFeeModal();
+  await loadData();
+}
+
+// ── 지출 등록 모달
+function openExpenseModal() {
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('exp-date').value     = today;
+  document.getElementById('exp-amount').value   = '';
+  document.getElementById('exp-note').value     = '';
+  document.getElementById('exp-category').value = 'room';
+  document.getElementById('expenseModal').style.display = 'flex';
+}
+function closeExpenseModal() { document.getElementById('expenseModal').style.display = 'none'; }
+
+async function saveExpense() {
+  const category = document.getElementById('exp-category').value;
+  const amount   = parseInt(document.getElementById('exp-amount').value);
+  const spentAt  = document.getElementById('exp-date').value;
+  const note     = document.getElementById('exp-note').value.trim() || null;
+
+  if (!amount || !spentAt) { toast('금액과 날짜를 입력하세요.'); return; }
+
+  const { error } = await sb.from('study_expenses').insert({
+    category, amount, spent_at: spentAt, note,
+    created_by: currentMember?.id || null,
+  });
+  if (error) { toast('오류: ' + error.message); return; }
+  toast('✅ 지출 등록 완료');
+  closeExpenseModal();
+  await loadData();
+}
+
+// ── 초기화
+async function init() {
+  await requireAuth();
+  checkDBConnection();
+
+  const [mem, me, adminFlag] = await Promise.all([
+    fetchMembers(), getCurrentMember(), isAdmin()
+  ]);
+  members       = mem || [];
+  currentMember = me;
+  isAdminUser   = adminFlag;
+
+  if (isAdminUser) {
+    document.getElementById('adminBtns').style.display = 'flex';
+  }
+
+  await loadData();
+}
+
+async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
+
+init();
+</script>
+</body>
+</html>

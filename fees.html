@@ -222,7 +222,7 @@ function changeMonth(delta) {
   const [y, m] = feeCurrentMonth.split('-').map(Number);
   const d = new Date(y, m - 1 + delta, 1);
   feeCurrentMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-  document.getElementById('feeCurrentMonthLabel').textContent = feeCurrentMonth.replace('-','년 ') + '월';
+  document.getElementById('currentMonthLabel').textContent = feeCurrentMonth.replace('-','년 ') + '월';
   renderFees();
 }
 
@@ -242,7 +242,7 @@ function renderSummary() {
 }
 
 function renderFees() {
-  document.getElementById('feeCurrentMonthLabel').textContent = feeCurrentMonth.replace('-', '년 ') + '월';
+  document.getElementById('currentMonthLabel').textContent = feeCurrentMonth.replace('-', '년 ') + '월';
   const monthFees = fees.filter(f => f.month === feeCurrentMonth);
   const totalPaid = monthFees.reduce((s,f) => s + f.amount, 0);
   const target    = members.length * REGULAR_FEE;

@@ -18,7 +18,7 @@
     </div>
     <div class="btn-row">
       <a href="trade.html?type=sell" class="btn">매도 요청</a>
-      <button class="btn" onclick="goToPresOrder()" style="font-size:13px;">📋 발표종목 입력</button>
+      <button class="btn" onclick="openPresModal()" style="font-size:13px;">📋 발표종목 입력</button>
       <a href="picks.html?action=new" class="btn btn-primary">+ 탑픽 제출</a>
     </div>
   </div>
@@ -116,6 +116,44 @@
     </div>
   </div>
 </main></div>
+
+<!-- ════════════════════════════════════════
+     발표종목 입력 팝업
+     ════════════════════════════════════════ -->
+<div id="presModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:600;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;">
+  <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:560px;border:0.5px solid var(--border);margin:auto;">
+
+    <!-- 헤더 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div>
+        <div style="font-size:15px;font-weight:500;">📋 발표종목 입력</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">입력 후 스터디 일정 탭에서 날짜 배정</div>
+      </div>
+      <button class="btn" onclick="closePresModal()" style="font-size:12px;">닫기</button>
+    </div>
+
+    <!-- 이번 발표 설정 -->
+    <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;margin-bottom:1rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="font-size:12px;font-weight:500;color:var(--muted);">이번 발표</span>
+      <select id="pm-category" onchange="onPmCategoryChange()" style="font-size:12px;padding:4px 8px;">
+        <option value="stock">기업 분석</option>
+        <option value="industry">산업 분석</option>
+      </select>
+      <div id="pm-industryWrap" style="display:none;">
+        <input type="text" id="pm-industry" placeholder="산업명 입력" style="font-size:12px;padding:4px 8px;width:140px;" />
+      </div>
+    </div>
+
+    <!-- 멤버별 종목 입력 -->
+    <div id="pm-memberPanel" style="display:flex;flex-direction:column;gap:0;"></div>
+
+    <!-- 하단 버튼 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border);">
+      <span style="font-size:12px;color:var(--muted);">저장 후 스터디 일정 → 발표 순서 탭에서 날짜 배정하세요</span>
+      <button class="btn btn-primary" style="font-size:13px;" onclick="closePresModal()">완료</button>
+    </div>
+  </div>
+</div>
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -127,18 +165,325 @@ let currentMembers = [];
 let allCurrentPicks = [];
 let globalPriceMap = {};   // 현재가 캐시 (내 섹션에서도 재사용)
 
-// ── iframe 페이지 이동 헬퍼
-function goToPresOrder() {
-  if (window.parent && window.parent.loadPage) {
-    window.parent.loadPage('schedule');
-    setTimeout(() => {
-      const frame = window.parent.document.getElementById('page-frame');
-      if (frame?.contentWindow?.switchMainTab) frame.contentWindow.switchMainTab('presOrder');
-    }, 800);
+// ════════════════════════════════════════
+// 발표종목 입력 팝업
+// ════════════════════════════════════════
+let _pmMembers      = [];       // 팝업용 멤버 목록
+let _pmPresentations = [];      // 팝업용 presentations (draft)
+let _pmSearchTimers = {};       // 멤버별 검색 타이머
+
+function onPmCategoryChange() {
+  const cat = document.getElementById('pm-category').value;
+  document.getElementById('pm-industryWrap').style.display = cat === 'industry' ? 'block' : 'none';
+}
+
+async function openPresModal() {
+  const modal = document.getElementById('presModal');
+  modal.style.display = 'flex';
+  document.getElementById('pm-memberPanel').innerHTML =
+    '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">불러오는 중...</div>';
+
+  // 멤버 + 기존 draft presentations 로드
+  const [members, presData] = await Promise.all([
+    fetchMembers(),
+    sb.from('presentations')
+      .select('*').eq('status', 'planned').is('schedule_id', null)
+      .then(r => r.data || [])
+  ]);
+
+  _pmMembers       = members;
+  _pmPresentations = presData;
+
+  // 이번 발표 카테고리 추천 (마지막 발표 기준)
+  try {
+    const { data: lastPres } = await sb.from('presentations')
+      .select('category').eq('status', 'done')
+      .order('presented_at', { ascending: false }).limit(1);
+    if (lastPres?.[0]) {
+      const lastCat = lastPres[0].category;
+      document.getElementById('pm-category').value = lastCat === 'stock' ? 'industry' : 'stock';
+      onPmCategoryChange();
+    }
+  } catch(e) {}
+
+  renderPmPanel();
+}
+
+function closePresModal() {
+  document.getElementById('presModal').style.display = 'none';
+  // 내 발표종목 섹션 갱신
+  getCurrentMember().then(me => { if (me) renderMyPresentations(me); });
+}
+
+// 팝업 바깥 클릭 시 닫기
+document.getElementById('presModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('presModal')) closePresModal();
+});
+
+function renderPmPanel() {
+  const panel = document.getElementById('pm-memberPanel');
+  panel.innerHTML = '';
+
+  _pmMembers.forEach((m, mi) => {
+    const draft = _pmPresentations.find(p => p.member_id === m.id);
+
+    // 행 컨테이너
+    const row = document.createElement('div');
+    row.className = 'pm-member-row';
+    row.style.cssText = 'padding:10px 0;border-bottom:0.5px solid var(--border);';
+
+    // 상단: 아바타 + 이름 + 종목 검색
+    const topLine = document.createElement('div');
+    topLine.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+    const av = document.createElement('div');
+    av.className = 'avatar ' + avCls[mi % 6];
+    av.style.cssText = 'width:28px;height:28px;font-size:11px;flex-shrink:0;';
+    av.textContent = m.name.slice(0, 2);
+
+    const nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:52px;flex-shrink:0;';
+    nameDiv.textContent = m.name;
+
+    // 종목 검색 wrap
+    const searchWrap = document.createElement('div');
+    searchWrap.style.cssText = 'flex:1;position:relative;';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '종목 검색 (2글자 이상)';
+    input.style.cssText = 'width:100%;font-size:13px;padding:6px 10px;';
+    input.dataset.memberId = m.id;
+    input.dataset.stockCode = '';
+    input.dataset.priceAt   = '';
+    input.dataset.capAt     = '';
+
+    // draft 복원
+    if (draft) {
+      const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic || '');
+      input.value = topicName;
+      input.dataset.stockCode = draft.stock_code   || '';
+      input.dataset.priceAt   = draft.price_at     || '';
+      input.dataset.capAt     = draft.market_cap_at || '';
+      input.dataset.targetCap = draft.target_cap   || '';
+      input.dataset.reason    = draft.reason       || '';
+      input.dataset.risk      = draft.risk         || '';
+    }
+
+    const dd = document.createElement('div');
+    dd.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:700;' +
+      'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
+      'box-shadow:0 4px 16px rgba(0,0,0,0.15);max-height:180px;overflow-y:auto;margin-top:2px;';
+
+    input.oninput = () => pmStockSearch(input, dd);
+
+    // 지우기 버튼
+    const clearBtn = document.createElement('button');
+    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0 4px;flex-shrink:0;line-height:1;';
+    clearBtn.textContent = '×';
+    clearBtn.onclick = async () => {
+      const existingDraft = _pmPresentations.find(p => p.member_id === m.id);
+      if (existingDraft) {
+        await sb.from('presentations').delete().eq('id', existingDraft.id);
+        _pmPresentations = _pmPresentations.filter(p => p.id !== existingDraft.id);
+      }
+      input.value = '';
+      input.dataset.stockCode = input.dataset.priceAt = input.dataset.capAt = '';
+      input.dataset.targetCap = input.dataset.reason = input.dataset.risk = '';
+      const extra = row.querySelector('.pm-extra-wrap');
+      if (extra) extra.style.display = 'none';
+      toast(m.name + ' 입력 초기화');
+    };
+
+    searchWrap.appendChild(input);
+    searchWrap.appendChild(dd);
+
+    topLine.appendChild(av);
+    topLine.appendChild(nameDiv);
+    topLine.appendChild(searchWrap);
+    topLine.appendChild(clearBtn);
+
+    // 추가 입력 영역 (목표시총 / 투자사유 / 리스크)
+    const extraWrap = document.createElement('div');
+    extraWrap.className = 'pm-extra-wrap';
+    extraWrap.style.cssText = 'display:' + (draft?.stock_code ? 'block' : 'none') +
+      ';margin-top:8px;padding:10px 12px;background:var(--bg);border-radius:var(--r-md);';
+
+    // 시총 행
+    const capLine = document.createElement('div');
+    capLine.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;';
+
+    const mkCap = (label, placeholder, fieldKey) => {
+      const g = document.createElement('div');
+      g.innerHTML = `<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">${label}</label>`;
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.placeholder = placeholder;
+      inp.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;';
+      inp.dataset.field = fieldKey;
+      if (draft?.[fieldKey === 'curCap' ? 'market_cap_at' : 'target_cap'])
+        inp.value = draft[fieldKey === 'curCap' ? 'market_cap_at' : 'target_cap'];
+      g.appendChild(inp);
+      return [g, inp];
+    };
+
+    const [curCapGrp, curCapInp] = mkCap('현재 시총 (억원)', '자동 입력됨', 'curCap');
+    const [tgtCapGrp, tgtCapInp] = mkCap('목표 시총 (억원)', '예: 4200000', 'targetCap');
+
+    const capPreview = document.createElement('div');
+    capPreview.style.cssText = 'font-size:11px;color:var(--green);margin-top:3px;display:none;';
+    const calcPmPreview = () => {
+      const cur = parseInt(curCapInp.value), tgt = parseInt(tgtCapInp.value);
+      if (cur > 0 && tgt > 0) {
+        capPreview.textContent = cur.toLocaleString() + '억 → ' + tgt.toLocaleString() + '억 (+' + ((tgt-cur)/cur*100).toFixed(1) + '%)';
+        capPreview.style.display = 'block';
+      } else { capPreview.style.display = 'none'; }
+      input.dataset.targetCap = tgtCapInp.value;
+    };
+    if (draft?.target_cap) { tgtCapInp.value = draft.target_cap; calcPmPreview(); }
+    tgtCapInp.oninput = calcPmPreview;
+    curCapInp.oninput = calcPmPreview;
+    tgtCapGrp.appendChild(capPreview);
+
+    capLine.appendChild(curCapGrp);
+    capLine.appendChild(tgtCapGrp);
+
+    // 투자사유 / 리스크
+    const mkTextarea = (label, placeholder, fieldKey, rows) => {
+      const g = document.createElement('div');
+      g.style.cssText = 'margin-bottom:8px;';
+      g.innerHTML = `<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">${label}</label>`;
+      const ta = document.createElement('textarea');
+      ta.placeholder = placeholder;
+      ta.style.cssText = `font-size:12px;padding:6px 8px;width:100%;min-height:${rows}px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;`;
+      if (draft?.[fieldKey]) ta.value = draft[fieldKey];
+      ta.oninput = () => { input.dataset[fieldKey] = ta.value; };
+      g.appendChild(ta);
+      return g;
+    };
+
+    extraWrap.appendChild(capLine);
+    extraWrap.appendChild(mkTextarea('투자 사유', '매수 근거, 투자 thesis 등', 'reason', 52));
+    extraWrap.appendChild(mkTextarea('투자 리스크', '주요 리스크 요인', 'risk', 44));
+
+    // 저장 버튼
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn btn-primary';
+    saveBtn.style.cssText = 'font-size:12px;width:100%;justify-content:center;';
+    saveBtn.textContent = '💾 저장';
+    saveBtn.onclick = async () => {
+      const stockName = input.value.trim();
+      if (!stockName || !input.dataset.stockCode) { toast('종목을 검색해서 선택하세요.'); return; }
+      saveBtn.textContent = '저장 중...'; saveBtn.disabled = true;
+      try {
+        await pmSaveOnePres(m.id, stockName, input, curCapInp);
+        toast('✅ ' + m.name + ' — ' + stockName + ' 저장 완료!');
+      } catch(e) { toast('저장 오류: ' + e.message); }
+      finally { saveBtn.textContent = '💾 저장'; saveBtn.disabled = false; }
+    };
+    extraWrap.appendChild(saveBtn);
+
+    row.appendChild(topLine);
+    row.appendChild(extraWrap);
+    panel.appendChild(row);
+  });
+}
+
+// 팝업 종목 자동완성
+let _pmTimers = {};
+function pmStockSearch(input, dd) {
+  const memberId = input.dataset.memberId;
+  clearTimeout(_pmTimers[memberId]);
+  const q = input.value.trim();
+  input.dataset.stockCode = '';
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+
+  _pmTimers[memberId] = setTimeout(async () => {
+    const { data } = await sb.from('stock_prices')
+      .select('stock_code,stock_name,price,change_rate,market_cap')
+      .or(`stock_name.ilike.%${q}%,stock_code.ilike.%${q}%`)
+      .gt('price', 0)
+      .order('market_cap', { ascending: false, nullsFirst: false })
+      .limit(8);
+
+    dd.innerHTML = '';
+    if (!data?.length) {
+      dd.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--muted);">검색 결과 없음</div>';
+      dd.style.display = 'block';
+      return;
+    }
+
+    data.forEach(s => {
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;';
+      const sign = (s.change_rate||0) >= 0 ? '+' : '';
+      const cl   = (s.change_rate||0) >= 0 ? '#0f6e56' : '#a32d2d';
+      item.innerHTML =
+        `<div><span style="font-weight:500;">${s.stock_name}</span> <span style="color:var(--muted);font-size:11px;">${s.stock_code}</span></div>` +
+        `<span style="color:${cl};font-size:12px;">${sign}${(s.change_rate||0).toFixed(1)}%</span>`;
+      item.addEventListener('mouseenter', () => item.style.background = 'var(--bg)');
+      item.addEventListener('mouseleave', () => item.style.background = '');
+      item.addEventListener('click', async () => {
+        input.value           = s.stock_name;
+        input.dataset.stockCode = s.stock_code;
+        input.dataset.priceAt   = s.price      || '';
+        input.dataset.capAt     = s.market_cap || '';
+        dd.style.display = 'none';
+
+        // 추가 입력 영역 펼치기
+        const row    = input.closest('.pm-member-row');
+        const extra  = row?.querySelector('.pm-extra-wrap');
+        const curCap = row?.querySelector('[data-field="curCap"]');
+        if (extra)  extra.style.display  = 'block';
+        if (curCap && s.market_cap) curCap.value = s.market_cap;
+
+        // 즉시 DB 저장 (임시)
+        const curCapInp = row?.querySelector('[data-field="curCap"]');
+        await pmSaveOnePres(input.dataset.memberId, s.stock_name, input, curCapInp);
+      });
+      dd.appendChild(item);
+    });
+    dd.style.display = 'block';
+  }, 250);
+}
+
+// 팝업 저장 함수
+async function pmSaveOnePres(memberId, stockName, input, curCapInp) {
+  const cat      = document.getElementById('pm-category').value;
+  const industry = document.getElementById('pm-industry').value.trim();
+  const topic    = (cat === 'industry' && industry) ? `${industry} > ${stockName}` : stockName;
+
+  const payload = {
+    topic,
+    category:      cat,
+    stock_code:    input.dataset.stockCode  || null,
+    price_at:      parseInt(input.dataset.priceAt)    || null,
+    market_cap_at: parseInt(curCapInp?.value || input.dataset.capAt) || null,
+    target_cap:    parseInt(input.dataset.targetCap)  || null,
+    reason:        input.dataset.reason     || null,
+    risk:          input.dataset.risk       || null,
+    status:        'planned',
+  };
+
+  const existing = _pmPresentations.find(p => p.member_id === memberId);
+  if (existing) {
+    const { error } = await sb.from('presentations').update(payload).eq('id', existing.id);
+    if (error) throw error;
+    Object.assign(existing, payload);
   } else {
-    location.href = 'schedule.html#presOrder';
+    const { data, error } = await sb.from('presentations')
+      .insert({ member_id: memberId, ...payload }).select().single();
+    if (error) throw error;
+    _pmPresentations.push(data);
   }
 }
+
+// 팝업 외부 클릭 닫기
+document.addEventListener('click', e => {
+  if (!e.target.closest('.pm-member-row') && !e.target.closest('[data-field]')) {
+    document.querySelectorAll('#pm-memberPanel .pm-stock-dropdown,[style*="z-index:700"]')
+      .forEach(d => { if (d.tagName === 'DIV' && d.style.display !== 'none' && d.style.position === 'absolute') d.style.display = 'none'; });
+  }
+});
 
 // ── 초기화
 async function init() {

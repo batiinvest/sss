@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>투자 스터디 · 일정 관리</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <link rel="stylesheet" href="css/style.css">
   <style>
     .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
     .cal-head { background: var(--bg); padding: 8px 4px; text-align: center; font-size: 12px; font-weight: 500; color: var(--muted); }
@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-<div class="layout layout-page"><main class="main">
+<div class="layout" style="display:block;"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar">
@@ -45,8 +45,9 @@
         <div class="updated">산업 분석 · 종목 분석 · 회식 · 발표 순서 관리</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <div class="tab-toggle">
-          <button id="tabSchedule" onclick="switchMainTab('schedule')" class="active">📅 일정 관리</button>
+        <div style="display:flex;border:0.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
+          <button id="tabSchedule" onclick="switchMainTab('schedule')"
+            style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;">📅 일정 관리</button>
           <button id="tabPresOrder" onclick="switchMainTab('presOrder')"
             style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--surface);color:var(--muted);">📋 발표 순서</button>
         </div>
@@ -111,7 +112,7 @@
           <label>메모</label>
           <textarea id="s-desc" placeholder="안건, 준비사항 등을 자유롭게 작성하세요" style="min-height:60px;"></textarea>
         </div>
-        <div class="flex-end">
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
           <button class="btn" onclick="closeForm()">취소</button>
           <button class="btn btn-primary" id="saveScheduleBtn" onclick="saveSchedule()">저장</button>
         </div>
@@ -142,7 +143,7 @@
       <div class="card">
         <div class="card-head"><div class="card-title">다가오는 일정</div></div>
         <div id="upcomingList">
-          <div class="empty-cell">불러오는 중...</div>
+          <div class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</div>
         </div>
       </div>
 
@@ -166,7 +167,7 @@
             <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>메모</th><th style="width:100px;">작업</th>
           </tr></thead>
           <tbody id="scheduleListTbody">
-            <tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr>
+            <tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -177,7 +178,7 @@
     <!-- 발표 순서 탭 -->
     <div id="tabPresOrderContent" style="display:none;">
 
-      <div class="grid-2" class="mb-card">
+      <div class="grid-2" style="margin-bottom:1.25rem;">
 
         <!-- 달력 -->
         <div class="card">
@@ -243,7 +244,7 @@
               <th>날짜</th><th>제목</th><th>구분</th><th>발표자 · 종목</th><th>시간</th><th style="width:80px;">작업</th>
             </tr></thead>
             <tbody id="scheduleListTbody2">
-              <tr><td colspan="6" class="empty-cell">불러오는 중...</td></tr>
+              <tr><td colspan="6" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
             </tbody>
           </table>
         </div>
@@ -276,7 +277,7 @@
       </div>
     </div>
 
-    <div class="flex-end">
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
       <button class="btn" id="detailEditBtn">수정</button>
       <button class="btn btn-danger" id="detailDeleteBtn">삭제</button>
     </div>
@@ -286,8 +287,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260420"></script>
+<script src="js/db.js?v=20260420"></script>
 <script>
 // 타임존 안전한 날짜 문자열
 function toDateStr(date) {
@@ -484,8 +485,11 @@ function renderPresOrderCalendar() {
         const memberName = e.dataTransfer.getData('memberName');
         const stockName  = e.dataTransfer.getData('stockName');
         const stockCode  = e.dataTransfer.getData('stockCode') || null;
-        const priceAt    = parseInt(e.dataTransfer.getData('priceAt')) || null;
-        const capAt      = parseInt(e.dataTransfer.getData('capAt'))   || null;
+        const priceAt    = parseInt(e.dataTransfer.getData('priceAt'))    || null;
+        const capAt      = parseInt(e.dataTransfer.getData('capAt'))      || null;
+        const targetCap  = parseInt(e.dataTransfer.getData('targetCap'))  || null;
+        const reason     = e.dataTransfer.getData('reason')               || null;
+        const risk       = e.dataTransfer.getData('risk')                 || null;
 
         if (!memberId || !stockName) { toast('종목을 먼저 입력하세요.'); return; }
 
@@ -503,12 +507,12 @@ function renderPresOrderCalendar() {
             title:      schedTitle,
             category:   cat,
             event_date: dateStr,
-            event_time: '20:00:00',  // 기본 20시
+            event_time: '20:00:00',
           }).select().single();
 
           if (schedErr) { toast('일정 생성 오류: ' + schedErr.message); return; }
           sched = newSched;
-          schedules.push(sched);  // 전역 배열 업데이트
+          schedules.push(sched);
           toast('📅 ' + dateStr + ' ' + schedTitle + ' 일정 자동 생성');
         }
 
@@ -520,33 +524,34 @@ function renderPresOrderCalendar() {
           p.schedule_id === sched.id && p.member_id === memberId
         );
 
+        const updatePayload = {
+          schedule_id:   sched.id,
+          presented_at:  dateStr,
+          status:        'planned',
+          topic,
+          stock_code:    stockCode || (draft?.stock_code ?? null),
+          price_at:      priceAt   || (draft?.price_at   ?? null),
+          market_cap_at: capAt     || (draft?.market_cap_at ?? null),
+          target_cap:    targetCap || (draft?.target_cap  ?? null),
+          reason:        reason    || (draft?.reason      ?? null),
+          risk:          risk      || (draft?.risk        ?? null),
+        };
+
         if (draft) {
-          await sb.from('presentations').update({
-            schedule_id:   sched.id,
-            presented_at:  dateStr,
-            status:        'planned',
-            topic,
-            stock_code:    stockCode || draft.stock_code,
-            price_at:      priceAt   || draft.price_at,
-            market_cap_at: capAt     || draft.market_cap_at,
-          }).eq('id', draft.id);
+          await sb.from('presentations').update(updatePayload).eq('id', draft.id);
           toast('✅ ' + memberName + ' → ' + stockName + ' 배정!');
         } else if (alreadyAssigned) {
           await sb.from('presentations').update({
             topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
+            target_cap: targetCap, reason, risk,
           }).eq('id', alreadyAssigned.id);
           toast(memberName + ' 발표 종목 변경: ' + stockName);
         } else {
           await sb.from('presentations').insert({
-            schedule_id:   sched.id,
-            member_id:     memberId,
-            category:      cat,
-            topic,
-            stock_code:    stockCode,
-            price_at:      priceAt,
-            market_cap_at: capAt,
-            presented_at:  dateStr,
-            status:        'planned',
+            schedule_id: sched.id, member_id: memberId, category: cat,
+            topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
+            target_cap: targetCap, reason, risk,
+            presented_at: dateStr, status: 'planned',
           });
           toast('✅ ' + memberName + ' → ' + stockName + ' 등록!');
         }
@@ -655,7 +660,7 @@ function renderMemberPresPanel() {
     const handle = document.createElement('div');
     handle.draggable = true;
     handle.title = '달력의 일정 셀로 드래그하세요';
-    handle.style.cssText = 'font-size:20px;color:var(--muted);cursor:grab;padding:0 4px;user-select:none;line-height:1;';
+    handle.style.cssText = 'font-size:20px;color:var(--muted);cursor:grab;padding:0 4px;user-select:none;line-height:1;flex-shrink:0;';
     handle.textContent = '⠿';
     handle.addEventListener('dragstart', e => {
       const stockName = input.value.trim();
@@ -667,18 +672,20 @@ function renderMemberPresPanel() {
       e.dataTransfer.setData('stockCode',  input.dataset.stockCode || '');
       e.dataTransfer.setData('priceAt',    input.dataset.priceAt   || '');
       e.dataTransfer.setData('capAt',      input.dataset.capAt     || '');
+      e.dataTransfer.setData('targetCap',  input.dataset.targetCap || '');
+      e.dataTransfer.setData('reason',     input.dataset.reason    || '');
+      e.dataTransfer.setData('risk',       input.dataset.risk      || '');
       handle.style.opacity = '0.3';
     });
     handle.addEventListener('dragend', () => { handle.style.opacity = '1'; });
 
     // 지우기 버튼
     const clearBtn = document.createElement('button');
-    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 2px;line-height:1;';
+    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 2px;line-height:1;flex-shrink:0;';
     clearBtn.textContent = '×';
     clearBtn.title = '입력 초기화';
     clearBtn.onclick = async () => {
       const memberId = input.dataset.memberId;
-      // draft 항목 DB 삭제
       const draft = presentations.find(p =>
         p.member_id === memberId && p.status === 'planned' && !p.schedule_id
       );
@@ -693,46 +700,146 @@ function renderMemberPresPanel() {
       }
       input.value = ''; input.dataset.stockCode = '';
       input.dataset.priceAt = ''; input.dataset.capAt = '';
+      input.dataset.targetCap = ''; input.dataset.reason = ''; input.dataset.risk = '';
+      // 추가 입력 영역 숨김
+      const extraWrap = row.querySelector('.pres-extra-wrap');
+      if (extraWrap) extraWrap.style.display = 'none';
     };
+
+    // ── 추가 입력 영역 (목표시총 / 투자사유 / 투자리스크)
+    // 종목 선택 후 아래에 펼쳐지는 영역
+    const extraWrap = document.createElement('div');
+    extraWrap.className = 'pres-extra-wrap';
+    extraWrap.style.cssText = 'display:none;padding:8px 0 4px;border-top:0.5px solid var(--border);margin-top:6px;';
+
+    // 목표 시총 입력
+    const capRow = document.createElement('div');
+    capRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;';
+
+    const curCapGrp = document.createElement('div');
+    curCapGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">현재 시총 (억원)</label>';
+    const curCapInput = document.createElement('input');
+    curCapInput.type = 'number'; curCapInput.placeholder = '자동 입력됨';
+    curCapInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;';
+    curCapInput.dataset.field = 'curCap';
+    curCapGrp.appendChild(curCapInput);
+
+    const tgtCapGrp = document.createElement('div');
+    tgtCapGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">목표 시총 (억원)</label>';
+    const tgtCapInput = document.createElement('input');
+    tgtCapInput.type = 'number'; tgtCapInput.placeholder = '예: 4200000';
+    tgtCapInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;';
+    tgtCapInput.dataset.field = 'targetCap';
+
+    // 시총 상승여력 미리보기
+    const capPreview = document.createElement('div');
+    capPreview.style.cssText = 'display:none;font-size:11px;color:var(--green);margin-top:3px;';
+    const calcCapPreview = () => {
+      const cur = parseInt(curCapInput.value); const tgt = parseInt(tgtCapInput.value);
+      if (cur > 0 && tgt > 0) {
+        const u = ((tgt - cur) / cur * 100).toFixed(1);
+        capPreview.textContent = cur.toLocaleString() + '억 → ' + tgt.toLocaleString() + '억 (+' + u + '%)';
+        capPreview.style.display = 'block';
+      } else { capPreview.style.display = 'none'; }
+      input.dataset.targetCap = tgtCapInput.value;
+    };
+    tgtCapInput.oninput = calcCapPreview;
+    curCapInput.oninput = calcCapPreview;
+
+    tgtCapGrp.appendChild(tgtCapInput);
+    tgtCapGrp.appendChild(capPreview);
+    capRow.appendChild(curCapGrp);
+    capRow.appendChild(tgtCapGrp);
+
+    // 투자 사유
+    const reasonGrp = document.createElement('div');
+    reasonGrp.style.cssText = 'margin-bottom:6px;';
+    reasonGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">투자 사유</label>';
+    const reasonInput = document.createElement('textarea');
+    reasonInput.placeholder = '매수 근거, 투자 thesis 등';
+    reasonInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;min-height:56px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;';
+    reasonInput.dataset.field = 'reason';
+    reasonInput.oninput = () => { input.dataset.reason = reasonInput.value; };
+    reasonGrp.appendChild(reasonInput);
+
+    // 투자 리스크
+    const riskGrp = document.createElement('div');
+    riskGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">투자 리스크</label>';
+    const riskInput = document.createElement('textarea');
+    riskInput.placeholder = '주요 리스크 요인';
+    riskInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;min-height:48px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;';
+    riskInput.dataset.field = 'risk';
+    riskInput.oninput = () => { input.dataset.risk = riskInput.value; };
+    riskGrp.appendChild(riskInput);
+
+    extraWrap.appendChild(capRow);
+    extraWrap.appendChild(reasonGrp);
+    extraWrap.appendChild(riskGrp);
+
+    // draft에서 추가 필드 복원
+    if (draft) {
+      if (draft.market_cap_at)    curCapInput.value   = draft.market_cap_at;
+      if (draft.target_cap)       { tgtCapInput.value = draft.target_cap; calcCapPreview(); }
+      if (draft.reason)           reasonInput.value   = draft.reason;
+      if (draft.risk)             riskInput.value     = draft.risk;
+      if (draft.stock_code)       extraWrap.style.display = 'block';
+      input.dataset.targetCap = draft.target_cap || '';
+      input.dataset.reason    = draft.reason     || '';
+      input.dataset.risk      = draft.risk       || '';
+    }
+
+    // 종목 선택 시 추가 영역 펼치기 (memberStockSearch에서 호출)
+    input._extraWrap   = extraWrap;
+    input._curCapInput = curCapInput;
+
+    // 전체 행: 1행(아바타+이름+검색+핸들+X) + 2행(추가 입력)
+    const rowInner = document.createElement('div');
+    rowInner.style.cssText = 'flex:1;min-width:0;';
+
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    topRow.appendChild(wrap);
+    topRow.appendChild(handle);
+    topRow.appendChild(clearBtn);
+
+    rowInner.appendChild(topRow);
+    rowInner.appendChild(extraWrap);
 
     row.appendChild(av);
     row.appendChild(nameDiv);
-    row.appendChild(wrap);
-    row.appendChild(handle);
-    row.appendChild(clearBtn);
+    row.appendChild(rowInner);
     panel.appendChild(row);
   });
 }
 
 // 종목 선택 시 임시저장 (schedule_id 없이 - 드래그로 일정 배정)
-async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt) {
+async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt, targetCap, reason, risk) {
   const cat      = document.getElementById('thisTurnCategory').value;
   const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
   const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
 
+  const payload = {
+    topic,
+    stock_code:    stockCode || null,
+    price_at:      parseInt(priceAt)    || null,
+    market_cap_at: parseInt(capAt)      || null,
+    target_cap:    parseInt(targetCap)  || null,
+    reason:        reason               || null,
+    risk:          risk                 || null,
+    category:      cat,
+  };
+
   // 이미 schedule_id 없이 저장된 항목이 있으면 update
   const existing = presentations.find(p =>
-    !p.schedule_id && p.member_id === memberId && (p.status === 'planned' && !p.schedule_id || p.status === 'planned')
+    !p.schedule_id && p.member_id === memberId && p.status === 'planned'
   );
 
   if (existing) {
-    const { error } = await sb.from('presentations').update({
-      topic,
-      stock_code:    stockCode || null,
-      price_at:      parseInt(priceAt) || null,
-      market_cap_at: parseInt(capAt)   || null,
-      category:      cat,
-    }).eq('id', existing.id);
+    const { error } = await sb.from('presentations').update(payload).eq('id', existing.id);
     if (error) { toast('❌ 저장 오류: ' + error.message); console.error(error); return; }
   } else {
     const { error } = await sb.from('presentations').insert({
-      member_id:     memberId,
-      category:      cat,
-      topic,
-      stock_code:    stockCode || null,
-      price_at:      parseInt(priceAt) || null,
-      market_cap_at: parseInt(capAt)   || null,
-      status:        'planned',
+      member_id: memberId, status: 'planned', ...payload
     });
     if (error) { toast('❌ 저장 오류: ' + error.message); console.error(error); return; }
   }
@@ -780,6 +887,14 @@ function memberStockSearch(input, dd) {
         input.dataset.priceAt   = s.price || '';
         input.dataset.capAt     = s.market_cap || '';
         dd.style.display = 'none';
+
+        // 추가 입력 영역 펼치기 + 현재 시총 자동 채우기
+        if (input._extraWrap) {
+          input._extraWrap.style.display = 'block';
+          if (input._curCapInput && s.market_cap) {
+            input._curCapInput.value = s.market_cap;
+          }
+        }
 
         // 종목 선택 즉시 임시저장
         await saveOnePres(input.dataset.memberId, s.stock_name, s.stock_code,
@@ -1003,7 +1118,7 @@ function renderUpcoming() {
 
   const el = document.getElementById('upcomingList');
   if (!upcoming.length) {
-    el.innerHTML = '<div class="empty-cell">예정된 일정이 없습니다</div>';
+    el.innerHTML = '<div class="muted" style="text-align:center;padding:1rem;">예정된 일정이 없습니다</div>';
     return;
   }
 
@@ -1041,7 +1156,7 @@ function renderScheduleList() {
     .sort((a,b) => b.event_date.localeCompare(a.event_date));
   const tbody = document.getElementById('scheduleListTbody');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">일정이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">일정이 없습니다</td></tr>';
     return;
   }
   const today = new Date().toISOString().slice(0,10);
@@ -1684,6 +1799,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
+async function doLogout() { await sb.auth.signOut(); location.href = 'index.html'; }
 
 init();
 </script>

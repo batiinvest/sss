@@ -24,7 +24,7 @@
   </div>
 
   <!-- ── 내 탑픽 + 내 발표종목 ── -->
-  <div class="grid-2" id="mySection" style="display:none;">
+  <div id="mySection" style="display:none;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem;">
 
     <!-- 내 탑픽 -->
     <div class="card">
@@ -184,7 +184,7 @@ async function renderMySection() {
     return;
   }
 
-  document.getElementById('mySection').style.display = '';
+  document.getElementById('mySection').style.display = 'grid';
 
   await Promise.all([
     renderMyPicks(me),

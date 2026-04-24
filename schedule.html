@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>투자 스터디 · 일정 관리</title>
   <link rel="stylesheet" href="css/style.css">
@@ -440,7 +441,13 @@ function renderPresOrderCalendar() {
       evDiv.className = 'cal-event ' + (CAT_CLASS[s.category] || 'ev-other');
       evDiv.textContent = s.title;
       evDiv.style.cursor = 'pointer';
-      evDiv.onclick = (e) => { e.stopPropagation(); showDetail(s.id, e); };
+      evDiv.draggable = false;
+      evDiv.addEventListener('dragstart', e => e.preventDefault());
+      evDiv.addEventListener('click', e => {
+        e.stopPropagation();
+        e.preventDefault();
+        showDetail(s.id, e);
+      });
       cell.appendChild(evDiv);
 
       // 이 일정 발표자+종목 표시
@@ -449,7 +456,8 @@ function renderPresOrderCalendar() {
       );
       pres.forEach(p => {
         const pDiv = document.createElement('div');
-        pDiv.style.cssText = 'font-size:9px;color:var(--muted);padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        pDiv.draggable = false;
+        pDiv.style.cssText = 'font-size:9px;color:var(--muted);padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;';
         const name  = p.members?.name?.slice(0,2) || '';
         const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '');
         pDiv.textContent = name + ' · ' + topic;
@@ -1161,8 +1169,13 @@ let currentDetailScheduleId = null;
 
 async function showDetail(id, e) {
   if (e) e.stopPropagation();
-  const s = schedules.find(s => s.id === id);
-  if (!s) return;
+  let s = schedules.find(s => s.id === id);
+  // schedules에 없으면 DB에서 다시 조회
+  if (!s) {
+    schedules = await fetchSchedules();
+    s = schedules.find(s => s.id === id);
+  }
+  if (!s) { console.warn('일정을 찾을 수 없음:', id); return; }
   currentDetailScheduleId = id;
 
   document.getElementById('detailTitle').textContent = s.title;

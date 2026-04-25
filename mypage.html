@@ -189,26 +189,31 @@ async function init() {
   await requireAuth();
   checkDBConnection();
 
-  myMember = await getCurrentMember();
-  if (!myMember) {
+  try {
+    myMember = await getCurrentMember();
+    if (!myMember) {
+      document.getElementById('pageSubtitle').textContent =
+        '멤버 정보를 찾을 수 없습니다. 관리자에게 이메일 연동을 요청하세요.';
+      return;
+    }
+
     document.getElementById('pageSubtitle').textContent =
-      '멤버 정보를 찾을 수 없습니다. 관리자에게 이메일 연동을 요청하세요.';
-    return;
+      myMember.name + '님의 개인 정보 · 투자 현황';
+
+    // 프로필은 DB 없이 즉시 렌더
+    renderProfile();
+
+    // 나머지 데이터 전부 병렬 요청
+    await Promise.all([
+      renderMetrics(),
+      renderMyPicks(),
+      renderMyPresentations(),
+      renderMySettles(),
+    ]);
+  } catch(e) {
+    console.error('init 오류:', e);
+    toast('페이지 로드 오류: ' + (e.message || '알 수 없는 오류'));
   }
-
-  document.getElementById('pageSubtitle').textContent =
-    myMember.name + '님의 개인 정보 · 투자 현황';
-
-  // 프로필은 DB 없이 즉시 렌더
-  renderProfile();
-
-  // 나머지 데이터 전부 병렬 요청
-  await Promise.all([
-    renderMetrics(),
-    renderMyPicks(),
-    renderMyPresentations(),
-    renderMySettles(),
-  ]);
 }
 
 // ── 프로필
@@ -240,156 +245,176 @@ async function renderMetrics() {
   retEl.textContent = (retRate >= 0 ? '+' : '') + retRate + '%';
   retEl.className   = 'metric-value ' + rCls(retRate);
 
-  // 투자금/잔액 + 결산승률 병렬 조회
-  const [{ data: trades }, { data: settles }] = await Promise.all([
-    sb.from('trades').select('trade_type,price,quantity').eq('member_id', m.id),
-    sb.from('settlements').select('net_profit').eq('member_id', m.id),
-  ]);
+  try {
+    // 투자금/잔액 + 결산승률 병렬 조회
+    const [{ data: trades, error: e1 }, { data: settles, error: e2 }] = await Promise.all([
+      sb.from('trades').select('trade_type,price,quantity').eq('member_id', m.id),
+      sb.from('settlements').select('net_profit').eq('member_id', m.id),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
 
-  const bought   = (trades||[]).filter(t => t.trade_type === 'buy').reduce((s,t) => s + t.price * t.quantity, 0);
-  const sold     = (trades||[]).filter(t => t.trade_type === 'sell').reduce((s,t) => s + t.price * t.quantity, 0);
-  const invested = bought - sold;
-  const cash     = (m.base_amount || 0) - invested;
-  document.getElementById('myInvested').textContent = won(invested);
-  document.getElementById('myCash').textContent = `잔액 ${won(cash)}`;
+    const bought   = (trades||[]).filter(t => t.trade_type === 'buy').reduce((s,t) => s + t.price * t.quantity, 0);
+    const sold     = (trades||[]).filter(t => t.trade_type === 'sell').reduce((s,t) => s + t.price * t.quantity, 0);
+    const invested = bought - sold;
+    const cash     = (m.base_amount || 0) - invested;
+    document.getElementById('myInvested').textContent = won(invested);
+    document.getElementById('myCash').textContent = `잔액 ${won(cash)}`;
 
-  const wins    = (settles||[]).filter(s => s.net_profit > 0).length;
-  const total   = (settles||[]).length;
-  const winRate = total ? Math.round(wins / total * 100) : 0;
-  document.getElementById('myWinRate').textContent = total ? winRate + '%' : '—';
-  document.getElementById('myWinSub').textContent  = total ? `${wins}승 / ${total}건` : '결산 없음';
+    const wins    = (settles||[]).filter(s => s.net_profit > 0).length;
+    const total   = (settles||[]).length;
+    const winRate = total ? Math.round(wins / total * 100) : 0;
+    document.getElementById('myWinRate').textContent = total ? winRate + '%' : '—';
+    document.getElementById('myWinSub').textContent  = total ? `${wins}승 / ${total}건` : '결산 없음';
+  } catch(e) {
+    console.error('renderMetrics 오류:', e);
+    document.getElementById('myInvested').textContent = '오류';
+    document.getElementById('myWinRate').textContent  = '—';
+  }
 }
 
 // ── 보유 탑픽
 async function renderMyPicks() {
-  const { data: picks } = await sb.from('picks_with_trades')
-    .select('*').eq('member_id', myMember.id)
-    .order('submitted_at', { ascending: false });
-
-  document.getElementById('myPickCount').textContent = (picks||[]).length + '건';
-  const holds = (picks||[]).filter(p => p.status === 'hold');
-  document.getElementById('myPickSub').textContent  =
-    `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
-
   const tbody = document.getElementById('myPicksTbody');
-  if (!picks || !picks.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">탑픽 없음</td></tr>';
-    return;
-  }
+  try {
+    const { data: picks, error } = await sb.from('picks_with_trades')
+      .select('*').eq('member_id', myMember.id)
+      .order('submitted_at', { ascending: false });
+    if (error) throw error;
 
-  // 현재가 조회
-  const codes = [...new Set(holds.filter(p => p.stock_code).map(p => p.stock_code))];
-  if (codes.length) {
-    const { data: prices } = await sb.from('stock_prices')
-      .select('stock_code,price,change_rate').in('stock_code', codes);
-    for (const p of (prices||[])) myPriceMap[p.stock_code] = p;
-  }
+    document.getElementById('myPickCount').textContent = (picks||[]).length + '건';
+    const holds = (picks||[]).filter(p => p.status === 'hold');
+    document.getElementById('myPickSub').textContent =
+      `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
 
-  tbody.innerHTML = picks.map(p => {
-    const cur      = p.stock_code ? myPriceMap[p.stock_code] : null;
-    const curPrice = cur?.price;
-    const pnl      = (p.buy_price && p.buy_quantity && curPrice)
-      ? (curPrice - p.buy_price) * p.buy_quantity : null;
-    const pnlRate  = (p.buy_price && curPrice)
-      ? ((curPrice - p.buy_price) / p.buy_price * 100).toFixed(1) : null;
-    const statusBadge = p.status === 'hold'
-      ? '<span class="badge b-hold">보유중</span>'
-      : '<span class="badge b-sold">매도완료</span>';
-    const upside = p.target_price && curPrice
-      ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
-    return `<tr>
-      <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
-      <td style="font-weight:500;">${p.stock_name}</td>
-      <td>${p.buy_price ? won(p.buy_price) : '—'}</td>
-      <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
-      <td class="${pnlRate !== null ? rCls(pnlRate) : ''}">${pnl !== null ? (pnl>=0?'+':'')+won(pnl)+'('+pnlRate+'%)' : '—'}</td>
-      <td>${p.target_price ? p.target_price.toLocaleString()+'원'+(upside?` <span style="font-size:11px;">(+${upside}%)</span>`:'') : '—'}</td>
-      <td>${statusBadge}</td>
-    </tr>`;
-  }).join('');
+    if (!picks || !picks.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">탑픽 없음</td></tr>';
+      return;
+    }
+
+    // 현재가 조회
+    const codes = [...new Set(holds.filter(p => p.stock_code).map(p => p.stock_code))];
+    if (codes.length) {
+      const { data: prices } = await sb.from('stock_prices')
+        .select('stock_code,price,change_rate').in('stock_code', codes);
+      for (const p of (prices||[])) myPriceMap[p.stock_code] = p;
+    }
+
+    tbody.innerHTML = picks.map(p => {
+      const cur      = p.stock_code ? myPriceMap[p.stock_code] : null;
+      const curPrice = cur?.price;
+      const pnl      = (p.buy_price && p.buy_quantity && curPrice)
+        ? (curPrice - p.buy_price) * p.buy_quantity : null;
+      const pnlRate  = (p.buy_price && curPrice)
+        ? ((curPrice - p.buy_price) / p.buy_price * 100).toFixed(1) : null;
+      const statusBadge = p.status === 'hold'
+        ? '<span class="badge b-hold">보유중</span>'
+        : '<span class="badge b-sold">매도완료</span>';
+      const upside = p.target_price && curPrice
+        ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
+      return `<tr>
+        <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
+        <td style="font-weight:500;">${p.stock_name}</td>
+        <td>${p.buy_price ? won(p.buy_price) : '—'}</td>
+        <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
+        <td class="${pnlRate !== null ? rCls(pnlRate) : ''}">${pnl !== null ? (pnl>=0?'+':'')+won(pnl)+'('+pnlRate+'%)' : '—'}</td>
+        <td>${p.target_price ? p.target_price.toLocaleString()+'원'+(upside?` <span style="font-size:11px;">(+${upside}%)</span>`:'') : '—'}</td>
+        <td>${statusBadge}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('renderMyPicks 오류:', e);
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">데이터 로드 오류</td></tr>';
+  }
 }
 
 // ── 발표 히스토리
 async function renderMyPresentations() {
-  const { data: pres } = await sb.from('presentations')
-    .select('*').eq('member_id', myMember.id)
-    .order('presented_at', { ascending: false });
-
-  document.getElementById('myPresCount').textContent = (pres||[]).length + '건';
-
   const tbody = document.getElementById('myPresTbody');
-  if (!pres || !pres.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">발표 내역 없음</td></tr>';
-    return;
+  try {
+    const { data: pres, error } = await sb.from('presentations')
+      .select('*').eq('member_id', myMember.id)
+      .order('presented_at', { ascending: false });
+    if (error) throw error;
+
+    document.getElementById('myPresCount').textContent = (pres||[]).length + '건';
+
+    if (!pres || !pres.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">발표 내역 없음</td></tr>';
+      return;
+    }
+
+    // 현재가 조회
+    const codes = [...new Set((pres||[]).filter(p => p.stock_code).map(p => p.stock_code))];
+    if (codes.length) {
+      const { data: prices } = await sb.from('stock_prices')
+        .select('stock_code,price').in('stock_code', codes);
+      for (const p of (prices||[])) myPriceMap[p.stock_code] = p;
+    }
+
+    // 평균 수익률
+    const withRet = pres.filter(p => p.stock_code && myPriceMap[p.stock_code]?.price && p.price_at);
+    const returns = withRet.map(p => (myPriceMap[p.stock_code].price - p.price_at) / p.price_at * 100);
+    const avg = returns.length ? returns.reduce((s,r) => s+r, 0) / returns.length : null;
+    document.getElementById('myPresAvg').textContent = avg !== null
+      ? `평균 수익률 ${avg >= 0 ? '+' : ''}${avg.toFixed(1)}% (${withRet.length}건)`
+      : '수익률 데이터 없음';
+
+    tbody.innerHTML = pres.map(p => {
+      const cur      = p.stock_code ? myPriceMap[p.stock_code] : null;
+      const curPrice = cur?.price;
+      const ret = (p.price_at && curPrice)
+        ? ((curPrice - p.price_at) / p.price_at * 100).toFixed(1) : null;
+      const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
+      const catBadge  = p.category === 'industry'
+        ? '<span class="badge" style="background:#e8f4fd;color:#0c447c;">산업</span>'
+        : '<span class="badge b-hold">기업</span>';
+      return `<tr>
+        <td class="muted" style="white-space:nowrap;">${p.presented_at}</td>
+        <td>${catBadge}</td>
+        <td style="font-weight:500;">${topicName}</td>
+        <td>${p.price_at ? p.price_at.toLocaleString()+'원' : '—'}</td>
+        <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
+        <td class="${ret !== null ? rCls(ret) : ''}">${ret !== null ? (ret>=0?'+':'')+ret+'%' : '—'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('renderMyPresentations 오류:', e);
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">데이터 로드 오류</td></tr>';
   }
-
-  // 현재가 조회
-  const codes = [...new Set((pres||[]).filter(p => p.stock_code).map(p => p.stock_code))];
-  if (codes.length) {
-    const { data: prices } = await sb.from('stock_prices')
-      .select('stock_code,price').in('stock_code', codes);
-    for (const p of (prices||[])) myPriceMap[p.stock_code] = p;
-  }
-
-  // 수익률 계산 가능 건수
-  const withRet = pres.filter(p => {
-    const cur = p.stock_code ? myPriceMap[p.stock_code] : null;
-    return p.price_at && cur?.price;
-  });
-  const returns = withRet.map(p => {
-    const cur = myPriceMap[p.stock_code];
-    return (cur.price - p.price_at) / p.price_at * 100;
-  });
-  const avg = returns.length ? returns.reduce((s,r) => s+r,0) / returns.length : null;
-  document.getElementById('myPresAvg').textContent = avg !== null
-    ? `평균 수익률 ${avg >= 0 ? '+' : ''}${avg.toFixed(1)}% (${withRet.length}건)`
-    : '수익률 데이터 없음';
-
-  tbody.innerHTML = pres.map(p => {
-    const cur     = p.stock_code ? myPriceMap[p.stock_code] : null;
-    const curPrice = cur?.price;
-    const ret = (p.price_at && curPrice)
-      ? ((curPrice - p.price_at) / p.price_at * 100).toFixed(1) : null;
-    const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
-    const catBadge  = p.category === 'industry'
-      ? '<span class="badge" style="background:#e8f4fd;color:#0c447c;">산업</span>'
-      : '<span class="badge b-hold">기업</span>';
-    return `<tr>
-      <td class="muted" style="white-space:nowrap;">${p.presented_at}</td>
-      <td>${catBadge}</td>
-      <td style="font-weight:500;">${topicName}</td>
-      <td>${p.price_at ? p.price_at.toLocaleString()+'원' : '—'}</td>
-      <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
-      <td class="${ret !== null ? rCls(ret) : ''}">${ret !== null ? (ret>=0?'+':'')+ret+'%' : '—'}</td>
-    </tr>`;
-  }).join('');
 }
 
 // ── 결산 내역
 async function renderMySettles() {
-  const { data: settles } = await sb.from('settlements')
-    .select('*, picks(stock_name)')
-    .eq('member_id', myMember.id)
-    .order('settled_at', { ascending: false });
-
   const tbody = document.getElementById('mySettlesTbody');
-  if (!settles || !settles.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">결산 내역 없음</td></tr>';
-    return;
+  try {
+    const { data: settles, error } = await sb.from('settlements')
+      .select('*, picks(stock_name)')
+      .eq('member_id', myMember.id)
+      .order('settled_at', { ascending: false });
+    if (error) throw error;
+
+    if (!settles || !settles.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">결산 내역 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = settles.map(s => {
+      const d  = new Date(s.settled_at);
+      const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+      const retRate = s.buy_price ? ((s.sell_price - s.buy_price) / s.buy_price * 100).toFixed(1) : null;
+      return `<tr>
+        <td class="muted">${ds}</td>
+        <td style="font-weight:500;">${s.picks?.stock_name || '—'}</td>
+        <td>${won(s.buy_price)}</td>
+        <td>${won(s.sell_price)}</td>
+        <td class="${retRate !== null ? rCls(retRate) : ''}">${retRate !== null ? (retRate>=0?'+':'')+retRate+'%' : '—'}</td>
+        <td class="${rCls(s.net_profit)}">${s.net_profit>=0?'+':''}${won(s.net_profit)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('renderMySettles 오류:', e);
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-cell">데이터 로드 오류</td></tr>';
   }
-  tbody.innerHTML = settles.map(s => {
-    const d  = new Date(s.settled_at);
-    const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
-    const retRate = s.buy_price ? ((s.sell_price - s.buy_price) / s.buy_price * 100).toFixed(1) : null;
-    return `<tr>
-      <td class="muted">${ds}</td>
-      <td style="font-weight:500;">${s.picks?.stock_name || '—'}</td>
-      <td>${won(s.buy_price)}</td>
-      <td>${won(s.sell_price)}</td>
-      <td class="${retRate !== null ? rCls(retRate) : ''}">${retRate !== null ? (retRate>=0?'+':'')+retRate+'%' : '—'}</td>
-      <td class="${rCls(s.net_profit)}">${s.net_profit>=0?'+':''}${won(s.net_profit)}</td>
-    </tr>`;
-  }).join('');
 }
 
 // ── 정보 수정 폼

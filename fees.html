@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -385,17 +385,34 @@ function renderMonthlySummary() {
 
 // ── 데이터 로드
 async function loadData() {
-  const [feesRes, expRes] = await Promise.all([
-    sb.from('study_fees').select('*, members(name)').order('paid_at', {ascending:false}),
-    sb.from('study_expenses').select('*').order('spent_at', {ascending:false}),
-  ]);
-  fees     = feesRes.data  || [];
-  expenses = expRes.data   || [];
+  try {
+    const [feesRes, expRes] = await Promise.all([
+      sb.from('study_fees').select('*, members(name)').order('paid_at', {ascending:false}),
+      sb.from('study_expenses').select('*').order('spent_at', {ascending:false}),
+    ]);
 
-  renderSummary();
-  renderFees();
-  renderExpenses();
-  renderMonthlySummary();
+    // 테이블 미생성 감지 (error code: 42P01)
+    if (feesRes.error) {
+      if (feesRes.error.code === '42P01') {
+        document.getElementById('totalBalance').textContent = 'DB 테이블 미생성';
+        toast('study_fees 테이블을 먼저 생성하세요. (add_presentations_columns.sql 참고)');
+      } else {
+        throw feesRes.error;
+      }
+      return;
+    }
+
+    fees     = feesRes.data || [];
+    expenses = expRes.data  || [];
+
+    renderSummary();
+    renderFees();
+    renderExpenses();
+    renderMonthlySummary();
+  } catch(e) {
+    console.error('loadData 오류:', e);
+    toast('데이터 로드 오류: ' + (e.message || '알 수 없는 오류'));
+  }
 }
 
 // ── 납부 등록 모달
@@ -419,13 +436,22 @@ async function saveFee() {
 
   if (!memberId || !month || !amount) { toast('모든 필드를 입력하세요.'); return; }
 
-  const { error } = await sb.from('study_fees').insert({
-    member_id: memberId, month, amount, fee_type: feeType, note,
-  });
-  if (error) { toast('오류: ' + error.message); return; }
-  toast('✅ 납부 등록 완료');
-  closeFeeModal();
-  await loadData();
+  const btn = document.querySelector('#feeModal .btn-primary');
+  if (btn) { btn.textContent = '저장 중...'; btn.disabled = true; }
+
+  try {
+    const { error } = await sb.from('study_fees').insert({
+      member_id: memberId, month, amount, fee_type: feeType, note,
+    });
+    if (error) throw error;
+    toast('✅ 납부 등록 완료');
+    closeFeeModal();
+    await loadData();
+  } catch(e) {
+    toast('저장 오류: ' + (e.message || '알 수 없는 오류'));
+  } finally {
+    if (btn) { btn.textContent = '저장'; btn.disabled = false; }
+  }
 }
 
 // ── 지출 등록 모달
@@ -447,14 +473,23 @@ async function saveExpense() {
 
   if (!amount || !spentAt) { toast('금액과 날짜를 입력하세요.'); return; }
 
-  const { error } = await sb.from('study_expenses').insert({
-    category, amount, spent_at: spentAt, note,
-    created_by: currentMember?.id || null,
-  });
-  if (error) { toast('오류: ' + error.message); return; }
-  toast('✅ 지출 등록 완료');
-  closeExpenseModal();
-  await loadData();
+  const btn = document.querySelector('#expenseModal .btn-primary');
+  if (btn) { btn.textContent = '저장 중...'; btn.disabled = true; }
+
+  try {
+    const { error } = await sb.from('study_expenses').insert({
+      category, amount, spent_at: spentAt, note,
+      created_by: currentMember?.id || null,
+    });
+    if (error) throw error;
+    toast('✅ 지출 등록 완료');
+    closeExpenseModal();
+    await loadData();
+  } catch(e) {
+    toast('저장 오류: ' + (e.message || '알 수 없는 오류'));
+  } finally {
+    if (btn) { btn.textContent = '저장'; btn.disabled = false; }
+  }
 }
 
 // ── 초기화
@@ -462,18 +497,23 @@ async function init() {
   await requireAuth();
   checkDBConnection();
 
-  const [mem, me, adminFlag] = await Promise.all([
-    fetchMembers(), getCurrentMember(), isAdmin()
-  ]);
-  members       = mem || [];
-  currentMember = me;
-  isAdminUser   = adminFlag;
+  try {
+    const [mem, me, adminFlag] = await Promise.all([
+      fetchMembers(), getCurrentMember(), isAdmin()
+    ]);
+    members       = mem || [];
+    currentMember = me;
+    isAdminUser   = adminFlag;
 
-  if (isAdminUser) {
-    document.getElementById('adminBtns').style.display = 'flex';
+    if (isAdminUser) {
+      document.getElementById('adminBtns').style.display = 'flex';
+    }
+
+    await loadData();
+  } catch(e) {
+    console.error('init 오류:', e);
+    toast('페이지 초기화 오류: ' + (e.message || '알 수 없는 오류'));
   }
-
-  await loadData();
 }
 
 

@@ -505,71 +505,117 @@ async function init() {
   document.getElementById('updatedAt').textContent =
     `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 체결가 기준`;
 
-  const [members, picks, allPicks, trades, allTradesData] = await Promise.all([
+  // 내 섹션 스켈레톤 먼저 표시 (로딩 중 UI)
+  showMySectionSkeleton();
+
+  // 전체 데이터 + 내 섹션 데이터를 동시에 요청
+  const [members, picks, allPicks, trades, allTradesData, me] = await Promise.all([
     fetchMemberStats(),
     fetchPicksByMonth(currentMonth()),
     fetchAllPicks({ status: 'hold' }),
     fetchTrades(8),
-    fetchAllTrades()
+    fetchAllTrades(),
+    getCurrentMember(),
   ]);
 
   currentMembers  = members;
   currentPicks    = picks;
   allCurrentPicks = allPicks;
 
+  // 전체 카드 렌더
   renderMetrics(members, picks, allTradesData);
   renderPicksTable(picks, {});
   renderMemberBars(members);
   renderNotices(members, picks);
   renderTradesTable(trades);
 
-  // 현재가 갱신 (완료 후 내 섹션도 갱신)
-  await refreshPrices();
+  // 내 섹션: 데이터가 준비됐으면 바로 렌더 (현재가 없어도 먼저 표시)
+  if (me) {
+    document.getElementById('mySection').style.display = 'grid';
+    // 내 탑픽·발표종목 데이터도 병렬 요청
+    const [myPicks, myPres] = await Promise.all([
+      sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
+      sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10)
+        .catch(() => ({ data: [] }))
+    ]);
+    renderMyPicksData(me, myPicks.data || []);
+    renderMyPresData(me, myPres.data || [], {});
 
-  // 내 섹션 (로그인 멤버 기준)
-  await renderMySection();
+    // 현재가 갱신 후 내 탑픽 카드도 업데이트 (백그라운드)
+    refreshPrices().then(() => {
+      if (globalPriceMap && Object.keys(globalPriceMap).length) {
+        renderMyPicksData(me, myPicks.data || []);
+        renderMyPresData(me, myPres.data || [], globalPriceMap);
+      }
+    });
+  } else {
+    document.getElementById('myMemberNotice').style.display = 'block';
+    // 현재가는 백그라운드
+    refreshPrices();
+  }
 }
 
+// ── 내 섹션 스켈레톤 (로딩 중 표시)
+function showMySectionSkeleton() {
+  const section = document.getElementById('mySection');
+  section.style.display = 'grid';
+
+  const skeletonStyle = 'background:linear-gradient(90deg,var(--bg) 25%,var(--border) 50%,var(--bg) 75%);background-size:200% 100%;animation:shimmer 1.2s infinite;border-radius:var(--r-md);height:14px;margin-bottom:6px;';
+
+  document.getElementById('myPickBanner').style.display = 'block';
+  document.getElementById('myPickBanner').innerHTML =
+    `<div style="${skeletonStyle}width:60%;"></div>`;
+
+  document.getElementById('myPickCards').innerHTML =
+    `<div style="background:var(--bg);border-radius:var(--r-md);padding:12px 14px;">
+      <div style="${skeletonStyle}width:50%;"></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;">
+        ${[1,2,3,4].map(() => `<div style="${skeletonStyle}height:36px;margin:0;"></div>`).join('')}
+      </div>
+    </div>`;
+
+  document.getElementById('myPresTbody').innerHTML =
+    [1,2,3].map(() => `<tr>${[1,2,3,4,5].map(() =>
+      `<td><div style="${skeletonStyle}margin:0;"></div></td>`
+    ).join('')}</tr>`).join('');
+}
+
+// ── CSS 애니메이션 (shimmer)
+const _shimmerStyle = document.createElement('style');
+_shimmerStyle.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}';
+document.head.appendChild(_shimmerStyle);
+
 // ════════════════════════════════════════
-// 내 탑픽 + 내 발표종목
+// 내 탑픽 + 내 발표종목 (데이터 주입 방식)
 // ════════════════════════════════════════
+
+// 외부에서도 호출 가능하도록 유지 (팝업 갱신 등)
 async function renderMySection() {
   const me = await getCurrentMember();
-  if (!me) {
-    document.getElementById('myMemberNotice').style.display = 'block';
-    return;
-  }
-
+  if (!me) { document.getElementById('myMemberNotice').style.display = 'block'; return; }
   document.getElementById('mySection').style.display = 'grid';
-
-  await Promise.all([
-    renderMyPicks(me),
-    renderMyPresentations(me)
+  const [myPicks, myPres] = await Promise.all([
+    sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
+    sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10)
+      .catch(() => ({ data: [] }))
   ]);
+  renderMyPicksData(me, myPicks.data || []);
+  renderMyPresData(me, myPres.data || [], globalPriceMap);
 }
 
-// ── 내 탑픽
-async function renderMyPicks(me) {
-  // 전체 picks (hold + sold 모두) 내 것만
-  const { data: myPicks } = await sb.from('picks_with_trades')
-    .select('*')
-    .eq('member_id', me.id)
-    .order('month', { ascending: false });
+// 데이터를 받아 바로 렌더 (DB 호출 없음)
+function renderMyPicksData(me, picks) {
+  const thisMonth = currentMonth();
+  const submitted = picks.find(p => p.month === thisMonth);
+  const bannerEl  = document.getElementById('myPickBanner');
 
-  const picks = myPicks || [];
-
-  // ① 이번 달 제출 여부 배너
-  const thisMonth  = currentMonth();
-  const submitted  = picks.find(p => p.month === thisMonth);
-  const bannerEl   = document.getElementById('myPickBanner');
+  bannerEl.style.display = 'block';
   if (submitted) {
-    bannerEl.style.display = 'block';
     bannerEl.innerHTML =
       `<div style="background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--green);">
         ✅ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 제출 완료 — ${submitted.stock_name}
        </div>`;
   } else {
-    bannerEl.style.display = 'block';
     bannerEl.innerHTML =
       `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;justify-content:space-between;align-items:center;">
         <span>⚠️ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 미제출</span>
@@ -577,33 +623,23 @@ async function renderMyPicks(me) {
        </div>`;
   }
 
-  // ② 보유 중 종목 카드 (hold 상태만)
   const holdPicks = picks.filter(p => p.status === 'hold');
   const cardsEl   = document.getElementById('myPickCards');
 
   if (!holdPicks.length) {
-    cardsEl.innerHTML =
-      `<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">보유 중인 탑픽이 없습니다</div>`;
+    cardsEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">보유 중인 탑픽이 없습니다</div>`;
     return;
   }
 
   cardsEl.innerHTML = holdPicks.map(p => {
-    const cur     = globalPriceMap[p.stock_code];
+    const cur      = globalPriceMap[p.stock_code];
     const curPrice = cur?.price;
     const dayChg   = cur?.change;
-
-    // 평가손익
-    const pnl     = (p.buy_price && p.buy_quantity && curPrice)
-      ? (curPrice - p.buy_price) * p.buy_quantity : null;
-    const pnlRate = (p.buy_price && curPrice)
-      ? ((curPrice - p.buy_price) / p.buy_price * 100) : null;
-
-    // 목표가까지 상승여력
-    const upside  = (p.target_price && curPrice)
-      ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
-
-    const pnlColor  = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
-    const dayColor  = dayChg  === null ? '' : dayChg  >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
+    const pnl      = (p.buy_price && p.buy_quantity && curPrice) ? (curPrice - p.buy_price) * p.buy_quantity : null;
+    const pnlRate  = (p.buy_price && curPrice) ? ((curPrice - p.buy_price) / p.buy_price * 100) : null;
+    const upside   = (p.target_price && curPrice) ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
+    const pnlColor = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
+    const dayColor = dayChg  === null ? '' : dayChg  >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
 
     return `<div style="background:var(--bg);border-radius:var(--r-md);padding:10px 14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -614,109 +650,57 @@ async function renderMyPicks(me) {
         <span class="badge b-hold">보유중</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">매수가</div>
-          <div style="font-weight:500;">${p.buy_price ? p.buy_price.toLocaleString()+'원' : '—'}</div>
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">현재가</div>
+        <div><div style="color:var(--muted);margin-bottom:2px;">매수가</div>
+          <div style="font-weight:500;">${p.buy_price ? p.buy_price.toLocaleString()+'원' : '—'}</div></div>
+        <div><div style="color:var(--muted);margin-bottom:2px;">현재가</div>
           <div style="font-weight:500;">${curPrice ? curPrice.toLocaleString()+'원' : '—'}
-            ${dayChg !== null && dayChg !== undefined
-              ? `<span style="font-size:10px;${dayColor}">(${dayChg>=0?'+':''}${Number(dayChg).toFixed(1)}%)</span>` : ''}
-          </div>
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
+            ${dayChg != null ? `<span style="font-size:10px;${dayColor}">(${dayChg>=0?'+':''}${Number(dayChg).toFixed(1)}%)</span>` : ''}
+          </div></div>
+        <div><div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
           <div style="font-weight:500;${pnlColor}">
-            ${pnl !== null
-              ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원'
-              : '—'}
-            ${pnlRate !== null
-              ? `<span style="font-size:10px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>` : ''}
-          </div>
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">목표가</div>
+            ${pnl !== null ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원' : '—'}
+            ${pnlRate !== null ? `<span style="font-size:10px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>` : ''}
+          </div></div>
+        <div><div style="color:var(--muted);margin-bottom:2px;">목표가</div>
           <div style="font-weight:500;color:var(--green);">
             ${p.target_price ? p.target_price.toLocaleString()+'원' : '—'}
             ${upside !== null ? `<span style="font-size:10px;">(+${upside}%)</span>` : ''}
-          </div>
-        </div>
+          </div></div>
       </div>
     </div>`;
   }).join('');
 }
 
-// ── 내 발표종목
-async function renderMyPresentations(me) {
-  let presData = [];
-  try {
-    const { data } = await sb.from('presentations')
-      .select('*')
-      .eq('member_id', me.id)
-      .order('presented_at', { ascending: false })
-      .limit(10);
-    presData = data || [];
-  } catch(e) {
-    document.getElementById('myPresTbody').innerHTML =
-      '<tr><td colspan="5" class="empty-cell">발표 데이터를 불러올 수 없습니다</td></tr>';
-    return;
-  }
-
-  // ① 예정 발표 (status = 'planned')
+function renderMyPresData(me, presData, priceMap) {
   const planned   = presData.filter(p => p.status === 'planned');
   const plannedEl = document.getElementById('myPresPlanned');
   if (planned.length) {
     plannedEl.style.display = 'block';
     plannedEl.innerHTML = planned.map(p => {
       const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
-      const catBadge  = p.category === 'industry'
-        ? '<span class="industry-tag">산업</span>'
-        : '<span class="stock-tag">기업</span>';
+      const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
       return `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px;">
-        📋 ${catBadge}
-        <strong style="color:var(--text);">${topicName}</strong>
+        📋 ${catBadge} <strong style="color:var(--text);">${topicName}</strong>
         <span style="color:var(--muted);">${p.presented_at || '일정 미정'} 예정</span>
       </div>`;
     }).join('');
+  } else {
+    plannedEl.style.display = 'none';
   }
 
-  // ② 완료 발표 이력
   const done  = presData.filter(p => p.status === 'done' || !p.status);
   const tbody = document.getElementById('myPresTbody');
-
   if (!done.length) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">발표 이력이 없습니다</td></tr>';
     return;
   }
 
-  // 현재가 조회 (stock_code 있는 것만)
-  const codes = [...new Set(done.filter(p => p.stock_code).map(p => p.stock_code))];
-  let pressPriceMap = { ...globalPriceMap };
-
-  if (codes.length) {
-    const missingCodes = codes.filter(c => !pressPriceMap[c]);
-    if (missingCodes.length) {
-      const { data: priceRows } = await sb.from('stock_prices')
-        .select('stock_code,price,change_rate')
-        .in('stock_code', missingCodes);
-      for (const r of (priceRows || [])) {
-        if (r.price > 0) pressPriceMap[r.stock_code] = { price: r.price, change: r.change_rate || 0 };
-      }
-    }
-  }
-
   tbody.innerHTML = done.slice(0, 6).map(p => {
     const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
-    const cur       = p.stock_code ? pressPriceMap[p.stock_code] : null;
+    const cur       = p.stock_code ? priceMap[p.stock_code] : null;
     const curPrice  = cur?.price;
-    const ret       = (p.price_at && curPrice)
-      ? ((curPrice - p.price_at) / p.price_at * 100) : null;
-
-    const catBadge = p.category === 'industry'
-      ? '<span class="industry-tag">산업</span>'
-      : '<span class="stock-tag">기업</span>';
-
+    const ret       = (p.price_at && curPrice) ? ((curPrice - p.price_at) / p.price_at * 100) : null;
+    const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
     return `<tr>
       <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at || '—'}</td>
       <td>${catBadge} <span style="font-weight:500;">${topicName}</span></td>
@@ -727,6 +711,16 @@ async function renderMyPresentations(me) {
       </td>
     </tr>`;
   }).join('');
+}
+
+// 하위 호환 (팝업 닫힐 때 호출되는 기존 함수명 유지)
+async function renderMyPicks(me) {
+  const { data } = await sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false });
+  renderMyPicksData(me, data || []);
+}
+async function renderMyPresentations(me) {
+  const { data } = await sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10).catch(() => ({ data: [] }));
+  renderMyPresData(me, data || [], globalPriceMap);
 }
 
 // ════════════════════════════════════════

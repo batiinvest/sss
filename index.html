@@ -532,25 +532,27 @@ async function init() {
   // 내 섹션: 데이터가 준비됐으면 바로 렌더 (현재가 없어도 먼저 표시)
   if (me) {
     document.getElementById('mySection').style.display = 'grid';
-    // 내 탑픽·발표종목 데이터도 병렬 요청
-    const [myPicks, myPres] = await Promise.all([
-      sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
-      sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10)
-        .catch(() => ({ data: [] }))
-    ]);
-    renderMyPicksData(me, myPicks.data || []);
-    renderMyPresData(me, myPres.data || [], {});
 
-    // 현재가 갱신 후 내 탑픽 카드도 업데이트 (백그라운드)
+    // 내 탑픽·발표종목 데이터 병렬 요청
+    const [myPicksRes, myPresRes] = await Promise.all([
+      sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
+      sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10),
+    ]);
+    const myPicksData = myPicksRes.data || [];
+    const myPresData  = myPresRes.data  || [];
+
+    renderMyPicksData(me, myPicksData);
+    renderMyPresData(me, myPresData, {});
+
+    // 현재가 갱신 후 평가손익 업데이트 (백그라운드)
     refreshPrices().then(() => {
       if (globalPriceMap && Object.keys(globalPriceMap).length) {
-        renderMyPicksData(me, myPicks.data || []);
-        renderMyPresData(me, myPres.data || [], globalPriceMap);
+        renderMyPicksData(me, myPicksData);
+        renderMyPresData(me, myPresData, globalPriceMap);
       }
     });
   } else {
     document.getElementById('myMemberNotice').style.display = 'block';
-    // 현재가는 백그라운드
     refreshPrices();
   }
 }
@@ -594,13 +596,12 @@ async function renderMySection() {
   const me = await getCurrentMember();
   if (!me) { document.getElementById('myMemberNotice').style.display = 'block'; return; }
   document.getElementById('mySection').style.display = 'grid';
-  const [myPicks, myPres] = await Promise.all([
+  const [myPicksRes, myPresRes] = await Promise.all([
     sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
-    sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10)
-      .catch(() => ({ data: [] }))
+    sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10),
   ]);
-  renderMyPicksData(me, myPicks.data || []);
-  renderMyPresData(me, myPres.data || [], globalPriceMap);
+  renderMyPicksData(me, myPicksRes.data || []);
+  renderMyPresData(me, myPresRes.data || [], globalPriceMap);
 }
 
 // 데이터를 받아 바로 렌더 (DB 호출 없음)
@@ -719,7 +720,7 @@ async function renderMyPicks(me) {
   renderMyPicksData(me, data || []);
 }
 async function renderMyPresentations(me) {
-  const { data } = await sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10).catch(() => ({ data: [] }));
+  const { data } = await sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10);
   renderMyPresData(me, data || [], globalPriceMap);
 }
 

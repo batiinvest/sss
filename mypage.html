@@ -199,8 +199,11 @@ async function init() {
   document.getElementById('pageSubtitle').textContent =
     myMember.name + '님의 개인 정보 · 투자 현황';
 
+  // 프로필은 DB 없이 즉시 렌더
+  renderProfile();
+
+  // 나머지 데이터 전부 병렬 요청
   await Promise.all([
-    renderProfile(),
     renderMetrics(),
     renderMyPicks(),
     renderMyPresentations(),
@@ -237,22 +240,19 @@ async function renderMetrics() {
   retEl.textContent = (retRate >= 0 ? '+' : '') + retRate + '%';
   retEl.className   = 'metric-value ' + rCls(retRate);
 
-  // 투자금 / 잔액
-  const { data: trades } = await sb.from('trades')
-    .select('trade_type,price,quantity')
-    .eq('member_id', m.id);
-  const bought = (trades||[]).filter(t => t.trade_type === 'buy')
-    .reduce((s,t) => s + t.price * t.quantity, 0);
-  const sold   = (trades||[]).filter(t => t.trade_type === 'sell')
-    .reduce((s,t) => s + t.price * t.quantity, 0);
+  // 투자금/잔액 + 결산승률 병렬 조회
+  const [{ data: trades }, { data: settles }] = await Promise.all([
+    sb.from('trades').select('trade_type,price,quantity').eq('member_id', m.id),
+    sb.from('settlements').select('net_profit').eq('member_id', m.id),
+  ]);
+
+  const bought   = (trades||[]).filter(t => t.trade_type === 'buy').reduce((s,t) => s + t.price * t.quantity, 0);
+  const sold     = (trades||[]).filter(t => t.trade_type === 'sell').reduce((s,t) => s + t.price * t.quantity, 0);
   const invested = bought - sold;
   const cash     = (m.base_amount || 0) - invested;
-
   document.getElementById('myInvested').textContent = won(invested);
   document.getElementById('myCash').textContent = `잔액 ${won(cash)}`;
 
-  // 결산 승률
-  const { data: settles } = await sb.from('settlements').select('net_profit').eq('member_id', m.id);
   const wins    = (settles||[]).filter(s => s.net_profit > 0).length;
   const total   = (settles||[]).length;
   const winRate = total ? Math.round(wins / total * 100) : 0;

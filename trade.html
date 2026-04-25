@@ -136,16 +136,22 @@
 let members  = [];
 let allPicks = [];
 let allTrades = [];
+let me    = null;
+let admin = false;
 
 async function init() {
   await requireAuth();
-  members   = await fetchMembers();
-  allPicks  = await fetchAllPicks();
-  allTrades = await fetchTrades(50);
+
+  // 멤버·탑픽·거래내역·본인정보 병렬 로드
+  [members, allPicks, allTrades, me, admin] = await Promise.all([
+    fetchMembers(),
+    fetchAllPicks(),
+    fetchTrades(50),
+    getCurrentMember(),
+    isAdmin(),
+  ]);
 
   // 셀렉트 채우기
-  const me    = await getCurrentMember();
-  const admin = await isAdmin();
   ['buy-member','sell-member'].forEach(id => {
     const el = document.getElementById(id);
     members.forEach(m => {
@@ -211,8 +217,6 @@ function calcSellReturn() {
 }
 
 async function submitBuy() {
-  const me    = await getCurrentMember();
-  const admin = await isAdmin();
   const memberId = document.getElementById('buy-member').value;
   if (!admin && me && memberId !== me.id) {
     toast('본인의 매수만 등록할 수 있습니다.');
@@ -236,8 +240,6 @@ async function submitBuy() {
 }
 
 async function submitSell() {
-  const me    = await getCurrentMember();
-  const admin = await isAdmin();
   const memberId = document.getElementById('sell-member').value;
   if (!admin && me && memberId !== me.id) {
     toast('본인의 매도만 등록할 수 있습니다.');

@@ -172,8 +172,12 @@ let autoLookupTimer = null;
 async function init() {
   await requireAuth();
   checkDBConnection();
-  members  = await fetchMembers();
-  allPicks = await fetchAllPicks();
+
+  // 멤버·탑픽 병렬 로드
+  [members, allPicks] = await Promise.all([
+    fetchMembers(),
+    fetchAllPicks(),
+  ]);
 
   const flt = document.getElementById('filterMember');
   members.forEach(m => {
@@ -184,7 +188,6 @@ async function init() {
   buildMonthTabs();
   renderMonthPicks(selMonth);
   renderHistory();
-
 }
 
 // ── 종목코드 입력 후 0.9초 대기 → 자동 조회

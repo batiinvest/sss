@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <link rel="stylesheet" href="css/style.css?v=20260426">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; display: flex; overflow: hidden; }
@@ -95,7 +95,8 @@
     <a href="#" onclick="loadPage('index');return false;" class="nav-item" data-page="index"><div class="nav-dot g"></div>대시보드</a>
 
     <div class="nav-section-label">스터디</div>
-    <a href="#" onclick="loadPage('schedule');return false;"      class="nav-item" data-page="schedule"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="#" onclick="loadPage('schedule-calendar');return false;" class="nav-item" data-page="schedule-calendar"><div class="nav-dot g"></div>스터디 일정</a>
+    <a href="#" onclick="loadPage('schedule-order');return false;"    class="nav-item" data-page="schedule-order"><div class="nav-dot g"></div>발표 순서</a>
     <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표 히스토리</a>
     <a href="#" onclick="loadPage('fees');return false;"          class="nav-item" data-page="fees"><div class="nav-dot a"></div>스터디 회비</a>
 
@@ -115,14 +116,14 @@
   </nav>
 
   <!-- iframe: 각 페이지 컨텐츠 -->
-  <iframe id="page-frame" src="index.html?v=20260424" title="페이지 컨텐츠" scrolling="yes" style="flex:1;border:none;width:100%;height:100vh;background:var(--bg);"></iframe>
+  <iframe id="page-frame" src="index.html?v=20260426" title="페이지 컨텐츠" scrolling="yes" style="flex:1;border:none;width:100%;height:100vh;background:var(--bg);"></iframe>
 
 </div>
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 let currentPage = 'index';
 
@@ -153,7 +154,7 @@ function loadPage(pageName) {
   frame.classList.add('switching');
 
   setTimeout(() => {
-    frame.src = pageName + '.html?v=20260424';
+    frame.src = pageName + '.html?v=20260426';
     frame.onload = () => {
       frame.classList.remove('switching');
       // 모바일: 햄버거 닫기

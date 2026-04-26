@@ -163,6 +163,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260426"></script>
 <script src="js/db.js?v=20260426"></script>
+<script src="js/modal-pick.js?v=20260427"></script>
 <script>
 let allPicks = [];
 let members  = [];
@@ -184,11 +185,13 @@ async function init() {
     flt.innerHTML += `<option value="${m.id}">${m.name}</option>`;
   });
 
-  document.getElementById('f-month').value = selMonth;
-  initStockSearch();
   buildMonthTabs();
   renderMonthPicks(selMonth);
   renderHistory();
+
+  // 탑픽 제출 후 목록 자동 갱신
+  ModalPick.mount();
+  ModalPick._onSubmit = () => { allPicks = []; fetchAllPicks().then(p => { allPicks = p; renderMonthPicks(selMonth); renderHistory(); }); };
 }
 
 // ── 종목 자동완성 — db.js의 bindStockSearch 사용
@@ -410,25 +413,12 @@ function applyFilter() {
   ));
 }
 
+// picks.html: ModalPick(modal-pick.js)으로 위임
 function openPickForm() {
-  ['lookupResult','lookupError','lookupLoading','upsidePreview','capUpsidePreview','selectedStock','stockDropdown']
-    .forEach(id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; });
-  document.getElementById('f-stock').value     = '';
-  document.getElementById('f-code').value      = '';
-  document.getElementById('f-market').value    = 'KOSPI';
-  document.getElementById('f-cur-price').value = '';
-  document.getElementById('f-cur-cap').value   = '';
-  document.getElementById('f-month').value     = selMonth;
-  document.getElementById('pickFormModal').style.display = 'flex';
-  setTimeout(() => { initStockSearch(); document.getElementById('f-stock').focus(); }, 200);
+  ModalPick.open({ month: selMonth });
 }
-function closePickForm() {
-  document.getElementById('pickFormModal').style.display = 'none';
-}
-document.getElementById('pickFormModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('pickFormModal')) closePickForm();
-});
-function toggleForm() { openPickForm(); } // 하위 호환
+function closePickForm() { ModalPick.close(); }
+function toggleForm()    { openPickForm(); }
 
 async function submitPickForm() {
   const me = await getCurrentMember();

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <title>SSS · 사용자 관리</title>
+  <link rel="stylesheet" href="css/style.css?v=20260427">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -15,7 +15,7 @@
     <div class="topbar">
       <div>
         <div class="page-title">사용자 관리</div>
-        <div class="updated">참여자 추가 · 정보 수정 · 탈퇴 처리</div>
+        <div class="updated">참여자 추가 · 정보 수정 · 탈퇴 처리 &nbsp;·&nbsp; 수익률 현황은 <a href="members.html" style="color:var(--accent);">참여자 현황</a>에서 확인</div>
       </div>
       <button class="btn btn-primary" id="addMemberBtn" onclick="openForm()">+ 참여자 추가</button>
     </div>
@@ -75,17 +75,16 @@
         <table>
           <thead><tr>
             <th>참여자</th><th>이메일</th><th>참여일</th>
-            <th>기준금액</th><th>누적 수익률</th><th class="hist-hide-mobile">종목 수</th><th class="hist-hide-mobile">메모</th>
+            <th>기준금액</th><th>종목 수</th><th>메모</th>
             <th style="width:130px;">작업</th>
           </tr></thead>
           <tbody id="membersTbody">
-            <tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr>
+            <tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <div class="grid-3 mt-card" id="summaryCards"></div>
   </main>
 </div>
 
@@ -104,8 +103,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260427"></script>
+<script src="js/db.js?v=20260427"></script>
 <script>
 // 현재 수정 중인 멤버 ID를 전역 변수로 관리 (hidden input 대신)
 let editingMemberId = null;
@@ -145,19 +144,17 @@ async function loadData() {
     fetchSettlements()
   ]);
   renderMembers();
-  renderSummaryCards();
 }
 
 function renderMembers() {
   document.getElementById('memberCountLabel').textContent = `총 ${members.length}명 활성`;
   const tbody = document.getElementById('membersTbody');
   if (!members.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">참여자가 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">참여자가 없습니다</td></tr>';
     return;
   }
   tbody.innerHTML = members.map((m, i) => {
     const pickCount = allPicks.filter(p => p.member_id === m.id).length;
-    const rCl = rCls(m.return_rate);
     return `<tr>
       <td>
         <div class="flex">
@@ -168,7 +165,6 @@ function renderMembers() {
       <td class="muted">${m.email || '-'}</td>
       <td class="muted">${m.joined_at}</td>
       <td style="font-weight:500;">${(m.base_amount/10000).toFixed(1)}만원</td>
-      <td class="${rCl}">${pct(m.return_rate)}</td>
       <td>${pickCount}건</td>
       <td class="muted" style="font-size:12px;">${m.note || '-'}</td>
       <td>
@@ -179,35 +175,6 @@ function renderMembers() {
       </td>
     </tr>`;
   }).join('');
-}
-
-function renderSummaryCards() {
-  if (!members.length) return;
-  const sorted = [...members].sort((a,b) => b.return_rate - a.return_rate);
-  const best  = sorted[0];
-  const worst = sorted[sorted.length-1];
-  const avg   = (members.reduce((s,m) => s+m.return_rate,0)/members.length).toFixed(1);
-  const total = members.reduce((s,m) => s+m.base_amount, 0);
-  document.getElementById('summaryCards').innerHTML = `
-    <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">최고 수익률</div>
-      <div class="flex" style="gap:10px;">
-        <div class="avatar av1" style="width:32px;height:32px;font-size:12px;">${best.name.slice(0,2)}</div>
-        <div><div style="font-weight:500;">${best.name}</div><div class="up" style="font-size:18px;font-weight:500;">${pct(best.return_rate)}</div></div>
-      </div>
-    </div>
-    <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">전체 평균</div>
-      <div style="font-size:28px;font-weight:500;" class="${rCls(avg)}">${pct(avg)}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px;">총 ${(total/10000).toFixed(0)}만원 운용 중</div>
-    </div>
-    <div class="card">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">최저 수익률</div>
-      <div class="flex" style="gap:10px;">
-        <div class="avatar av3" style="width:32px;height:32px;font-size:12px;">${worst.name.slice(0,2)}</div>
-        <div><div style="font-weight:500;">${worst.name}</div><div class="${rCls(worst.return_rate)}" style="font-size:18px;font-weight:500;">${pct(worst.return_rate)}</div></div>
-      </div>
-    </div>`;
 }
 
 function openForm(prefill = {}) {

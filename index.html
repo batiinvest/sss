@@ -585,27 +585,36 @@ function renderPicksTable(picks, prices) {
     tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">이번 달 탑픽이 없습니다</td></tr>';
     return;
   }
-  tbody.innerHTML = picks.map((p, i) => {
+
+  // 수익률 계산 후 내림차순 정렬
+  const withRate = picks.map(p => {
     const priceInfo = prices[p.stock_code];
     const curPrice  = priceInfo?.price;
-    const dayChange = priceInfo?.change;
-
-    let rateVal, rateStr;
+    let rateVal;
     if (p.status === 'hold' && curPrice && p.buy_price) {
       rateVal = ((curPrice - p.buy_price) / p.buy_price * 100);
-      rateStr = pct(rateVal);
     } else {
-      rateVal = p.realized_return;
-      rateStr = pct(rateVal);
+      rateVal = p.realized_return ?? null;
     }
+    return { ...p, _rateVal: rateVal };
+  }).sort((a, b) => {
+    // null은 맨 뒤로
+    if (a._rateVal == null && b._rateVal == null) return 0;
+    if (a._rateVal == null) return 1;
+    if (b._rateVal == null) return -1;
+    return b._rateVal - a._rateVal;
+  });
 
-    const upside = p.target_price && (curPrice || p.buy_price)
+  tbody.innerHTML = withRate.map((p, i) => {
+    const priceInfo  = prices[p.stock_code];
+    const curPrice   = priceInfo?.price;
+    const dayChange  = priceInfo?.change;
+    const rateVal    = p._rateVal;
+    const rateStr    = pct(rateVal);
+    const upside     = p.target_price && (curPrice || p.buy_price)
       ? (((p.target_price - (curPrice||p.buy_price)) / (curPrice||p.buy_price)) * 100).toFixed(1)
       : null;
-
-    const badgeHtml = p.status === 'sold'
-      ? statusBadge('sold') : statusBadge('hold');
-
+    const badgeHtml  = p.status === 'sold' ? statusBadge('sold') : statusBadge('hold');
     const dayChangeEl = dayChange != null
       ? `<span style="font-size:11px;" class="${rCls(dayChange)}">${dayChange>=0?'+':''}${dayChange}%</span>`
       : '<span class="muted" style="font-size:11px;">-</span>';
@@ -624,17 +633,46 @@ function renderPicksTable(picks, prices) {
 }
 
 function renderMemberBars(members) {
-  const sorted = [...members].sort((a,b) => b.return_rate - a.return_rate);
-  const maxAbs = Math.max(...sorted.map(m => Math.abs(m.return_rate)), 1);
+  // 이번 달 탑픽 보유 현황 + 현재가로 실시간 수익률 계산
+  const enriched = members.map(m => {
+    const myPicks = allCurrentPicks.filter(p =>
+      p.member_id === m.id && p.status === 'hold' && p.buy_price
+    );
+    let liveRate = null;
+    if (myPicks.length) {
+      let totalCost = 0, totalVal = 0;
+      myPicks.forEach(p => {
+        const cur = globalPriceMap[p.stock_code]?.price;
+        if (cur && p.buy_quantity) {
+          totalCost += p.buy_price * p.buy_quantity;
+          totalVal  += cur * p.buy_quantity;
+        }
+      });
+      if (totalCost > 0) liveRate = (totalVal - totalCost) / totalCost * 100;
+    }
+    // 확정 수익률(return_rate)이 있으면 우선, 없으면 실시간으로 표시
+    const displayRate = m.return_rate !== 0 ? m.return_rate : (liveRate ?? m.return_rate);
+    const isLive      = m.return_rate === 0 && liveRate !== null;
+    return { ...m, displayRate, isLive };
+  });
+
+  const sorted = [...enriched].sort((a, b) => b.displayRate - a.displayRate);
+  const maxAbs = Math.max(...sorted.map(m => Math.abs(m.displayRate)), 1);
+
   document.getElementById('memberBars').innerHTML = sorted.map((m, i) => {
-    const w = Math.round(Math.abs(m.return_rate) / maxAbs * 100);
+    const w   = Math.round(Math.abs(m.displayRate) / maxAbs * 100);
+    const tip = m.isLive
+      ? `<span style="font-size:10px;color:var(--muted);margin-left:2px;">평가</span>`
+      : '';
     return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg);border-radius:var(--r-md);">
       <div class="avatar ${avCls[i%6]}" style="width:28px;height:28px;font-size:11px;">${m.name.slice(0,2)}</div>
       <div style="font-size:13px;font-weight:500;width:52px;flex-shrink:0;">${m.name}</div>
       <div style="flex:1;height:6px;background:var(--border);border-radius:4px;overflow:hidden;">
-        <div class="prog-bar ${m.return_rate>=0?'bar-up':'bar-dn'}" style="width:${w}%;"></div>
+        <div class="prog-bar ${m.displayRate>=0?'bar-up':'bar-dn'}" style="width:${w}%;"></div>
       </div>
-      <div class="${rCls(m.return_rate)}" style="font-size:12px;min-width:46px;text-align:right;">${pct(m.return_rate)}</div>
+      <div class="${rCls(m.displayRate)}" style="font-size:12px;min-width:46px;text-align:right;">
+        ${pct(m.displayRate)}${tip}
+      </div>
     </div>`;
   }).join('');
 }

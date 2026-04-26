@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <title>SSS · 참여자 현황</title>
+  <link rel="stylesheet" href="css/style.css?v=20260426">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -48,8 +48,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 let members = [], allTrades = [];
 let allPicks = [];
@@ -146,9 +146,8 @@ async function loadMemberHistory() {
     const settle = settlements.find(s => s.pick_id === p.pick_id);
     const r = p.realized_return;
     if (settle) runningBase = settle.new_base_amount || runningBase + (settle.net_profit || 0);
-    const statusBadge = p.status === 'sold'
-      ? '<span class="badge b-sold">매도완료</span>'
-      : '<span class="badge b-hold">보유중</span>';
+    const badgeHtml = p.status === 'sold'
+      ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
       <td style="font-weight:500;">${p.stock_name}</td>
@@ -157,7 +156,7 @@ async function loadMemberHistory() {
       <td class="${rCls(r)}">${pct(r)}</td>
       <td class="${rCls(settle?.net_profit)}">${settle ? (settle.net_profit>=0?'+':'')+won(settle.net_profit) : '-'}</td>
       <td style="font-weight:500;">${settle ? won(runningBase) : '-'}</td>
-      <td>${statusBadge}</td>
+      <td>${badgeHtml}</td>
     </tr>`;
   }).join('');
 }

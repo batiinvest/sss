@@ -352,7 +352,7 @@ function renderMonthPicks(month) {
     const r = p.realized_return;
     const upside = p.target_cap && p.current_cap
       ? (((p.target_cap - p.current_cap) / p.current_cap) * 100).toFixed(1) : null;
-    const statusBadge = p.status==='sold'
+    const badgeHtml = p.status==='sold'
       ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
@@ -363,7 +363,7 @@ function renderMonthPicks(month) {
       <td class="${rCls(r)}">${pct(r)}</td>
       <td style="color:var(--green);">${won(p.target_price)}</td>
       <td>${upside ? `<span style="color:var(--green);">+${upside}%</span>` : '-'}</td>
-      <td>${statusBadge}</td>
+      <td>${badgeHtml}</td>
     </tr>`;
   }).join('');
 
@@ -385,7 +385,7 @@ function renderHistory(filtered) {
   }
   tbody.innerHTML = picks.map((p, i) => {
     const r = p.realized_return;
-    const statusBadge = p.status==='sold'
+    const badgeHtml = p.status==='sold'
       ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
@@ -395,7 +395,7 @@ function renderHistory(filtered) {
       <td>${won(p.buy_price)}</td>
       <td>${won(p.sell_price)}</td>
       <td class="${rCls(r)}">${pct(r)}</td>
-      <td>${statusBadge}</td>
+      <td>${badgeHtml}</td>
       <td style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">${p.reason||'-'}</td>
     </tr>`;
   }).join('');

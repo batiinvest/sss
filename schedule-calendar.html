@@ -45,7 +45,12 @@
       <div class="updated">산업 분석 · 종목 분석 · 회식 관리</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
-      <button class="btn" onclick="if(window.parent&&window.parent.loadPage)window.parent.loadPage('schedule-order');else location.href='schedule-order.html'" style="font-size:12px;">📋 발표 순서 →</button>
+      <!-- 탭 버튼 -->
+      <div style="display:flex;border:0.5px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
+        <button style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--accent);color:#fff;">📅 일정 관리</button>
+        <button style="padding:6px 14px;font-size:12px;border:none;cursor:pointer;background:var(--surface);color:var(--muted);"
+          onclick="goToSchedulePage('schedule-order')">📋 발표 순서</button>
+      </div>
       <button class="btn btn-primary" onclick="openForm()">+ 일정 추가</button>
     </div>
   </div>
@@ -198,28 +203,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260426"></script>
 <script src="js/db.js?v=20260426"></script>
+<script src="js/schedule-shared.js?v=20260426"></script>
 <script>
-// 타임존 안전한 날짜 문자열
-function toDateStr(date) {
-  return date.getFullYear() + '-' +
-    String(date.getMonth() + 1).padStart(2, '0') + '-' +
-    String(date.getDate()).padStart(2, '0');
-}
-
-let schedules     = [];
-let members       = [];
-let presentations = [];
-let dragSrcMemberId   = null;
-let dragSrcScheduleId = null;
-let dragSrcPresId     = null;
-
-let calYear   = new Date().getFullYear();
-let calMonth  = new Date().getMonth(); // 0-indexed
-let editingScheduleId = null;
-
-const CAT_LABEL = { industry: '산업 분석', stock: '종목 분석', dinner: '회식', other: '기타' };
-const CAT_CLASS = { industry: 'ev-meeting', stock: 'ev-deadline', dinner: 'ev-dinner', other: 'ev-other' };
-const MONTH_KR  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+// ← 공통 변수는 js/schedule-shared.js 참조
 
 
 async function init() {
@@ -227,10 +213,7 @@ async function init() {
   checkDBConnection();
 
   try {
-    [schedules, members, presentations] = await Promise.all([
-      fetchSchedules(), fetchMembers(),
-      sb.from('presentations').select('*, members(name)').order('created_at').then(r => r.data || [])
-    ]);
+    await loadSharedData();   // js/schedule-shared.js
   } catch(e) {
     console.error('일정 데이터 로드 오류:', e.message);
     schedules = []; members = []; presentations = [];

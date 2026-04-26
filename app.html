@@ -25,26 +25,30 @@
 
     /* 모바일 */
     @media (max-width: 768px) {
-      html, body { height: 100%; overflow: hidden; }
+      html { height: 100%; overflow: hidden; }
+      body { height: 100%; overflow: hidden; }
+
       .layout {
         flex-direction: column;
-        height: 100vh;
-        height: 100dvh; /* 동적 뷰포트 — 주소창/툴바 높이 변화 대응 */
+        /* dvh 대신 고정 100% 사용 — 주소창 변동 시 레이아웃 재계산 방지 */
+        height: 100%;
         overflow: hidden;
+        /* 사이드바 높이만큼 남은 공간을 iframe이 채움 */
+        position: fixed;
+        inset: 0;
       }
       .sidebar {
         flex-shrink: 0;
         height: auto !important;
-        position: sticky !important;
-        top: 0 !important;
+        position: relative !important;
         z-index: 200 !important;
       }
       #page-frame {
         flex: 1;
-        height: 0;    /* flex child가 남은 공간을 채우도록 */
         min-height: 0;
-        overflow-y: auto;                  /* iframe 자체 스크롤 활성화 */
-        -webkit-overflow-scrolling: touch; /* iOS 관성 스크롤 */
+        /* iframe 자체는 스크롤 없이 꽉 채움 */
+        overflow: hidden;
+        /* 내부 페이지가 스크롤 담당 (in-iframe 클래스로 처리) */
       }
     }
   </style>

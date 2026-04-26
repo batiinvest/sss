@@ -490,11 +490,18 @@ textarea { resize: vertical; min-height: 72px; }
 html.in-iframe .sidebar,
 html.in-iframe .hamburger { display: none !important; }
 html.in-iframe .layout    { display: block !important; }
-html.in-iframe,
+
+/* iframe 내부 페이지: 자체 스크롤 담당 */
+html.in-iframe {
+  height: 100%;
+  overflow: hidden;
+}
 html.in-iframe body {
-  height: auto !important;
-  min-height: 100% !important;
-  overflow-y: auto !important;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* iOS 관성 스크롤 */
+  overscroll-behavior-y: contain;    /* 스크롤 끝에서 부모로 전파 방지 */
 }
 html.in-iframe .main {
   min-height: unset;

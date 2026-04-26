@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 내 정보</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <link rel="stylesheet" href="css/style.css?v=20260426">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -50,21 +50,23 @@
         <!-- 비밀번호 변경 -->
         <div class="card-divider">
           <div class="section-label">비밀번호 변경</div>
+          <form onsubmit="changePassword();return false;" autocomplete="new-password">
           <div class="form-row">
             <div class="form-group">
               <label>새 비밀번호</label>
-              <input type="password" id="edit-pw" placeholder="새 비밀번호 (6자 이상)" />
+              <input type="password" id="edit-pw" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" />
             </div>
             <div class="form-group">
               <label>비밀번호 확인</label>
-              <input type="password" id="edit-pw2" placeholder="비밀번호 재입력" />
+              <input type="password" id="edit-pw2" placeholder="비밀번호 재입력" autocomplete="new-password" />
             </div>
           </div>
           <div id="pwMsg" class="fs-12 mb-8" style="min-height:16px;"></div>
           <div class="flex-end">
-            <button class="btn" onclick="closeEditForm()">닫기</button>
-            <button class="btn btn-primary" onclick="changePassword()">비밀번호 변경</button>
+            <button type="button" class="btn" onclick="closeEditForm()">닫기</button>
+            <button type="submit" class="btn btn-primary">비밀번호 변경</button>
           </div>
+          </form>
         </div>
       </div>
     </div>
@@ -179,8 +181,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 let myMember    = null;
 let myPriceMap  = {};
@@ -307,9 +309,9 @@ async function renderMyPicks() {
         ? (curPrice - p.buy_price) * p.buy_quantity : null;
       const pnlRate  = (p.buy_price && curPrice)
         ? ((curPrice - p.buy_price) / p.buy_price * 100).toFixed(1) : null;
-      const statusBadge = p.status === 'hold'
-        ? '<span class="badge b-hold">보유중</span>'
-        : '<span class="badge b-sold">매도완료</span>';
+      const statusBadgeHtml = p.status === 'hold'
+        ? statusBadge('hold')
+        : statusBadge('sold');
       const upside = p.target_price && curPrice
         ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
       return `<tr>
@@ -319,7 +321,7 @@ async function renderMyPicks() {
         <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
         <td class="${pnlRate !== null ? rCls(pnlRate) : ''}">${pnl !== null ? (pnl>=0?'+':'')+won(pnl)+'('+pnlRate+'%)' : '—'}</td>
         <td>${p.target_price ? p.target_price.toLocaleString()+'원'+(upside?` <span style="font-size:11px;">(+${upside}%)</span>`:'') : '—'}</td>
-        <td>${statusBadge}</td>
+        <td>${statusBadgeHtml}</td>
       </tr>`;
     }).join('');
   } catch(e) {
@@ -399,8 +401,7 @@ async function renderMySettles() {
       return;
     }
     tbody.innerHTML = settles.map(s => {
-      const d  = new Date(s.settled_at);
-      const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+      const ds = fmtDate(s.settled_at);
       const retRate = s.buy_price ? ((s.sell_price - s.buy_price) / s.buy_price * 100).toFixed(1) : null;
       return `<tr>
         <td class="muted">${ds}</td>

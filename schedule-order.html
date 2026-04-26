@@ -698,6 +698,12 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt, targe
 
 // 멤버 패널 종목 자동완성
 let _memberSearchTimer = null;
+// initMemberStockSearch: input에 자동완성 이벤트를 바인딩하는 초기화 함수
+function initMemberStockSearch(input, dd) {
+  input.dataset.stockCode = '';
+  input.addEventListener('input', () => memberStockSearch(input, dd));
+}
+
 function memberStockSearch(input, dd) {
   clearTimeout(_memberSearchTimer);
   const q = input.value.trim();

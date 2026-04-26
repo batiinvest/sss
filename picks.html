@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <title>SSS · 탑픽 관리</title>
+  <link rel="stylesheet" href="css/style.css?v=20260426">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -161,8 +161,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 let allPicks = [];
 let members  = [];
@@ -185,155 +185,13 @@ async function init() {
   });
 
   document.getElementById('f-month').value = selMonth;
+  initStockSearch();
   buildMonthTabs();
   renderMonthPicks(selMonth);
   renderHistory();
 }
 
-// ── 종목코드 입력 후 0.9초 대기 → 자동 조회
-// ── 종목명 자동완성 검색
-let stockSearchTimer = null;
-let dropdownIdx = -1;
-
-async function onStockSearch(val) {
-  clearTimeout(stockSearchTimer);
-  const q = val.trim();
-  const dd = document.getElementById('stockDropdown');
-
-  if (q.length < 2) {
-    dd.style.display = 'none';
-    return;
-  }
-
-  stockSearchTimer = setTimeout(async () => {
-    try {
-      const { data } = await sb.from('stock_prices')
-        .select('stock_code, stock_name, market, price, change_rate, market_cap')
-        .or(`stock_name.ilike.%${q}%,stock_code.ilike.%${q}%`)
-        .gt('price', 0)
-        .order('market_cap', { ascending: false, nullsFirst: false })
-        .limit(15);
-
-      if (!data || data.length === 0) {
-        dd.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--muted);">검색 결과 없음</div>';
-        dd.style.display = 'block';
-        return;
-      }
-
-      dropdownIdx = -1;
-      dd.innerHTML = data.map((s, i) => {
-        const sign = (s.change_rate||0) >= 0 ? '+' : '';
-        const cls  = (s.change_rate||0) >= 0 ? 'color:#0f6e56' : 'color:#a32d2d';
-        const cap  = s.market_cap ? `${s.market_cap.toLocaleString()}억` : '';
-        return `<div class="stock-dd-item" data-idx="${i}"
-          data-code="${s.stock_code}" data-name="${s.stock_name}"
-          data-market="${s.market}" data-price="${s.price||0}"
-          data-cap="${s.market_cap||0}" data-change="${s.change_rate||0}"
-          onclick="selectStock(this)"
-          style="display:flex;justify-content:space-between;align-items:center;
-                 padding:9px 14px;cursor:pointer;border-bottom:0.5px solid var(--border);font-size:13px;">
-          <div>
-            <span style="font-weight:500;">${s.stock_name}</span>
-            <span style="color:var(--muted);font-size:11px;margin-left:6px;">${s.stock_code} · ${s.market}</span>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-weight:500;">${s.price ? s.price.toLocaleString()+'원' : '-'}</div>
-            <div style="font-size:11px;${cls}">${s.price ? sign+(s.change_rate||0).toFixed(2)+'%' : ''}
-              ${cap ? `<span style="color:var(--muted);margin-left:4px;">${cap}</span>` : ''}</div>
-          </div>
-        </div>`;
-      }).join('');
-
-      dd.style.display = 'block';
-
-      // hover 스타일
-      dd.querySelectorAll('.stock-dd-item').forEach(el => {
-        el.addEventListener('mouseenter', () => el.style.background = 'var(--bg)');
-        el.addEventListener('mouseleave', () => el.style.background = '');
-      });
-
-    } catch(e) {
-      console.error('종목 검색 오류:', e);
-    }
-  }, 300);
-}
-
-// 키보드 탐색
-function onStockSearchKey(e) {
-  const dd = document.getElementById('stockDropdown');
-  const items = dd.querySelectorAll('.stock-dd-item');
-  if (!items.length || dd.style.display === 'none') return;
-
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    dropdownIdx = Math.min(dropdownIdx + 1, items.length - 1);
-    items.forEach((el, i) => el.style.background = i === dropdownIdx ? 'var(--bg)' : '');
-    items[dropdownIdx]?.scrollIntoView({ block: 'nearest' });
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    dropdownIdx = Math.max(dropdownIdx - 1, 0);
-    items.forEach((el, i) => el.style.background = i === dropdownIdx ? 'var(--bg)' : '');
-    items[dropdownIdx]?.scrollIntoView({ block: 'nearest' });
-  } else if (e.key === 'Enter' && dropdownIdx >= 0) {
-    e.preventDefault();
-    selectStock(items[dropdownIdx]);
-  } else if (e.key === 'Escape') {
-    dd.style.display = 'none';
-  }
-}
-
-// 종목 선택
-function selectStock(el) {
-  const code    = el.dataset.code;
-  const name    = el.dataset.name;
-  const market  = el.dataset.market;
-  const price   = parseInt(el.dataset.price) || 0;
-  const cap     = parseInt(el.dataset.cap)   || 0;
-  const change  = parseFloat(el.dataset.change) || 0;
-
-  // hidden inputs 채우기
-  document.getElementById('f-stock').value  = name;
-  document.getElementById('f-code').value   = code;
-  document.getElementById('f-market').value = market;
-
-  // 드롭다운 닫기
-  document.getElementById('stockDropdown').style.display = 'none';
-
-  // 선택 확인 배지
-  const badge = document.getElementById('selectedStock');
-  const sign  = change >= 0 ? '+' : '';
-  const cls   = change >= 0 ? 'color:#0f6e56' : 'color:#a32d2d';
-  document.getElementById('selectedStockText').innerHTML =
-    `✅ <strong>${name}</strong> <span style="color:var(--muted)">${code} · ${market}</span>`;
-  badge.style.display = 'block';
-
-  // 현재가·시총 자동 입력
-  if (price > 0) {
-    document.getElementById('f-cur-price').value = price;
-    // DB 원래 가격 보존 (현재가 수정 시 시총 역산용)
-    document.getElementById('f-db-price').value = price;
-    document.getElementById('f-db-cap').value   = cap;
-
-    // 결과 박스 표시
-    document.getElementById('lookupSource').textContent =
-      `${code} · ${name} · DB 저장 가격`;
-    document.getElementById('r-price').textContent  = price.toLocaleString() + '원';
-    document.getElementById('r-price').className    = 'price-cell-value';
-    document.getElementById('r-change').textContent = `${sign}${change.toFixed(2)}%`;
-    document.getElementById('r-change').className   = `price-cell-value ${change >= 0 ? 'up' : 'dn'}`;
-    const capEl = document.getElementById('r-cap');
-    if (cap > 0) {
-      capEl.textContent = cap.toLocaleString() + '억원';
-      document.getElementById('f-cur-cap').value = cap;
-    } else {
-      capEl.textContent = '직접 입력';
-    }
-    document.getElementById('lookupResult').style.display = 'block';
-    calcUpsidePreview();
-    calcCapUpside();
-  }
-}
-
+// ── 종목 자동완성 — db.js의 bindStockSearch 사용
 function clearSelectedStock() {
   document.getElementById('f-stock').value  = '';
   document.getElementById('f-code').value   = '';
@@ -342,19 +200,55 @@ function clearSelectedStock() {
   document.getElementById('f-cur-cap').value   = '';
   document.getElementById('f-db-price').value  = '';
   document.getElementById('f-db-cap').value    = '';
-  document.getElementById('selectedStock').style.display   = 'none';
-  document.getElementById('lookupResult').style.display    = 'none';
-  document.getElementById('upsidePreview').style.display   = 'none';
+  document.getElementById('selectedStock').style.display    = 'none';
+  document.getElementById('lookupResult').style.display     = 'none';
+  document.getElementById('upsidePreview').style.display    = 'none';
   document.getElementById('capUpsidePreview').style.display = 'none';
   document.getElementById('f-stock').focus();
 }
 
-// 외부 클릭 시 드롭다운 닫기
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('#f-stock') && !e.target.closest('#stockDropdown')) {
-    document.getElementById('stockDropdown').style.display = 'none';
-  }
-});
+function initStockSearch() {
+  const input = document.getElementById('f-stock');
+  const dd    = document.getElementById('stockDropdown');
+  if (!input || !dd) return;
+
+  bindStockSearch(input, dd, (s) => {
+    const price  = s.price || 0;
+    const cap    = s.market_cap || 0;
+    const change = s.change_rate || 0;
+    const sign   = change >= 0 ? '+' : '';
+
+    document.getElementById('f-stock').value  = s.stock_name;
+    document.getElementById('f-code').value   = s.stock_code;
+    document.getElementById('f-market').value = s.market;
+
+    const badge = document.getElementById('selectedStock');
+    document.getElementById('selectedStockText').innerHTML =
+      `✅ <strong>${s.stock_name}</strong> <span style="color:var(--muted)">${s.stock_code} · ${s.market}</span>`;
+    badge.style.display = 'block';
+
+    if (price > 0) {
+      document.getElementById('f-cur-price').value = price;
+      document.getElementById('f-db-price').value  = price;
+      document.getElementById('f-db-cap').value    = cap;
+      document.getElementById('lookupSource').textContent = `${s.stock_code} · ${s.stock_name} · DB 저장 가격`;
+      document.getElementById('r-price').textContent  = price.toLocaleString() + '원';
+      document.getElementById('r-price').className    = 'price-cell-value';
+      document.getElementById('r-change').textContent = `${sign}${change.toFixed(2)}%`;
+      document.getElementById('r-change').className   = `price-cell-value ${change >= 0 ? 'up' : 'dn'}`;
+      const capEl = document.getElementById('r-cap');
+      if (cap > 0) {
+        capEl.textContent = cap.toLocaleString() + '억원';
+        document.getElementById('f-cur-cap').value = cap;
+      } else {
+        capEl.textContent = '직접 입력';
+      }
+      document.getElementById('lookupResult').style.display = 'block';
+      calcUpsidePreview();
+      calcCapUpside();
+    }
+  }, { limit: 15 });
+}
 
 // ── 목표주가 입력 → 목표시총 자동 계산
 function onTargetPriceInput() {
@@ -459,8 +353,7 @@ function renderMonthPicks(month) {
     const upside = p.target_cap && p.current_cap
       ? (((p.target_cap - p.current_cap) / p.current_cap) * 100).toFixed(1) : null;
     const statusBadge = p.status==='sold'
-      ? '<span class="badge b-sold">매도완료</span>'
-      : '<span class="badge b-hold">보유중</span>';
+      ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
       <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}</span></td>
@@ -493,8 +386,7 @@ function renderHistory(filtered) {
   tbody.innerHTML = picks.map((p, i) => {
     const r = p.realized_return;
     const statusBadge = p.status==='sold'
-      ? '<span class="badge b-sold">매도완료</span>'
-      : '<span class="badge b-hold">보유중</span>';
+      ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div></div></td>
@@ -528,7 +420,7 @@ function openPickForm() {
   document.getElementById('f-cur-cap').value   = '';
   document.getElementById('f-month').value     = selMonth;
   document.getElementById('pickFormModal').style.display = 'flex';
-  setTimeout(() => document.getElementById('f-stock').focus(), 200);
+  setTimeout(() => { initStockSearch(); document.getElementById('f-stock').focus(); }, 200);
 }
 function closePickForm() {
   document.getElementById('pickFormModal').style.display = 'none';

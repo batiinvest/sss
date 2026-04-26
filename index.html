@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <link rel="stylesheet" href="css/style.css?v=20260426">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -173,8 +173,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -246,39 +246,9 @@ document.getElementById('pickModal').addEventListener('click', e => {
 });
 
 // ── 공통: 종목 검색 드롭다운 생성
-function makeStockDD(input, ddEl, onSelect) {
-  input.oninput = () => {
-    clearTimeout(_pmTimers[input.id]);
-    const q = input.value.trim();
-    if (q.length < 2) { ddEl.style.display = 'none'; return; }
-    _pmTimers[input.id] = setTimeout(async () => {
-      const { data } = await sb.from('stock_prices')
-        .select('stock_code,stock_name,market,price,change_rate,market_cap')
-        .or('stock_name.ilike.%' + q + '%,stock_code.ilike.%' + q + '%')
-        .gt('price', 0).order('market_cap', { ascending:false, nullsFirst:false }).limit(12);
-      ddEl.innerHTML = '';
-      if (!data?.length) {
-        ddEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted);">검색 결과 없음</div>';
-        ddEl.style.display = 'block'; return;
-      }
-      data.forEach(s => {
-        const item = document.createElement('div');
-        item.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:9px 14px;cursor:pointer;border-bottom:0.5px solid var(--border);font-size:13px;';
-        const sign = (s.change_rate||0) >= 0 ? '+' : '';
-        const cl   = (s.change_rate||0) >= 0 ? '#0f6e56' : '#a32d2d';
-        item.innerHTML =
-          '<div><span style="font-weight:500;">' + s.stock_name + '</span>' +
-          ' <span style="color:var(--muted);font-size:11px;">' + s.stock_code + ' · ' + s.market + '</span></div>' +
-          '<div style="text-align:right;"><div style="font-weight:500;">' + (s.price||0).toLocaleString() + '원</div>' +
-          '<div style="font-size:11px;color:' + cl + ';">' + sign + (s.change_rate||0).toFixed(2) + '%</div></div>';
-        item.addEventListener('mouseenter', () => item.style.background = 'var(--bg)');
-        item.addEventListener('mouseleave', () => item.style.background = '');
-        item.addEventListener('click', () => { ddEl.style.display = 'none'; onSelect(s); });
-        ddEl.appendChild(item);
-      });
-      ddEl.style.display = 'block';
-    }, 250);
-  };
+// makeStockDD → db.js의 bindStockSearch로 위임 (하위호환)
+function makeStockDD(input, ddEl, onSelect, opts = {}) {
+  bindStockSearch(input, ddEl, onSelect, opts);
 }
 
 // ── 발표종목 팝업 패널
@@ -488,13 +458,7 @@ async function pickSubmit(memberId) {
   finally { btn.textContent = '탑픽 제출'; btn.disabled = false; }
 }
 
-// 외부 클릭 시 드롭다운 닫기
-document.addEventListener('click', e => {
-  if (!e.target.closest('#pm-input') && !e.target.closest('#pm-dd'))
-    { const dd = document.getElementById('pm-dd'); if (dd) dd.style.display = 'none'; }
-  if (!e.target.closest('#pick-input') && !e.target.closest('#pick-dd'))
-    { const dd = document.getElementById('pick-dd'); if (dd) dd.style.display = 'none'; }
-});
+// 드롭다운 외부 클릭 닫기는 bindStockSearch(db.js)가 처리
 
 // ── 초기화
 async function init() {
@@ -908,8 +872,7 @@ function renderPicksTable(picks, prices) {
       : null;
 
     const statusBadge = p.status === 'sold'
-      ? '<span class="badge b-sold">매도완료</span>'
-      : '<span class="badge b-hold">보유중</span>';
+      ? statusBadge('sold') : statusBadge('hold');
 
     const dayChangeEl = dayChange != null
       ? `<span style="font-size:11px;" class="${rCls(dayChange)}">${dayChange>=0?'+':''}${dayChange}%</span>`
@@ -968,7 +931,7 @@ function renderTradesTable(trades) {
       <td class="muted">${ds}</td>
       <td>${t.members?.name||'-'}</td>
       <td style="font-weight:500;">${t.stock_name}</td>
-      <td>${t.trade_type==='buy'?'<span class="badge b-buy">매수</span>':'<span class="badge b-sell">매도</span>'}</td>
+      <td>${statusBadge(t.trade_type)}</td>
       <td>${won(t.price)}</td>
       <td>${t.quantity}주</td>
       <td>${won(t.price*t.quantity)}</td>

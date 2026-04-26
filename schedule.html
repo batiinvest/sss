@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>투자 스터디 · 일정 관리</title>
+  <title>SSS · 스터디 일정</title>
   <link rel="stylesheet" href="css/style.css">
   <style>
     .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
@@ -310,8 +310,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260420"></script>
-<script src="js/db.js?v=20260420"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 // 타임존 안전한 날짜 문자열
 function toDateStr(date) {
@@ -675,7 +675,7 @@ function renderMemberPresPanel() {
       'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
       'box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;';
 
-    input.oninput = () => memberStockSearch(input, dd);
+    initMemberStockSearch(input, dd);
 
     wrap.appendChild(input);
     wrap.appendChild(dd);
@@ -900,14 +900,9 @@ function memberStockSearch(input, dd) {
   input.dataset.stockCode = '';
   if (q.length < 2) { dd.style.display = 'none'; return; }
   _memberSearchTimer = setTimeout(async () => {
-    const { data } = await sb.from('stock_prices')
-      .select('stock_code,stock_name,price,change_rate,market_cap')
-      .or('stock_name.ilike.%' + q + '%,stock_code.ilike.%' + q + '%')
-      .gt('price', 0)
-      .order('market_cap', { ascending: false, nullsFirst: false })
-      .limit(8);
+    const data = await searchStockPrices(q, 8);
     dd.innerHTML = '';
-    if (!data || !data.length) {
+    if (!data.length) {
       dd.innerHTML = '<div style="padding:8px 12px;font-size:12px;color:var(--muted);">검색 결과 없음</div>';
       dd.style.display = 'block';
       return;
@@ -1753,14 +1748,8 @@ function presStockSearch(input) {
   if (q.length < 2) { dd.style.display = 'none'; return; }
 
   presSearchTimer = setTimeout(async () => {
-    const { data } = await sb.from('stock_prices')
-      .select('stock_code,stock_name,market,price,change_rate,market_cap')
-      .or('stock_name.ilike.%' + q + '%,stock_code.ilike.%' + q + '%')
-      .gt('price', 0)
-      .order('market_cap', { ascending: false, nullsFirst: false })
-      .limit(10);
-
-    if (!data || !data.length) { dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">검색 결과 없음</div>'; dd.style.display = 'block'; return; }
+    const data = await searchStockPrices(q, 10);
+    if (!data.length) { dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">검색 결과 없음</div>'; dd.style.display = 'block'; return; }
 
     dd.innerHTML = '';
     data.forEach(s => {

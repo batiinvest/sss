@@ -1,5 +1,5 @@
 // ============================================================
-// js/config.js  v20260424
+// js/config.js  v20260426
 // ⚠️  SUPABASE_URL · SUPABASE_ANON 만 수정하세요
 // ============================================================
 
@@ -27,6 +27,41 @@ const won  = (n) => n != null ? Number(n).toLocaleString('ko-KR') + '원' : '-';
 const pct  = (n, d = 1) => n != null ? (Number(n) >= 0 ? '+' : '') + Number(n).toFixed(d) + '%' : '-';
 const rCls = (n) => n == null ? '' : Number(n) >= 0 ? 'up' : 'dn';
 const avCls = ['av1', 'av2', 'av3', 'av4', 'av1', 'av2'];
+
+// ── 날짜 포맷 (타임스탬프 문자열 또는 Date → 표시용 문자열)
+// fmtDate('2025-04-15T10:30:00') → '2025.4.15'
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = ts instanceof Date ? ts : new Date(ts);
+  if (isNaN(d)) return String(ts).slice(0, 10).replace(/-/g, '.');
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+}
+
+// fmtDateTime('2025-04-15T10:30:00') → '2025.4.15 10:30'
+function fmtDateTime(ts) {
+  if (!ts) return '—';
+  const d = ts instanceof Date ? ts : new Date(ts);
+  if (isNaN(d)) return String(ts).slice(0, 16).replace('T', ' ');
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ` +
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// ── 상태 뱃지 HTML 반환
+// statusBadge('hold') → '<span class="badge b-hold">보유중</span>'
+function statusBadge(status) {
+  const map = {
+    hold:     ['b-hold',  '보유중'],
+    sold:     ['b-sold',  '매도완료'],
+    buy:      ['b-buy',   '매수'],
+    sell:     ['b-sell',  '매도'],
+    planned:  ['b-warn',  '예정'],
+    done:     ['b-sold',  '완료'],
+    regular:  ['b-hold',  '정기'],
+    extra:    ['b-dn',    '추가'],
+  };
+  const [cls, label] = map[status] || ['b-hold', status || '—'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
 
 function toast(msg, ms = 2500) {
   let el = document.getElementById('toast');

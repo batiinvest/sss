@@ -1,5 +1,5 @@
 // ============================================================
-// js/db.js  v20260424
+// js/db.js  v20260426
 // 현재가: stock_prices 테이블에서 읽기 (Edge Function 불필요)
 // ============================================================
 
@@ -173,4 +173,173 @@ async function fetchFundStatus() {
   const { data: picks } = await sb.from('picks_with_trades')
     .select('member_id, buy_price, buy_quantity, status');
   return picks || [];
+}
+
+// ── 내 탑픽 (로그인 멤버 기준)
+async function fetchMyPicks(memberId, filters = {}) {
+  let q = sb.from('picks_with_trades').select('*').eq('member_id', memberId);
+  if (filters.status) q = q.eq('status', filters.status);
+  const { data, error } = await q.order('month', { ascending: false });
+  if (error) { console.error('fetchMyPicks:', error); return []; }
+  return data || [];
+}
+
+// ── 내 발표 히스토리 (로그인 멤버 기준)
+async function fetchMyPresentations(memberId, limit = 20) {
+  const { data, error } = await sb.from('presentations')
+    .select('*')
+    .eq('member_id', memberId)
+    .order('presented_at', { ascending: false })
+    .limit(limit);
+  if (error) { console.error('fetchMyPresentations:', error); return []; }
+  return data || [];
+}
+
+// ── 내 결산 내역
+async function fetchMySettlements(memberId) {
+  const { data, error } = await sb.from('settlements')
+    .select('*, picks(stock_name)')
+    .eq('member_id', memberId)
+    .order('settled_at', { ascending: false });
+  if (error) { console.error('fetchMySettlements:', error); return []; }
+  return data || [];
+}
+
+// ── 스터디 회비
+async function fetchFees(filters = {}) {
+  let q = sb.from('study_fees').select('*, members(name)').order('paid_at', { ascending: false });
+  if (filters.month) q = q.eq('month', filters.month);
+  if (filters.member_id) q = q.eq('member_id', filters.member_id);
+  const { data, error } = await q;
+  if (error) {
+    if (error.code === '42P01') return [];   // 테이블 미생성 무시
+    console.error('fetchFees:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// ── 스터디 지출
+async function fetchExpenses(filters = {}) {
+  let q = sb.from('study_expenses').select('*').order('spent_at', { ascending: false });
+  if (filters.category) q = q.eq('category', filters.category);
+  const { data, error } = await q;
+  if (error) {
+    if (error.code === '42P01') return [];
+    console.error('fetchExpenses:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// ── 연말 결산 내역
+async function fetchAnnualSettlements() {
+  const { data, error } = await sb.from('annual_settlements')
+    .select('*, members(name)')
+    .order('year', { ascending: false });
+  if (error) {
+    if (error.code === '42P01') return [];
+    console.error('fetchAnnualSettlements:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// ── 발표 히스토리 (전체 / 필터)
+async function fetchPresentations(filters = {}) {
+  let q = sb.from('presentations').select('*, members(name)');
+  if (filters.member_id) q = q.eq('member_id', filters.member_id);
+  if (filters.status)    q = q.eq('status', filters.status);
+  if (filters.category)  q = q.eq('category', filters.category);
+  const { data, error } = await q
+    .order('presented_at', { ascending: false })
+    .order('created_at',   { ascending: true });
+  if (error) { console.error('fetchPresentations:', error); return []; }
+  return data || [];
+}
+
+// ════════════════════════════════════════
+// 종목 자동완성 — DB 검색 (공통)
+// ════════════════════════════════════════
+
+/**
+ * 종목명 또는 코드로 stock_prices 검색
+ * @param {string} q - 검색어 (2자 이상)
+ * @param {number} limit - 최대 결과 수 (기본 12)
+ * @returns {Promise<Array>} 종목 배열 { stock_code, stock_name, market, price, change_rate, market_cap }
+ */
+async function searchStockPrices(q, limit = 12) {
+  if (!q || q.trim().length < 2) return [];
+  const { data, error } = await sb.from('stock_prices')
+    .select('stock_code, stock_name, market, price, change_rate, market_cap')
+    .or(`stock_name.ilike.%${q.trim()}%,stock_code.ilike.%${q.trim()}%`)
+    .gt('price', 0)
+    .order('market_cap', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) { console.error('searchStockPrices:', error); return []; }
+  return data || [];
+}
+
+/**
+ * 종목 자동완성 드롭다운 공통 헬퍼
+ * @param {HTMLInputElement} input   - 검색 입력 필드
+ * @param {HTMLElement}      ddEl    - 드롭다운 컨테이너 div
+ * @param {Function}         onSelect - 항목 선택 시 콜백 (stock 객체 전달)
+ * @param {Object}           options  - { delay: 250, limit: 12, showCap: true }
+ */
+function bindStockSearch(input, ddEl, onSelect, options = {}) {
+  const { delay = 250, limit = 12, showCap = true } = options;
+  let timer = null;
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { ddEl.style.display = 'none'; return; }
+
+    timer = setTimeout(async () => {
+      const stocks = await searchStockPrices(q, limit);
+      ddEl.innerHTML = '';
+
+      if (!stocks.length) {
+        ddEl.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--muted);">검색 결과 없음</div>';
+        ddEl.style.display = 'block';
+        return;
+      }
+
+      stocks.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'dd-item';
+        const sign = (s.change_rate || 0) >= 0 ? '+' : '';
+        const cl   = (s.change_rate || 0) >= 0 ? '#0f6e56' : '#a32d2d';
+        const cap  = showCap && s.market_cap ? s.market_cap.toLocaleString() + '억' : '';
+
+        item.innerHTML =
+          `<div>
+            <span style="font-weight:500;">${s.stock_name}</span>
+            <span style="color:var(--muted);font-size:11px;margin-left:6px;">${s.stock_code} · ${s.market}</span>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:500;">${s.price ? s.price.toLocaleString() + '원' : '—'}</div>
+            <div style="font-size:11px;color:${cl};">${sign}${(s.change_rate || 0).toFixed(2)}%
+              ${cap ? `<span style="color:var(--muted);margin-left:4px;">${cap}</span>` : ''}
+            </div>
+          </div>`;
+
+        item.addEventListener('click', () => {
+          ddEl.style.display = 'none';
+          onSelect(s);
+        });
+        ddEl.appendChild(item);
+      });
+
+      ddEl.style.display = 'block';
+    }, delay);
+  });
+
+  // 외부 클릭 시 닫기
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !ddEl.contains(e.target)) {
+      ddEl.style.display = 'none';
+    }
+  }, { passive: true });
 }

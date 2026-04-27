@@ -238,7 +238,7 @@ async function init() {
     const myPresData  = myPresRes.data  || [];
 
     renderMyPicksData(me, myPicksData);
-    renderMyPresData(me, myPresData, {});
+    await renderMyPresData(me, myPresData, {});
 
     // 현재가 갱신 후 평가손익 업데이트 (백그라운드)
     refreshPrices().then(() => {
@@ -368,7 +368,7 @@ function renderMyPicksData(me, picks) {
   }).join('');
 }
 
-function renderMyPresData(me, presData, priceMap) {
+async function renderMyPresData(me, presData, priceMap) {
   const planned   = presData.filter(p => p.status === 'planned');
   const plannedEl = document.getElementById('myPresPlanned');
   if (planned.length) {
@@ -392,9 +392,24 @@ function renderMyPresData(me, presData, priceMap) {
     return;
   }
 
+  // priceMap에 없는 발표종목 코드 추가 조회
+  const missingCodes = [...new Set(
+    done.filter(p => p.stock_code && !priceMap[p.stock_code]).map(p => p.stock_code)
+  )];
+  const mergedMap = { ...priceMap };
+  if (missingCodes.length) {
+    try {
+      const { data: prices } = await sb.from('stock_prices')
+        .select('stock_code,price,change_rate').in('stock_code', missingCodes);
+      for (const r of (prices || [])) {
+        if (r.price > 0) mergedMap[r.stock_code] = { price: r.price, change: r.change_rate };
+      }
+    } catch(e) { console.error('발표종목 현재가 조회 오류:', e); }
+  }
+
   tbody.innerHTML = done.slice(0, 6).map(p => {
     const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
-    const cur       = p.stock_code ? priceMap[p.stock_code] : null;
+    const cur       = p.stock_code ? mergedMap[p.stock_code] : null;
     const curPrice  = cur?.price;
     const ret       = (p.price_at && curPrice) ? ((curPrice - p.price_at) / p.price_at * 100) : null;
     const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
@@ -417,7 +432,7 @@ async function renderMyPicks(me) {
 }
 async function renderMyPresentations(me) {
   const { data } = await sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10);
-  renderMyPresData(me, data || [], globalPriceMap);
+  await renderMyPresData(me, data || [], globalPriceMap);
 }
 
 // ════════════════════════════════════════

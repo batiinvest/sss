@@ -28,8 +28,9 @@ const ModalPres = (() => {
         <option value="stock">기업 분석</option>
         <option value="industry">산업 분석</option>
       </select>
-      <div id="pm-industryWrap" style="display:none;">
-        <input type="text" id="pm-industry" placeholder="산업명 입력" style="font-size:12px;padding:4px 8px;width:140px;" />
+      <div id="pm-industryWrap" style="display:none;flex:1;">
+        <input type="text" id="pm-industry" placeholder="산업명 입력 (예: 반도체)" style="font-size:12px;padding:4px 8px;width:100%;max-width:200px;" />
+        <div id="pm-industry-hint" style="font-size:11px;color:var(--green);margin-top:2px;display:none;">✅ 다른 멤버 입력 기반 자동 채워짐</div>
       </div>
     </div>
     <!-- 입력 패널 -->
@@ -61,20 +62,68 @@ const ModalPres = (() => {
       return;
     }
 
-    const { data } = await sb.from('presentations')
-      .select('*').eq('status','planned').is('schedule_id',null).eq('member_id',_me.id);
-    _drafts = data || [];
+    // 내 draft + 전체 멤버 draft(산업명 공유용) 동시 로드
+    const [myRes, allRes] = await Promise.all([
+      sb.from('presentations')
+        .select('*').eq('status','planned').is('schedule_id',null).eq('member_id',_me.id),
+      sb.from('presentations')
+        .select('category,topic').eq('status','planned').is('schedule_id',null)
+        .order('created_at', { ascending: false }).limit(10)
+    ]);
+    _drafts = myRes.data || [];
 
-    // 이전 발표 기반 카테고리 추천
-    try {
-      const { data: last } = await sb.from('presentations')
-        .select('category').eq('status','done')
-        .order('presented_at', { ascending: false }).limit(1);
-      if (last?.[0]) {
-        document.getElementById('pm-category').value = last[0].category === 'stock' ? 'industry' : 'stock';
-        onCategoryChange();
+    // 이번 세션의 카테고리 + 산업명 추론
+    // 1순위: 전체 draft에서 가장 최근 category/industry
+    // 2순위: 완료된 발표 기준 다음 카테고리 추천
+    const allDrafts = allRes.data || [];
+    let sharedCat      = null;
+    let sharedIndustry = '';
+
+    if (allDrafts.length) {
+      const latestDraft = allDrafts[0];
+      sharedCat = latestDraft.category;
+      if (sharedCat === 'industry' && latestDraft.topic?.includes('>')) {
+        sharedIndustry = latestDraft.topic.split('>')[0].trim();
       }
-    } catch(e) {}
+    }
+
+    // 카테고리 추천 (draft 없을 때만 이전 완료 발표 기반으로)
+    if (!sharedCat) {
+      try {
+        const { data: last } = await sb.from('presentations')
+          .select('category').eq('status','done')
+          .order('presented_at', { ascending: false }).limit(1);
+        if (last?.[0]) sharedCat = last[0].category === 'stock' ? 'industry' : 'stock';
+      } catch(e) {}
+    }
+
+    if (sharedCat) {
+      document.getElementById('pm-category').value = sharedCat;
+      onCategoryChange();
+    }
+
+    // 공유 산업명 자동 입력
+    if (sharedIndustry) {
+      const industryEl = document.getElementById('pm-industry');
+      if (industryEl && !industryEl.value) {
+        industryEl.value = sharedIndustry;
+        // 힌트 표시 (내 draft가 없을 때만 — 다른 사람 기반 자동입력)
+        const myDraft = _drafts.find(p => p.member_id === _me.id);
+        if (!myDraft) {
+          const hintEl = document.getElementById('pm-industry-hint');
+          if (hintEl) hintEl.style.display = 'block';
+        }
+      }
+    }
+
+    // 산업명 변경 시 다른 draft들에도 반영 (실시간 공유)
+    setTimeout(() => {
+      const industryEl = document.getElementById('pm-industry');
+      if (industryEl) {
+        industryEl.addEventListener('change', () => syncIndustryName(industryEl.value.trim()));
+        industryEl.addEventListener('blur',   () => syncIndustryName(industryEl.value.trim()));
+      }
+    }, 0);
 
     renderPanel();
   }
@@ -181,6 +230,23 @@ const ModalPres = (() => {
     if (badge) badge.style.display = 'none';
     ['pm-cur-cap','pm-tgt-cap'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
     const cp = document.getElementById('pm-cap-prev'); if(cp) cp.style.display='none';
+  }
+
+  // ── 산업명 변경 시 내 draft topic 즉시 업데이트
+  async function syncIndustryName(industryName) {
+    if (!_me || !industryName) return;
+    const myDraft = _drafts.find(p => p.member_id === _me.id);
+    if (!myDraft || myDraft.category !== 'industry') return;
+
+    // 현재 topic에서 종목명 추출
+    const stockName = myDraft.topic?.includes('>')
+      ? myDraft.topic.split('>')[1].trim()
+      : (myDraft.topic || '');
+    if (!stockName) return;
+
+    const newTopic = industryName + ' > ' + stockName;
+    await sb.from('presentations').update({ topic: newTopic }).eq('id', myDraft.id);
+    myDraft.topic = newTopic;
   }
 
   // ── Draft 자동 저장

@@ -44,7 +44,22 @@ const ModalPick = (() => {
         '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">멤버 정보를 찾을 수 없습니다.</div>';
       return;
     }
-    renderPanel(me, opts);
+
+    // 전월 탑픽 조회
+    const thisMonth = opts.month || currentMonth();
+    const [y, m]    = thisMonth.split('-').map(Number);
+    const prevMonth = m === 1
+      ? `${y-1}-12`
+      : `${y}-${String(m-1).padStart(2,'0')}`;
+
+    const { data: prevPicks } = await sb.from('picks')
+      .select('stock_name,stock_code,market,target_price,current_cap,target_cap,reason')
+      .eq('member_id', me.id)
+      .eq('month', prevMonth)
+      .limit(1);
+    const prevPick = prevPicks?.[0] || null;
+
+    renderPanel(me, { ...opts, prevPick, thisMonth });
   }
 
   // ── 닫기
@@ -54,10 +69,32 @@ const ModalPick = (() => {
 
   // ── 패널 렌더
   function renderPanel(me, opts = {}) {
-    const mon = opts.month || currentMonth();
-    const panel = document.getElementById('pick-panel');
+    const mon      = opts.thisMonth || opts.month || currentMonth();
+    const prevPick = opts.prevPick || null;
+    const panel    = document.getElementById('pick-panel');
+
+    // 전월 탑픽 유지 배너
+    const prevBanner = prevPick
+      ? `<div id="prev-pick-banner"
+            data-tgt-price="${prevPick.target_price||''}"
+            data-tgt-cap="${prevPick.target_cap||''}"
+            data-reason="${(prevPick.reason||'').replace(/"/g,'&quot;')}"
+            style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:10px 14px;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">전월 탑픽 — 동일 종목 유지?</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div>
+              <span style="font-size:14px;font-weight:500;">${prevPick.stock_name}</span>
+              <span style="color:var(--muted);font-size:12px;margin-left:6px;">${prevPick.stock_code} · ${prevPick.market}</span>
+            </div>
+            <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;"
+              onclick="ModalPick.carryOver()">↩ 이 종목으로 유지</button>
+          </div>
+          ${prevPick.reason ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5;">${prevPick.reason.slice(0,80)}${prevPick.reason.length>80?'…':''}</div>` : ''}
+        </div>`
+      : '';
 
     panel.innerHTML =
+      prevBanner +
       // 대상 월
       '<div style="margin-bottom:10px;">' +
         '<label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">대상 월</label>' +
@@ -147,6 +184,66 @@ const ModalPick = (() => {
     document.getElementById('pick-tgt-cap').addEventListener('input', calcCap);
   }
 
+  // ── 전월 탑픽 그대로 제출
+  async function carryOver() {
+    const banner = document.getElementById('prev-pick-banner');
+    if (!banner) return;
+
+    // 배너에서 종목명/코드 읽기
+    const nameEl = banner.querySelector('span[style*="font-weight:500"]');
+    const codeEl = banner.querySelector('span[style*="color:var(--muted)"]');
+    if (!nameEl || !codeEl) return;
+
+    const stockName = nameEl.textContent.trim();
+    const parts     = codeEl.textContent.trim().split('·');
+    const stockCode = parts[0]?.trim();
+    const market    = parts[1]?.trim() || 'KOSPI';
+
+    if (!stockName || !stockCode) return;
+
+    // 폼에 종목 자동 입력
+    const inp = document.getElementById('pick-input');
+    if (inp) {
+      inp.value = stockName;
+      inp.dataset.stockCode = stockCode;
+      inp.dataset.market    = market;
+    }
+
+    // 배지 표시
+    const badge = document.getElementById('pick-badge');
+    if (badge) {
+      badge.style.display = 'flex';
+      badge.innerHTML =
+        '✅ <strong>' + stockName + '</strong>' +
+        ' <span style="color:var(--muted);font-size:12px;">' + stockCode + ' · ' + market + '</span>' +
+        '<button onclick="ModalPick.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>';
+    }
+
+    // 현재가·시총 최신화
+    try {
+      const { data } = await sb.from('stock_prices')
+        .select('price,market_cap').eq('stock_code', stockCode).single();
+      if (data?.price) {
+        const curP = document.getElementById('pick-cur-price');
+        const curC = document.getElementById('pick-cur-cap');
+        if (curP) { curP.value = data.price; curP.dispatchEvent(new Event('input')); }
+        if (curC && data.market_cap) { curC.value = data.market_cap; curC.dispatchEvent(new Event('input')); }
+      }
+    } catch(e) {}
+
+    // 전월 목표가·시총·매수사유 복사
+    const tgtP   = document.getElementById('pick-tgt-price');
+    const tgtC   = document.getElementById('pick-tgt-cap');
+    const reason = document.getElementById('pick-reason');
+    if (banner.dataset.tgtPrice && tgtP)   { tgtP.value = banner.dataset.tgtPrice; tgtP.dispatchEvent(new Event('input')); }
+    if (banner.dataset.tgtCap   && tgtC)   { tgtC.value = banner.dataset.tgtCap;   tgtC.dispatchEvent(new Event('input')); }
+    if (banner.dataset.reason   && reason) reason.value = banner.dataset.reason;
+
+    // 배너 숨기기 (이미 선택됨)
+    banner.style.display = 'none';
+    toast('전월 탑픽 ' + stockName + ' 이 입력됐습니다. 내용 확인 후 제출하세요.');
+  }
+
   // ── 종목 초기화
   function clearStock() {
     const inp = document.getElementById('pick-input');
@@ -204,7 +301,7 @@ const ModalPick = (() => {
     }
   }
 
-  return { mount, open, close, clearStock, submit };
+  return { mount, open, close, clearStock, submit, carryOver };
 })();
 
 // ── 전역 편의 함수 (기존 호출부 하위호환)

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <title>SSS · 매수/매도</title>
+  <link rel="stylesheet" href="css/style.css?v=20260426">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -130,8 +130,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260426"></script>
+<script src="js/db.js?v=20260426"></script>
 <script>
 let members  = [];
 let allPicks = [];
@@ -184,12 +184,32 @@ function updatePickSelect(type) {
   const memberId = document.getElementById(`${type}-member`).value;
   const pickSel  = document.getElementById(`${type}-pick`);
   pickSel.innerHTML = '<option value="">선택</option>';
-  const filtered = allPicks.filter(p =>
-    p.member_id === memberId &&
-    (type === 'buy' ? p.status !== 'sold' : p.status === 'hold' && p.buy_price)
-  );
+
+  const thisMonth = currentMonth();
+
+  const filtered = allPicks.filter(p => {
+    if (p.member_id !== memberId) return false;
+    if (type === 'buy') {
+      // 매수: 이번 달 탑픽 중 아직 매수 체결 없는 것만
+      return p.month === thisMonth && !p.buy_price && p.status !== 'sold';
+    } else {
+      // 매도: 매수 체결된 보유 중인 것만
+      return p.status === 'hold' && p.buy_price;
+    }
+  });
+
+  if (!filtered.length) {
+    pickSel.innerHTML += type === 'buy'
+      ? '<option value="" disabled>이번 달 미체결 탑픽 없음</option>'
+      : '<option value="" disabled>보유 중인 종목 없음</option>';
+    return;
+  }
+
   filtered.forEach(p => {
-    pickSel.innerHTML += `<option value="${p.pick_id}" data-buy="${p.buy_price}" data-qty="${p.buy_quantity}">${p.stock_name} (${(p.month||'').replace('-','년 ')}월)</option>`;
+    const label = type === 'buy'
+      ? p.stock_name
+      : `${p.stock_name} (매수가 ${p.buy_price ? p.buy_price.toLocaleString() + '원' : '—'})`;
+    pickSel.innerHTML += `<option value="${p.pick_id}" data-buy="${p.buy_price||''}" data-qty="${p.buy_quantity||''}">${label}</option>`;
   });
 }
 
@@ -270,8 +290,7 @@ function renderTrades(trades) {
     return;
   }
   tbody.innerHTML = trades.map(t => {
-    const d = new Date(t.traded_at);
-    const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+    const ds = fmtDateTime(t.traded_at);
     const typeBadge = t.trade_type === 'buy'
       ? '<span class="badge b-buy">매수</span>'
       : '<span class="badge b-sell">매도</span>';

@@ -243,20 +243,17 @@ const ModalPick = (() => {
       }
     } catch(e) {}
 
-    // 전월 목표가·시총·매수사유·매수가 복사
-    const tgtP    = document.getElementById('pick-tgt-price');
-    const tgtC    = document.getElementById('pick-tgt-cap');
-    const reason  = document.getElementById('pick-reason');
-    const buyPRef = document.getElementById('pick-buy-price');
+    // 전월 목표가·시총·매수사유 복사 (매수가는 현재가로 이미 입력됨)
+    const tgtP   = document.getElementById('pick-tgt-price');
+    const tgtC   = document.getElementById('pick-tgt-cap');
+    const reason = document.getElementById('pick-reason');
     if (banner.dataset.tgtPrice && tgtP)   { tgtP.value = banner.dataset.tgtPrice; tgtP.dispatchEvent(new Event('input')); }
     if (banner.dataset.tgtCap   && tgtC)   { tgtC.value = banner.dataset.tgtCap;   tgtC.dispatchEvent(new Event('input')); }
     if (banner.dataset.reason   && reason) reason.value = banner.dataset.reason;
-    if (banner.dataset.buyPrice && buyPRef) {
-      buyPRef.value = banner.dataset.buyPrice;
-      // 이월임을 inp에 마킹
-      const inp = document.getElementById('pick-input');
-      if (inp) inp.dataset.carriedFrom = banner.dataset.fromMonth || '';
-    }
+
+    // 이월 마킹
+    const inp = document.getElementById('pick-input');
+    if (inp) inp.dataset.carriedFrom = banner.dataset.fromMonth || '';
 
     // 배너 숨기기 (이미 선택됨)
     banner.style.display = 'none';

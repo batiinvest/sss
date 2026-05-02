@@ -52,8 +52,8 @@ const ModalPick = (() => {
       ? `${y-1}-12`
       : `${y}-${String(m-1).padStart(2,'0')}`;
 
-    const { data: prevPicks } = await sb.from('picks')
-      .select('stock_name,stock_code,market,target_price,current_cap,target_cap,reason')
+    const { data: prevPicks } = await sb.from('picks_with_trades')
+      .select('stock_name,stock_code,market,target_price,current_cap,target_cap,reason,buy_price,buy_quantity,month')
       .eq('member_id', me.id)
       .eq('month', prevMonth)
       .limit(1);
@@ -78,6 +78,8 @@ const ModalPick = (() => {
       ? `<div id="prev-pick-banner"
             data-tgt-price="${prevPick.target_price||''}"
             data-tgt-cap="${prevPick.target_cap||''}"
+            data-buy-price="${prevPick.buy_price||prevPick.buy_price_ref||''}"
+            data-from-month="${prevPick.month||''}"
             data-reason="${(prevPick.reason||'').replace(/"/g,'&quot;')}"
             style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:10px 14px;margin-bottom:12px;">
           <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">전월 탑픽 — 동일 종목 유지?</div>
@@ -85,6 +87,7 @@ const ModalPick = (() => {
             <div>
               <span style="font-size:14px;font-weight:500;">${prevPick.stock_name}</span>
               <span style="color:var(--muted);font-size:12px;margin-left:6px;">${prevPick.stock_code} · ${prevPick.market}</span>
+              ${prevPick.buy_price ? `<span style="font-size:12px;color:var(--muted);margin-left:6px;">· 매수가 ${prevPick.buy_price.toLocaleString()}원</span>` : ''}
             </div>
             <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;"
               onclick="ModalPick.carryOver()">↩ 이 종목으로 유지</button>
@@ -111,6 +114,13 @@ const ModalPick = (() => {
       // 선택 배지
       '<div id="pick-badge" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:13px;color:var(--green);margin-bottom:10px;">' +
         '<button onclick="ModalPick.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>' +
+      '</div>' +
+      // 매수가 (직접 입력 가능)
+      '<div style="margin-bottom:8px;">' +
+        '<label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">' +
+          '매수가 (원) <span style="font-weight:400;color:var(--muted);">— 이미 보유 중이라면 실제 매수가 입력</span>' +
+        '</label>' +
+        '<input type="number" id="pick-buy-price" placeholder="예: 75500  (없으면 비워두세요)" style="font-size:13px;padding:7px 10px;width:100%;">' +
       '</div>' +
       // 현재가 / 목표주가
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">' +
@@ -231,13 +241,20 @@ const ModalPick = (() => {
       }
     } catch(e) {}
 
-    // 전월 목표가·시총·매수사유 복사
-    const tgtP   = document.getElementById('pick-tgt-price');
-    const tgtC   = document.getElementById('pick-tgt-cap');
-    const reason = document.getElementById('pick-reason');
+    // 전월 목표가·시총·매수사유·매수가 복사
+    const tgtP    = document.getElementById('pick-tgt-price');
+    const tgtC    = document.getElementById('pick-tgt-cap');
+    const reason  = document.getElementById('pick-reason');
+    const buyPRef = document.getElementById('pick-buy-price');
     if (banner.dataset.tgtPrice && tgtP)   { tgtP.value = banner.dataset.tgtPrice; tgtP.dispatchEvent(new Event('input')); }
     if (banner.dataset.tgtCap   && tgtC)   { tgtC.value = banner.dataset.tgtCap;   tgtC.dispatchEvent(new Event('input')); }
     if (banner.dataset.reason   && reason) reason.value = banner.dataset.reason;
+    if (banner.dataset.buyPrice && buyPRef) {
+      buyPRef.value = banner.dataset.buyPrice;
+      // 이월임을 inp에 마킹
+      const inp = document.getElementById('pick-input');
+      if (inp) inp.dataset.carriedFrom = banner.dataset.fromMonth || '';
+    }
 
     // 배너 숨기기 (이미 선택됨)
     banner.style.display = 'none';
@@ -263,11 +280,14 @@ const ModalPick = (() => {
     const inp = document.getElementById('pick-input');
     if (!inp?.value.trim() || !inp?.dataset.stockCode) { toast('종목을 검색해서 선택하세요.'); return; }
 
-    const month    = document.getElementById('pick-month')?.value || currentMonth();
-    const tgtPrice = parseInt(document.getElementById('pick-tgt-price')?.value) || null;
-    const curCap   = parseInt(document.getElementById('pick-cur-cap')?.value)   || null;
-    const tgtCap   = parseInt(document.getElementById('pick-tgt-cap')?.value)   || null;
-    const reason   = document.getElementById('pick-reason')?.value?.trim()      || null;
+    const month       = document.getElementById('pick-month')?.value      || currentMonth();
+    const tgtPrice    = parseInt(document.getElementById('pick-tgt-price')?.value)  || null;
+    const curCap      = parseInt(document.getElementById('pick-cur-cap')?.value)    || null;
+    const tgtCap      = parseInt(document.getElementById('pick-tgt-cap')?.value)    || null;
+    const reason      = document.getElementById('pick-reason')?.value?.trim()       || null;
+    const buyPriceRef = parseInt(document.getElementById('pick-buy-price')?.value)  || null;
+    const curPrice    = parseInt(document.getElementById('pick-cur-price')?.value)  || null;
+    const carriedFrom = inp.dataset.carriedFrom || null;
 
     const { data: already } = await sb.from('picks')
       .select('id').eq('member_id', memberId).eq('month', month).maybeSingle();
@@ -280,19 +300,21 @@ const ModalPick = (() => {
 
     try {
       await submitPick({
-        member_id:    memberId,
+        member_id:     memberId,
         month,
-        stock_name:   inp.value.trim(),
-        stock_code:   inp.dataset.stockCode,
-        market:       inp.dataset.market || 'KOSPI',
-        target_price: tgtPrice,
-        current_cap:  curCap,
-        target_cap:   tgtCap,
+        stock_name:    inp.value.trim(),
+        stock_code:    inp.dataset.stockCode,
+        market:        inp.dataset.market || 'KOSPI',
+        target_price:  tgtPrice,
+        current_cap:   curCap,
+        target_cap:    tgtCap,
         reason,
+        price_at:      curPrice,      // 제출 시점 현재가 → 추천 수익률 기준
+        buy_price_ref: buyPriceRef,   // 실제 보유 매수가 → 이월 실질 수익률
+        carried_from:  carriedFrom,   // 이월 원본 월
       });
       toast('✅ 탑픽이 제출되었습니다!');
       close();
-      // 콜백: 각 페이지가 갱신할 함수를 등록해두면 실행
       if (typeof ModalPick._onSubmit === 'function') ModalPick._onSubmit();
     } catch(e) {
       toast('오류: ' + (e.message || '제출 실패'));

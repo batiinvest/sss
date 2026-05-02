@@ -601,46 +601,74 @@ function renderPicksTable(picks, prices) {
     return;
   }
 
-  // 수익률 계산 후 내림차순 정렬
   const withRate = picks.map(p => {
     const priceInfo = prices[p.stock_code];
     const curPrice  = priceInfo?.price;
-    let rateVal;
-    if (p.status === 'hold' && curPrice && p.buy_price) {
-      rateVal = ((curPrice - p.buy_price) / p.buy_price * 100);
-    } else {
-      rateVal = p.realized_return ?? null;
+
+    // 이번 달 추천 수익률 (price_at 기준)
+    let recRate = null;
+    if (p.price_at && curPrice) {
+      recRate = (curPrice - p.price_at) / p.price_at * 100;
     }
-    return { ...p, _rateVal: rateVal };
+
+    // 실질 보유 수익률 (buy_price 또는 buy_price_ref 기준)
+    const refPrice = p.buy_price || p.buy_price_ref;
+    let holdRate = null;
+    if (p.status === 'hold' && curPrice && refPrice) {
+      holdRate = (curPrice - refPrice) / refPrice * 100;
+    } else if (p.status === 'sold') {
+      holdRate = p.realized_return ?? null;
+    }
+
+    // 정렬 기준: 추천 수익률 우선, 없으면 실질 수익률
+    const sortVal = recRate ?? holdRate;
+    return { ...p, _recRate: recRate, _holdRate: holdRate, _sortVal: sortVal };
   }).sort((a, b) => {
-    // null은 맨 뒤로
-    if (a._rateVal == null && b._rateVal == null) return 0;
-    if (a._rateVal == null) return 1;
-    if (b._rateVal == null) return -1;
-    return b._rateVal - a._rateVal;
+    if (a._sortVal == null && b._sortVal == null) return 0;
+    if (a._sortVal == null) return 1;
+    if (b._sortVal == null) return -1;
+    return b._sortVal - a._sortVal;
   });
 
   tbody.innerHTML = withRate.map((p, i) => {
     const priceInfo  = prices[p.stock_code];
     const curPrice   = priceInfo?.price;
     const dayChange  = priceInfo?.change;
-    const rateVal    = p._rateVal;
-    const rateStr    = pct(rateVal);
-    const upside     = p.target_price && (curPrice || p.buy_price)
-      ? (((p.target_price - (curPrice||p.buy_price)) / (curPrice||p.buy_price)) * 100).toFixed(1)
+    const recRate    = p._recRate;
+    const holdRate   = p._holdRate;
+    const refPrice   = p.buy_price || p.buy_price_ref;
+    const upside     = p.target_price && (curPrice || refPrice)
+      ? (((p.target_price - (curPrice||refPrice)) / (curPrice||refPrice)) * 100).toFixed(1)
       : null;
     const badgeHtml  = p.status === 'sold' ? statusBadge('sold') : statusBadge('hold');
+    const isCarried  = !!p.carried_from;
     const dayChangeEl = dayChange != null
       ? `<span style="font-size:11px;" class="${rCls(dayChange)}">${dayChange>=0?'+':''}${dayChange}%</span>`
       : '<span class="muted" style="font-size:11px;">-</span>';
 
+    // 수익률 셀: 추천 수익률 표시, 이월이면 실질 수익률 괄호 추가
+    let rateCell;
+    if (recRate != null) {
+      rateCell = `<span class="${rCls(recRate)}">${pct(recRate)}</span>`;
+      if (isCarried && holdRate != null && Math.abs(holdRate - recRate) > 0.05) {
+        rateCell += `<br><span style="font-size:11px;color:var(--muted);">이월 ${pct(holdRate)}</span>`;
+      }
+    } else if (holdRate != null) {
+      rateCell = `<span class="${rCls(holdRate)}">${pct(holdRate)}</span>`;
+      if (isCarried) {
+        rateCell += `<br><span style="font-size:11px;color:var(--muted);">이월</span>`;
+      }
+    } else {
+      rateCell = '<span class="muted">-</span>';
+    }
+
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
       <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}</span></td>
-      <td>${won(p.buy_price)}</td>
+      <td>${refPrice ? won(refPrice) : '<span class="muted">-</span>'}</td>
       <td>${curPrice ? won(curPrice) : '<span class="muted">-</span>'}</td>
       <td>${dayChangeEl}</td>
-      <td class="${rCls(rateVal)}">${rateStr}</td>
+      <td>${rateCell}</td>
       <td style="color:var(--green);">${p.target_price ? won(p.target_price)+(upside?`<br><span style="font-size:11px;">(+${upside}%)</span>`:'') : '-'}</td>
       <td>${badgeHtml}</td>
     </tr>`;

@@ -285,9 +285,11 @@ const ModalPick = (() => {
     const curCap      = parseInt(document.getElementById('pick-cur-cap')?.value)    || null;
     const tgtCap      = parseInt(document.getElementById('pick-tgt-cap')?.value)    || null;
     const reason      = document.getElementById('pick-reason')?.value?.trim()       || null;
-    const buyPriceRef = parseInt(document.getElementById('pick-buy-price')?.value)  || null;
+    const buyPriceInp = parseInt(document.getElementById('pick-buy-price')?.value)  || null;
     const curPrice    = parseInt(document.getElementById('pick-cur-price')?.value)  || null;
     const carriedFrom = inp.dataset.carriedFrom || null;
+    // 매수가 직접 입력 시 우선, 없으면 현재가를 추천 시점가로 사용
+    const priceAt     = buyPriceInp || curPrice || null;
 
     const { data: already } = await sb.from('picks')
       .select('id').eq('member_id', memberId).eq('month', month).maybeSingle();
@@ -312,8 +314,7 @@ const ModalPick = (() => {
         current_cap:   curCap,
         target_cap:    tgtCap,
         reason,
-        price_at:      curPrice,      // 제출 시점 현재가 → 추천 수익률 기준
-        buy_price_ref: buyPriceRef,   // 실제 보유 매수가 → 이월 실질 수익률
+        price_at:      priceAt,       // 매수가 입력 시 해당 값, 없으면 현재가
         carried_from:  carriedFrom,   // 이월 원본 월
       });
       toast('✅ 탑픽이 제출되었습니다!');

@@ -636,7 +636,7 @@ function renderPicksTable(picks, prices) {
     const dayChange  = priceInfo?.change;
     const recRate    = p._recRate;
     const holdRate   = p._holdRate;
-    const refPrice   = p.buy_price || p.buy_price_ref;
+    const refPrice   = p.buy_price || p.price_at;
     const upside     = p.target_price && (curPrice || refPrice)
       ? (((p.target_price - (curPrice||refPrice)) / (curPrice||refPrice)) * 100).toFixed(1)
       : null;

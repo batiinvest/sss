@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260426">
+  <link rel="stylesheet" href="css/style.css?v=20260427">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -173,8 +173,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260426"></script>
-<script src="js/db.js?v=20260426"></script>
+<script src="js/config.js?v=20260427"></script>
+<script src="js/db.js?v=20260427"></script>
 <script src="js/modal-pick.js?v=20260427"></script>
 <script src="js/modal-pres.js?v=20260427"></script>
 <script>
@@ -337,15 +337,24 @@ function renderMyPicksData(me, picks) {
     const basePrice = p.price_at || p.buy_price;
 
     // price_at 기준 수익률 (이번 달 성과)
-    const pnl      = (basePrice && p.buy_quantity && curPrice)
+    const pnl     = (basePrice && p.buy_quantity && curPrice)
       ? (curPrice - basePrice) * p.buy_quantity : null;
-    const pnlRate  = (basePrice && curPrice)
+    const pnlRate = (basePrice && curPrice)
       ? ((curPrice - basePrice) / basePrice * 100) : null;
 
-    // 실제 매수가(buy_price) 기준 수익률 — 이월(carried_from)이고 buy_price가 다를 때만
-    const isCarried  = !!p.carried_from;
-    const realBuy    = p.buy_price;
-    const realRate   = (isCarried && realBuy && curPrice && realBuy !== basePrice)
+    // 실제 보유 수익률 — 이월인 경우 원본 월 탑픽의 buy_price로 계산
+    const isCarried = !!p.carried_from;
+    let realBuy  = p.buy_price; // trades 체결가 (이월 픽엔 없음)
+    if (isCarried && !realBuy && p.carried_from) {
+      // 같은 종목의 이전 픽 중 buy_price 있는 것 찾기
+      const origPick = picks.find(op =>
+        op.stock_code === p.stock_code &&
+        op.month === p.carried_from &&
+        op.buy_price
+      );
+      realBuy = origPick?.buy_price || null;
+    }
+    const realRate = (isCarried && realBuy && curPrice && realBuy !== basePrice)
       ? ((curPrice - realBuy) / realBuy * 100) : null;
 
     const upside   = (p.target_price && curPrice) ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
@@ -366,7 +375,7 @@ function renderMyPicksData(me, picks) {
           <div style="color:var(--muted);margin-bottom:2px;">매수가</div>
           <div style="font-weight:500;">${basePrice ? basePrice.toLocaleString()+'원' : '—'}</div>
           ${isCarried && realBuy && realBuy !== basePrice
-            ? `<div style="font-size:10px;color:var(--muted);">실제 ${realBuy.toLocaleString()}원</div>` : ''}
+            ? `<div style="font-size:10px;color:var(--muted);">(${p.carried_from?.replace('-','년 ')}월 ${realBuy.toLocaleString()}원)</div>` : ''}
         </div>
         <div>
           <div style="color:var(--muted);margin-bottom:2px;">현재가</div>
@@ -377,15 +386,10 @@ function renderMyPicksData(me, picks) {
         <div>
           <div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
           <div style="font-weight:500;${pnlColor}">
-            ${pnl !== null
-              ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원'
-              : pnlRate !== null ? '' : '—'}
-            ${pnlRate !== null
-              ? `<span style="font-size:${pnl!==null?'10':'13'}px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>`
-              : ''}
+            ${pnlRate !== null ? (pnlRate>=0?'+':'') + pnlRate.toFixed(1) + '%' : '—'}
           </div>
           ${realRate !== null
-            ? `<div style="font-size:10px;color:var(--muted);">실제 ${realRate>=0?'+':''}${realRate.toFixed(1)}%</div>` : ''}
+            ? `<div style="font-size:10px;" class="${rCls(realRate)}">(${realRate>=0?'+':''}${realRate.toFixed(1)}%)</div>` : ''}
         </div>
         <div>
           <div style="color:var(--muted);margin-bottom:2px;">목표가</div>

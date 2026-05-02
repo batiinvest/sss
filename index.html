@@ -337,8 +337,10 @@ function renderMyPicksData(me, picks) {
     const basePrice = p.price_at || p.buy_price;
 
     // price_at 기준 수익률 (이번 달 성과)
-    const pnl      = (basePrice && p.buy_quantity && curPrice) ? (curPrice - basePrice) * p.buy_quantity : null;
-    const pnlRate  = (basePrice && curPrice) ? ((curPrice - basePrice) / basePrice * 100) : null;
+    const pnl      = (basePrice && p.buy_quantity && curPrice)
+      ? (curPrice - basePrice) * p.buy_quantity : null;
+    const pnlRate  = (basePrice && curPrice)
+      ? ((curPrice - basePrice) / basePrice * 100) : null;
 
     // 실제 매수가(buy_price) 기준 수익률 — 이월(carried_from)이고 buy_price가 다를 때만
     const isCarried  = !!p.carried_from;
@@ -375,8 +377,12 @@ function renderMyPicksData(me, picks) {
         <div>
           <div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
           <div style="font-weight:500;${pnlColor}">
-            ${pnl !== null ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원' : '—'}
-            ${pnlRate !== null ? `<span style="font-size:10px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>` : ''}
+            ${pnl !== null
+              ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원'
+              : pnlRate !== null ? '' : '—'}
+            ${pnlRate !== null
+              ? `<span style="font-size:${pnl!==null?'10':'13'}px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>`
+              : ''}
           </div>
           ${realRate !== null
             ? `<div style="font-size:10px;color:var(--muted);">실제 ${realRate>=0?'+':''}${realRate.toFixed(1)}%</div>` : ''}

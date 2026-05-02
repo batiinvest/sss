@@ -332,8 +332,20 @@ function renderMyPicksData(me, picks) {
     const cur      = globalPriceMap[p.stock_code];
     const curPrice = cur?.price;
     const dayChg   = cur?.change;
-    const pnl      = (p.buy_price && p.buy_quantity && curPrice) ? (curPrice - p.buy_price) * p.buy_quantity : null;
-    const pnlRate  = (p.buy_price && curPrice) ? ((curPrice - p.buy_price) / p.buy_price * 100) : null;
+
+    // 매수가: price_at(이번 달 입력가) 우선, 없으면 trades 체결가
+    const basePrice = p.price_at || p.buy_price;
+
+    // price_at 기준 수익률 (이번 달 성과)
+    const pnl      = (basePrice && p.buy_quantity && curPrice) ? (curPrice - basePrice) * p.buy_quantity : null;
+    const pnlRate  = (basePrice && curPrice) ? ((curPrice - basePrice) / basePrice * 100) : null;
+
+    // 실제 매수가(buy_price) 기준 수익률 — 이월(carried_from)이고 buy_price가 다를 때만
+    const isCarried  = !!p.carried_from;
+    const realBuy    = p.buy_price;
+    const realRate   = (isCarried && realBuy && curPrice && realBuy !== basePrice)
+      ? ((curPrice - realBuy) / realBuy * 100) : null;
+
     const upside   = (p.target_price && curPrice) ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
     const pnlColor = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
     const dayColor = dayChg  === null ? '' : dayChg  >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
@@ -343,26 +355,39 @@ function renderMyPicksData(me, picks) {
         <div>
           <span style="font-size:14px;font-weight:500;">${p.stock_name}</span>
           <span style="font-size:11px;color:var(--muted);margin-left:6px;">${p.stock_code||''} · ${(p.month||'').replace('-','년 ')}월</span>
+          ${isCarried ? '<span style="font-size:10px;background:var(--amberbg);color:var(--amber);padding:1px 5px;border-radius:3px;margin-left:4px;">이월</span>' : ''}
         </div>
         <span class="badge b-hold">보유중</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
-        <div><div style="color:var(--muted);margin-bottom:2px;">매수가</div>
-          <div style="font-weight:500;">${p.buy_price ? p.buy_price.toLocaleString()+'원' : '—'}</div></div>
-        <div><div style="color:var(--muted);margin-bottom:2px;">현재가</div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">매수가</div>
+          <div style="font-weight:500;">${basePrice ? basePrice.toLocaleString()+'원' : '—'}</div>
+          ${isCarried && realBuy && realBuy !== basePrice
+            ? `<div style="font-size:10px;color:var(--muted);">실제 ${realBuy.toLocaleString()}원</div>` : ''}
+        </div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">현재가</div>
           <div style="font-weight:500;">${curPrice ? curPrice.toLocaleString()+'원' : '—'}
             ${dayChg != null ? `<span style="font-size:10px;${dayColor}">(${dayChg>=0?'+':''}${Number(dayChg).toFixed(1)}%)</span>` : ''}
-          </div></div>
-        <div><div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
+          </div>
+        </div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
           <div style="font-weight:500;${pnlColor}">
             ${pnl !== null ? (pnl>=0?'+':'')+pnl.toLocaleString()+'원' : '—'}
             ${pnlRate !== null ? `<span style="font-size:10px;">(${pnlRate>=0?'+':''}${pnlRate.toFixed(1)}%)</span>` : ''}
-          </div></div>
-        <div><div style="color:var(--muted);margin-bottom:2px;">목표가</div>
+          </div>
+          ${realRate !== null
+            ? `<div style="font-size:10px;color:var(--muted);">실제 ${realRate>=0?'+':''}${realRate.toFixed(1)}%</div>` : ''}
+        </div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:2px;">목표가</div>
           <div style="font-weight:500;color:var(--green);">
             ${p.target_price ? p.target_price.toLocaleString()+'원' : '—'}
             ${upside !== null ? `<span style="font-size:10px;">(+${upside}%)</span>` : ''}
-          </div></div>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');

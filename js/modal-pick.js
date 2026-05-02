@@ -252,7 +252,6 @@ const ModalPick = (() => {
     if (banner.dataset.reason   && reason) reason.value = banner.dataset.reason;
 
     // 이월 마킹
-    const inp = document.getElementById('pick-input');
     if (inp) inp.dataset.carriedFrom = banner.dataset.fromMonth || '';
 
     // 배너 숨기기 (이미 선택됨)

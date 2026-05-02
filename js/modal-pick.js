@@ -229,14 +229,16 @@ const ModalPick = (() => {
         '<button onclick="ModalPick.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>';
     }
 
-    // 현재가·시총 최신화
+    // 현재가 조회 후 매수가·시총 자동 입력
     try {
       const { data } = await sb.from('stock_prices')
         .select('price,market_cap').eq('stock_code', stockCode).single();
       if (data?.price) {
-        const curP = document.getElementById('pick-cur-price');
-        const curC = document.getElementById('pick-cur-cap');
-        if (curP) { curP.value = data.price; curP.dispatchEvent(new Event('input')); }
+        const curP  = document.getElementById('pick-cur-price');
+        const curC  = document.getElementById('pick-cur-cap');
+        const buyP  = document.getElementById('pick-buy-price'); // 매수가 = 현재가
+        if (curP)  { curP.value  = data.price; curP.dispatchEvent(new Event('input')); }
+        if (buyP)  { buyP.value  = data.price; }  // 유지 시 매수가 = 오늘 현재가
         if (curC && data.market_cap) { curC.value = data.market_cap; curC.dispatchEvent(new Event('input')); }
       }
     } catch(e) {}

@@ -292,7 +292,10 @@ const ModalPick = (() => {
     const { data: already } = await sb.from('picks')
       .select('id').eq('member_id', memberId).eq('month', month).maybeSingle();
     if (already) {
-      if (!confirm(month.replace('-','년 ') + '월 탑픽을 이미 제출하셨습니다. 추가 제출할까요?')) return;
+      if (!confirm(month.replace('-','년 ') + '월 탑픽을 이미 제출하셨습니다.\n기존 탑픽을 삭제하고 새 종목으로 변경할까요?')) return;
+      // 기존 탑픽 삭제 (연결된 trades는 pick_id FK가 있으므로 확인)
+      const { error: delErr } = await sb.from('picks').delete().eq('id', already.id);
+      if (delErr) { toast('기존 탑픽 삭제 오류: ' + delErr.message); return; }
     }
 
     const btn = document.getElementById('pick-submit-btn');

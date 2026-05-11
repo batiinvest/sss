@@ -845,9 +845,12 @@ function renderMemberPresPanel() {
       }
 
     } else {
-      // 종목 미입력 → 검색 입력창
+      // 종목 미입력 → 검색 입력창 + 직접 입력 버튼
       const wrap = document.createElement('div');
-      wrap.style.cssText = 'flex:1;position:relative;';
+      wrap.style.cssText = 'flex:1;position:relative;display:flex;gap:4px;align-items:center;';
+
+      const searchWrap = document.createElement('div');
+      searchWrap.style.cssText = 'flex:1;position:relative;';
 
       const input = document.createElement('input');
       input.type = 'text'; input.placeholder = '종목 검색...';
@@ -863,6 +866,44 @@ function renderMemberPresPanel() {
       dd.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:400;' +
         'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
         'box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;';
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && input.value.trim()) {
+          // 드롭다운에 아무것도 없으면 직접 입력으로 처리
+          if (dd.style.display === 'none' || !dd.children.length) {
+            manualBtn.click();
+          }
+        }
+      });
+
+      // 직접 입력 버튼
+      const manualBtn = document.createElement('button');
+      manualBtn.className = 'btn';
+      manualBtn.style.cssText = 'font-size:11px;padding:3px 7px;flex-shrink:0;white-space:nowrap;color:var(--muted);';
+      manualBtn.textContent = '직접 입력';
+      manualBtn.title = '검색 안 되는 종목 (해외주식 등) 직접 입력';
+      manualBtn.onclick = async () => {
+        const stockName = input.value.trim();
+        if (!stockName) { toast('종목명을 먼저 입력하세요.'); input.focus(); return; }
+        const cat      = document.getElementById('thisTurnCategory').value;
+        const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
+        const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
+        const payload  = {
+          member_id: m.id, status: 'planned',
+          topic, category: cat,
+          stock_code: null, price_at: null, market_cap_at: null,
+        };
+        const { error } = await sb.from('presentations').insert(payload);
+        if (error) { toast('저장 오류: ' + error.message); return; }
+        presentations = await sb.from('presentations')
+          .select('*, members(name)').order('created_at').then(r => r.data || []);
+        renderPresOrderCalendar(); renderPresScheduleList();
+        renderMemberPresPanel();
+        const newDraft = presentations.find(p =>
+          p.member_id === m.id && p.status === 'planned' && !p.schedule_id
+        );
+        if (newDraft) openPresEditModal(m, newDraft);
+      };
 
       // 종목 선택 시 → draft 저장 후 재렌더
       bindStockSearch(input, dd, async s => {
@@ -882,15 +923,16 @@ function renderMemberPresPanel() {
           .select('*, members(name)').order('created_at').then(r => r.data || []);
         renderPresOrderCalendar(); renderPresScheduleList();
         renderMemberPresPanel();
-        // 바로 편집 모달 열기
         const newDraft = presentations.find(p =>
           p.member_id === m.id && p.status === 'planned' && !p.schedule_id
         );
         if (newDraft) openPresEditModal(m, newDraft);
       }, { limit: 8 });
 
-      wrap.appendChild(input);
-      wrap.appendChild(dd);
+      searchWrap.appendChild(input);
+      searchWrap.appendChild(dd);
+      wrap.appendChild(searchWrap);
+      wrap.appendChild(manualBtn);
       rightArea.appendChild(wrap);
     }
 

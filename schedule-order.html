@@ -649,6 +649,7 @@ function renderPresOrderCalendar() {
         schedules = await fetchSchedules();
         renderPresOrderCalendar();
         renderPresScheduleList();
+        renderMemberPresPanel();  // 멤버 패널 갱신
         renderUpcoming();
         renderScheduleList();
       });
@@ -1212,6 +1213,7 @@ async function doAssign(scheduleId, dateStr, payload) {
     .select('*, members(name)').order('created_at').then(r => r.data || []);
   schedules = await fetchSchedules();
   renderPresOrderCalendar(); renderPresScheduleList(); renderUpcoming(); renderScheduleList();
+  renderMemberPresPanel();  // 멤버 패널도 갱신 (배정 상태 칩 반영)
 }
 
 document.getElementById('assignDateModal').addEventListener('click', e => {

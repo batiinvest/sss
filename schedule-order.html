@@ -306,6 +306,20 @@ document.getElementById('presEditModal').addEventListener('click', e => {
   if (e.target === document.getElementById('presEditModal')) closePresEditModal();
 });
 
+// ── 달력 탐색 (sessionStorage로 두 페이지 간 월 상태 공유)
+function _saveCalState() {
+  try { sessionStorage.setItem('sss_cal', JSON.stringify({y:calYear, m:calMonth})); } catch(e){}
+}
+function _loadCalState() {
+  try {
+    const s = sessionStorage.getItem('sss_cal');
+    if (s) { const d = JSON.parse(s); calYear = d.y; calMonth = d.m; }
+  } catch(e){}
+}
+function prevMonth() { calMonth--; if(calMonth<0){calMonth=11;calYear--;} _saveCalState(); }
+function nextMonth() { calMonth++; if(calMonth>11){calMonth=0;calYear++;} _saveCalState(); }
+function goToday()   { const t=new Date(); calYear=t.getFullYear(); calMonth=t.getMonth(); _saveCalState(); }
+
 // ════════════════════════════════════════
 // 이번 턴 설정
 // ════════════════════════════════════════
@@ -1096,6 +1110,7 @@ document.addEventListener('click', (e) => {
 async function init() {
   await requireAuth();
   checkDBConnection();
+  _loadCalState();   // 일정 관리에서 이동한 달 상태 복원
 
   try {
     await loadSharedData();   // js/schedule-shared.js

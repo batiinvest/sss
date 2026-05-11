@@ -681,18 +681,30 @@ function renderPicksTable(picks, prices) {
       ? `<span style="font-size:11px;" class="${rCls(dayChange)}">${dayChange>=0?'+':''}${dayChange}%</span>`
       : '<span class="muted" style="font-size:11px;">-</span>';
 
-    // 수익률 셀: 추천 수익률 표시, 이월이면 실질 수익률 괄호 추가
+    // 이월 시 원본 월 실질 수익률 계산
+    let origRate = null;
+    if (isCarried && p.carried_from && curPrice) {
+      // allCurrentPicks(보유 중 전체)에서 원본 월 + 같은 종목의 buy_price 찾기
+      const origPick = (allCurrentPicks || []).find(op =>
+        op.member_id === p.member_id &&
+        op.month === p.carried_from &&
+        op.stock_code === p.stock_code &&
+        op.buy_price
+      );
+      if (origPick?.buy_price) {
+        origRate = (curPrice - origPick.buy_price) / origPick.buy_price * 100;
+      }
+    }
+
+    // 수익률 셀
     let rateCell;
     if (recRate != null) {
       rateCell = `<span class="${rCls(recRate)}">${pct(recRate)}</span>`;
-      if (isCarried && holdRate != null && Math.abs(holdRate - recRate) > 0.05) {
-        rateCell += `<br><span style="font-size:11px;color:var(--muted);">이월 ${pct(holdRate)}</span>`;
+      if (isCarried && origRate != null) {
+        rateCell += `<br><span style="font-size:11px;color:var(--muted);">(${pct(origRate)})</span>`;
       }
     } else if (holdRate != null) {
       rateCell = `<span class="${rCls(holdRate)}">${pct(holdRate)}</span>`;
-      if (isCarried) {
-        rateCell += `<br><span style="font-size:11px;color:var(--muted);">이월</span>`;
-      }
     } else {
       rateCell = '<span class="muted">-</span>';
     }

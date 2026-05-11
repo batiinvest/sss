@@ -1,5 +1,5 @@
 // ============================================================
-// js/db.js  v20260426
+// js/db.js  v20260427
 // 현재가: stock_prices 테이블에서 읽기 (Edge Function 불필요)
 // ============================================================
 
@@ -342,4 +342,13 @@ function bindStockSearch(input, ddEl, onSelect, options = {}) {
       ddEl.style.display = 'none';
     }
   }, { passive: true });
+}
+
+// ── app_config: 키-값 설정 저장소
+async function getConfig(key) {
+  const { data } = await sb.from('app_config').select('value').eq('key', key).maybeSingle();
+  return data?.value ?? null;
+}
+async function setConfig(key, value) {
+  await sb.from('app_config').upsert({ key, value }, { onConflict: 'key' });
 }

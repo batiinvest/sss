@@ -225,6 +225,7 @@
 <script src="js/schedule-shared.js?v=20260427"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
+let presOrder = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
 
 
 // ════════════════════════════════════════
@@ -582,16 +583,12 @@ function renderMemberPresPanel() {
 
   panel.innerHTML = '';
 
-  // memberOrder: 표시 순서 배열 (처음엔 members 순서 그대로)
-  if (!panel._orderInitialized) {
-    panel._order = members.map(m => m.id);
-    panel._orderInitialized = true;
-  }
-  // 삭제된 멤버 제거, 새 멤버 추가
-  panel._order = panel._order.filter(id => members.find(m => m.id === id));
-  members.forEach(m => { if (!panel._order.includes(m.id)) panel._order.push(m.id); });
+  // 전역 순서 배열 사용 (init에서 DB로부터 불러옴)
+  // 삭제된 멤버 제거, 신규 멤버 추가
+  presOrder = presOrder.filter(id => members.find(m => m.id === id));
+  members.forEach(m => { if (!presOrder.includes(m.id)) presOrder.push(m.id); });
 
-  const orderedMembers = panel._order.map(id => members.find(m => m.id === id)).filter(Boolean);
+  const orderedMembers = presOrder.map(id => members.find(m => m.id === id)).filter(Boolean);
   const avColors = ['av1','av2','av3','av4','av1','av2'];
 
   panel.innerHTML = '';
@@ -607,17 +604,17 @@ function renderMemberPresPanel() {
     const upBtn = document.createElement('button');
     upBtn.className = 'order-btn'; upBtn.textContent = '▲'; upBtn.title = '위로';
     upBtn.disabled = idx === 0;
-    upBtn.onclick = () => {
-      const arr = panel._order;
-      [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+    upBtn.onclick = async () => {
+      [presOrder[idx-1], presOrder[idx]] = [presOrder[idx], presOrder[idx-1]];
+      await setConfig('pres_order', presOrder);
       renderMemberPresPanel();
     };
     const dnBtn = document.createElement('button');
     dnBtn.className = 'order-btn'; dnBtn.textContent = '▼'; dnBtn.title = '아래로';
     dnBtn.disabled = idx === orderedMembers.length - 1;
-    dnBtn.onclick = () => {
-      const arr = panel._order;
-      [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+    dnBtn.onclick = async () => {
+      [presOrder[idx], presOrder[idx+1]] = [presOrder[idx+1], presOrder[idx]];
+      await setConfig('pres_order', presOrder);
       renderMemberPresPanel();
     };
     orderBtns.appendChild(upBtn);
@@ -1114,9 +1111,13 @@ async function init() {
 
   try {
     await loadSharedData();   // js/schedule-shared.js
+    // 발표자 순서 DB에서 불러오기
+    const savedOrder = await getConfig('pres_order');
+    presOrder = Array.isArray(savedOrder) ? savedOrder : members.map(m => m.id);
   } catch(e) {
     console.error('데이터 로드 오류:', e.message);
     schedules = []; members = []; presentations = [];
+    presOrder = members.map(m => m.id);
   }
 
   guessNextTurn();

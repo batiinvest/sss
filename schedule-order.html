@@ -702,39 +702,41 @@ function renderMemberPresPanel() {
           rightArea.appendChild(unassignBtn);
         }
       } else {
-        // 미배정 → 드래그 핸들 + 모바일 배정 버튼
-        const handle = document.createElement('div');
-        handle.draggable = true;
-        handle.title = '달력으로 드래그';
-        handle.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;user-select:none;flex-shrink:0;';
-        handle.textContent = '⠿';
-        handle.addEventListener('dragstart', e => {
-          e.dataTransfer.effectAllowed = 'copy';
-          e.dataTransfer.setData('memberId',   m.id);
-          e.dataTransfer.setData('memberName', m.name);
-          e.dataTransfer.setData('stockName',  topicName);
-          e.dataTransfer.setData('stockCode',  draft.stock_code || '');
-          e.dataTransfer.setData('priceAt',    draft.price_at   || '');
-          e.dataTransfer.setData('capAt',      draft.market_cap_at || '');
-          e.dataTransfer.setData('targetCap',  draft.target_cap || '');
-          e.dataTransfer.setData('reason',     draft.reason     || '');
-          e.dataTransfer.setData('risk',       draft.risk       || '');
-          handle.style.opacity = '0.3';
-        });
-        handle.addEventListener('dragend', () => handle.style.opacity = '1');
+        // 미배정 → 관리자만 드래그 핸들 + 배정 버튼 표시
+        if (adminUser) {
+          const handle = document.createElement('div');
+          handle.draggable = true;
+          handle.title = '달력으로 드래그';
+          handle.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;user-select:none;flex-shrink:0;';
+          handle.textContent = '⠿';
+          handle.addEventListener('dragstart', e => {
+            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.setData('memberId',   m.id);
+            e.dataTransfer.setData('memberName', m.name);
+            e.dataTransfer.setData('stockName',  topicName);
+            e.dataTransfer.setData('stockCode',  draft.stock_code || '');
+            e.dataTransfer.setData('priceAt',    draft.price_at   || '');
+            e.dataTransfer.setData('capAt',      draft.market_cap_at || '');
+            e.dataTransfer.setData('targetCap',  draft.target_cap || '');
+            e.dataTransfer.setData('reason',     draft.reason     || '');
+            e.dataTransfer.setData('risk',       draft.risk       || '');
+            handle.style.opacity = '0.3';
+          });
+          handle.addEventListener('dragend', () => handle.style.opacity = '1');
 
-        const assignBtn = document.createElement('button');
-        assignBtn.className = 'btn assign-btn-mobile';
-        assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;';
-        assignBtn.textContent = '📅';
-        assignBtn.onclick = () => openAssignModal({
-          memberId: m.id, memberName: m.name, stockName: topicName,
-          stockCode: draft.stock_code, priceAt: draft.price_at,
-          capAt: draft.market_cap_at, targetCap: draft.target_cap,
-          reason: draft.reason, risk: draft.risk,
-        });
-        rightArea.appendChild(handle);
-        rightArea.appendChild(assignBtn);
+          const assignBtn = document.createElement('button');
+          assignBtn.className = 'btn assign-btn-mobile';
+          assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;';
+          assignBtn.textContent = '📅';
+          assignBtn.onclick = () => openAssignModal({
+            memberId: m.id, memberName: m.name, stockName: topicName,
+            stockCode: draft.stock_code, priceAt: draft.price_at,
+            capAt: draft.market_cap_at, targetCap: draft.target_cap,
+            reason: draft.reason, risk: draft.risk,
+          });
+          rightArea.appendChild(handle);
+          rightArea.appendChild(assignBtn);
+        }
       }
 
     } else {

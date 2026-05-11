@@ -631,10 +631,17 @@ function renderMemberPresPanel() {
     nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:48px;flex-shrink:0;';
     nameDiv.textContent = m.name;
 
-    // ── Draft 확인
+    // ── Draft 확인 (미배정 우선, 없으면 배정된 것)
     const draft = presentations.find(p =>
       p.member_id === m.id && p.status === 'planned' && !p.schedule_id
+    ) || presentations.find(p =>
+      p.member_id === m.id && p.status === 'planned' && p.schedule_id
     );
+
+    const isAssigned = draft && !!draft.schedule_id;
+    const assignedDate = isAssigned
+      ? schedules.find(s => s.id === draft.schedule_id)?.event_date || draft.presented_at
+      : null;
 
     // ── 우측 영역: 종목 입력 or 선택 칩
     const rightArea = document.createElement('div');
@@ -648,47 +655,18 @@ function renderMemberPresPanel() {
 
       const chip = document.createElement('div');
       chip.className = 'pres-stock-chip';
+      chip.style.background = isAssigned ? '#e8f4fd' : '';
+      chip.style.borderColor = isAssigned ? '#7ec0f0' : '';
+      chip.style.color       = isAssigned ? '#0c447c' : '';
       chip.title = '클릭하여 편집';
       chip.onclick = () => openPresEditModal(m, draft);
       chip.innerHTML =
-        '<span class="chip-name">✅ ' + topicName + '</span>' +
-        (upside ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
-        (draft.reason ? '<span class="chip-cap" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;" title="' + draft.reason + '">📝</span>' : '');
+        '<span class="chip-name">' + (isAssigned ? '📅 ' : '✅ ') + topicName + '</span>' +
+        (assignedDate ? '<span class="chip-cap" style="color:#185fa5;font-weight:500;">' + assignedDate + '</span>' : '') +
+        (upside && !isAssigned ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
+        (draft.reason ? '<span class="chip-cap" title="' + draft.reason + '">📝</span>' : '');
 
-      // 드래그 핸들
-      const handle = document.createElement('div');
-      handle.draggable = true;
-      handle.title = '달력으로 드래그';
-      handle.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;user-select:none;flex-shrink:0;';
-      handle.textContent = '⠿';
-      handle.addEventListener('dragstart', e => {
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('memberId',   m.id);
-        e.dataTransfer.setData('memberName', m.name);
-        e.dataTransfer.setData('stockName',  topicName);
-        e.dataTransfer.setData('stockCode',  draft.stock_code || '');
-        e.dataTransfer.setData('priceAt',    draft.price_at   || '');
-        e.dataTransfer.setData('capAt',      draft.market_cap_at || '');
-        e.dataTransfer.setData('targetCap',  draft.target_cap || '');
-        e.dataTransfer.setData('reason',     draft.reason     || '');
-        e.dataTransfer.setData('risk',       draft.risk       || '');
-        handle.style.opacity = '0.3';
-      });
-      handle.addEventListener('dragend', () => handle.style.opacity = '1');
-
-      // 배정 버튼 (모바일)
-      const assignBtn = document.createElement('button');
-      assignBtn.className = 'btn assign-btn-mobile';
-      assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;';
-      assignBtn.textContent = '📅';
-      assignBtn.onclick = () => openAssignModal({
-        memberId: m.id, memberName: m.name, stockName: topicName,
-        stockCode: draft.stock_code, priceAt: draft.price_at,
-        capAt: draft.market_cap_at, targetCap: draft.target_cap,
-        reason: draft.reason, risk: draft.risk,
-      });
-
-      // 지우기
+      // 지우기 버튼 (공통)
       const clearBtn = document.createElement('button');
       clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0;flex-shrink:0;';
       clearBtn.textContent = '×';
@@ -701,8 +679,57 @@ function renderMemberPresPanel() {
       };
 
       rightArea.appendChild(chip);
-      rightArea.appendChild(handle);
-      rightArea.appendChild(assignBtn);
+
+      if (isAssigned) {
+        // 배정 완료 → 배정 취소 버튼
+        const unassignBtn = document.createElement('button');
+        unassignBtn.className = 'btn';
+        unassignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;color:var(--muted);';
+        unassignBtn.textContent = '배정 취소';
+        unassignBtn.onclick = async () => {
+          await sb.from('presentations').update({ schedule_id: null, presented_at: null }).eq('id', draft.id);
+          presentations = await sb.from('presentations')
+            .select('*, members(name)').order('created_at').then(r => r.data || []);
+          renderPresOrderCalendar(); renderPresScheduleList();
+          renderMemberPresPanel();
+        };
+        rightArea.appendChild(unassignBtn);
+      } else {
+        // 미배정 → 드래그 핸들 + 모바일 배정 버튼
+        const handle = document.createElement('div');
+        handle.draggable = true;
+        handle.title = '달력으로 드래그';
+        handle.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;user-select:none;flex-shrink:0;';
+        handle.textContent = '⠿';
+        handle.addEventListener('dragstart', e => {
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('memberId',   m.id);
+          e.dataTransfer.setData('memberName', m.name);
+          e.dataTransfer.setData('stockName',  topicName);
+          e.dataTransfer.setData('stockCode',  draft.stock_code || '');
+          e.dataTransfer.setData('priceAt',    draft.price_at   || '');
+          e.dataTransfer.setData('capAt',      draft.market_cap_at || '');
+          e.dataTransfer.setData('targetCap',  draft.target_cap || '');
+          e.dataTransfer.setData('reason',     draft.reason     || '');
+          e.dataTransfer.setData('risk',       draft.risk       || '');
+          handle.style.opacity = '0.3';
+        });
+        handle.addEventListener('dragend', () => handle.style.opacity = '1');
+
+        const assignBtn = document.createElement('button');
+        assignBtn.className = 'btn assign-btn-mobile';
+        assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;';
+        assignBtn.textContent = '📅';
+        assignBtn.onclick = () => openAssignModal({
+          memberId: m.id, memberName: m.name, stockName: topicName,
+          stockCode: draft.stock_code, priceAt: draft.price_at,
+          capAt: draft.market_cap_at, targetCap: draft.target_cap,
+          reason: draft.reason, risk: draft.risk,
+        });
+        rightArea.appendChild(handle);
+        rightArea.appendChild(assignBtn);
+      }
+
       rightArea.appendChild(clearBtn);
 
     } else {

@@ -351,6 +351,25 @@ function renderUpcoming() {
     const dDiff = Math.ceil((d - new Date(new Date().toDateString())) / 86400000);
     const dStr  = dDiff === 0 ? '오늘' : dDiff === 1 ? '내일' : `D-${dDiff}`;
 
+    // 이 일정의 발표자·종목 목록
+    const pres = presentations
+      .filter(p => p.schedule_id === s.id && p.status === 'planned')
+      .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+
+    const presHtml = pres.length
+      ? `<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">
+          ${pres.map((p, i) => {
+            const name  = p.members?.name || '—';
+            const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'—');
+            return `<div style="font-size:12px;display:flex;align-items:center;gap:6px;">
+              <span style="color:var(--muted);min-width:14px;font-size:11px;">${i+1}.</span>
+              <span style="font-weight:500;color:var(--muted);font-size:11px;">${name}</span>
+              <span style="font-size:12px;">${topic}</span>
+            </div>`;
+          }).join('')}
+        </div>`
+      : `<div style="margin-top:4px;font-size:12px;color:var(--hint);">발표자 미배정</div>`;
+
     return `<div class="upcoming-item" onclick="showDetail('${s.id}',event)" style="cursor:pointer;">
       <div class="upcoming-date">
         <div class="upcoming-month">${mon}</div>
@@ -364,7 +383,7 @@ function renderUpcoming() {
         </div>
         <div style="font-weight:500;font-size:14px;">${s.title}</div>
         ${s.event_time ? `<div style="font-size:12px;color:var(--muted);">${s.event_time.slice(0,5)}${s.location?' · '+s.location:''}</div>` : (s.location?`<div style="font-size:12px;color:var(--muted);">${s.location}</div>`:'')}
-        ${s.description ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${s.description}</div>` : ''}
+        ${(s.category === 'stock' || s.category === 'industry') ? presHtml : ''}
       </div>
     </div>`;
   }).join('');

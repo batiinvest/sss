@@ -167,13 +167,19 @@ const ModalPres = (() => {
     panel.innerHTML =
       // 배정 완료 안내
       (isAssigned ? '<div style="padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:12px;color:var(--green);margin-bottom:10px;">📅 <strong>' + (draft.presented_at||'날짜 미정') + '</strong> 발표 배정 완료 · 종목 변경 시 아래에서 수정</div>' : '') +
-      // 종목 검색
+      // 종목 검색 + 직접 입력
       '<div style="position:relative;margin-bottom:10px;">' +
-        '<input type="text" id="pm-input" placeholder="종목명 또는 코드 검색" ' +
-          'style="width:100%;font-size:14px;padding:8px 12px;" value="' + stockName + '" />' +
-        '<div id="pm-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:700;' +
-          'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
-          'box-shadow:0 4px 16px rgba(0,0,0,0.15);max-height:200px;overflow-y:auto;margin-top:2px;"></div>' +
+        '<div style="display:flex;gap:4px;">' +
+          '<div style="flex:1;position:relative;">' +
+            '<input type="text" id="pm-input" placeholder="종목명·코드 검색 또는 직접 입력" ' +
+              'style="width:100%;font-size:14px;padding:8px 12px;" value="' + stockName + '" />' +
+            '<div id="pm-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:700;' +
+              'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
+              'box-shadow:0 4px 16px rgba(0,0,0,0.15);max-height:200px;overflow-y:auto;margin-top:2px;"></div>' +
+          '</div>' +
+          '<button id="pm-manual-btn" class="btn" style="font-size:12px;white-space:nowrap;flex-shrink:0;" ' +
+            'title="검색 안 되는 해외주식 등 직접 입력">직접 입력</button>' +
+        '</div>' +
       '</div>' +
       // 선택 배지
       '<div id="pm-badge" style="display:' + (draft?.stock_code ? 'flex' : 'none') + ';align-items:center;gap:8px;' +
@@ -206,16 +212,38 @@ const ModalPres = (() => {
     const curC    = document.getElementById('pm-cur-cap');
     const tgtC    = document.getElementById('pm-tgt-cap');
     const capPrev = document.getElementById('pm-cap-prev');
+    const badge   = document.getElementById('pm-badge');
 
     inp.dataset.stockCode = draft?.stock_code || '';
     inp.dataset.capAt     = draft?.market_cap_at || '';
+
+    // 직접 입력 버튼 — 검색 안 되는 종목 (해외주식 등)
+    const manualBtn = document.getElementById('pm-manual-btn');
+    const doManualSave = async () => {
+      const name = inp.value.trim();
+      if (!name) { inp.focus(); return; }
+      inp.dataset.stockCode = '';   // stock_code 없이 저장
+      badge.style.display = 'flex';
+      badge.innerHTML =
+        '✅ <strong>' + name + '</strong>' +
+        ' <span style="color:var(--muted);font-size:12px;">직접 입력</span>' +
+        '<button onclick="ModalPres.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>';
+      dd.style.display = 'none';
+      await saveDraft(inp);
+      toast('✅ ' + name + ' 저장됨');
+    };
+    manualBtn.onclick = doManualSave;
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (dd.style.display === 'none' || !dd.querySelector('.dd-item')) doManualSave();
+      }
+    });
 
     // 자동완성
     bindStockSearch(inp, dd, s => {
       inp.value = s.stock_name;
       inp.dataset.stockCode = s.stock_code;
       inp.dataset.capAt     = s.market_cap || '';
-      const badge = document.getElementById('pm-badge');
       badge.style.display = 'flex';
       badge.innerHTML =
         '✅ <strong>' + s.stock_name + '</strong> <span style="color:var(--muted);font-size:12px;">' + s.stock_code + ' · ' + (s.market||'') + '</span>' +

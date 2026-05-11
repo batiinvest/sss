@@ -21,7 +21,35 @@
     .ev-other    { background: var(--bg); color: var(--muted); }
     .ev-dinner   { background: #faeeda; color: #633806; }
     .ev-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
-    .pres-member-row { border-bottom: 0.5px solid var(--border); }
+
+    /* 멤버 패널 컴팩트 */
+    .pres-member-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 4px; border-bottom: 0.5px solid var(--border);
+    }
+    .pres-member-row:last-child { border-bottom: none; }
+    .order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+    .order-btn  {
+      background: none; border: 0.5px solid var(--border); border-radius: 3px;
+      width: 18px; height: 16px; cursor: pointer; font-size: 9px; line-height: 1;
+      color: var(--muted); display: flex; align-items: center; justify-content: center;
+      padding: 0;
+    }
+    .order-btn:hover { background: var(--bg); color: var(--text); }
+    .pres-stock-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--greenbg); border: 0.5px solid #9fe1cb;
+      border-radius: var(--r-md); padding: 4px 8px;
+      font-size: 12px; color: var(--green); cursor: pointer;
+      flex: 1; min-width: 0; overflow: hidden;
+    }
+    .pres-stock-chip:hover { opacity: 0.85; }
+    .pres-stock-chip .chip-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pres-stock-chip .chip-cap  { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    /* 편집 모달 */
+    #presEditModal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:700;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem; }
+    #presEditModal .modal-box { background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:500px;border:0.5px solid var(--border);margin:auto; }
   </style>
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 <style>
@@ -130,6 +158,42 @@
 
 </main></div>
 
+<!-- 종목 상세 편집 모달 -->
+<div id="presEditModal">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div id="presEditModalTitle" style="font-size:15px;font-weight:500;"></div>
+      <button class="btn" onclick="closePresEditModal()" style="font-size:12px;">닫기</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div>
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">현재 시총 (억원)</label>
+        <input type="number" id="edit-cur-cap" placeholder="자동 입력됨" style="font-size:13px;padding:7px 10px;width:100%;">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">목표 시총 (억원)</label>
+        <input type="number" id="edit-tgt-cap" placeholder="예: 10000" style="font-size:13px;padding:7px 10px;width:100%;">
+      </div>
+    </div>
+    <div id="edit-cap-preview" style="display:none;padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:13px;color:var(--green);margin-bottom:10px;"></div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 사유</label>
+      <textarea id="edit-reason" placeholder="매수 근거, 투자 thesis 등" style="font-size:13px;padding:7px 10px;width:100%;min-height:80px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;"></textarea>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 리스크</label>
+      <textarea id="edit-risk" placeholder="주요 리스크 요인" style="font-size:13px;padding:7px 10px;width:100%;min-height:60px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;"></textarea>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:8px;">
+      <button class="btn" style="color:var(--up);border-color:var(--up);font-size:12px;" onclick="clearPresEditStock()">종목 변경</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="closePresEditModal()">취소</button>
+        <button class="btn btn-primary" onclick="savePresEditModal()" id="edit-save-btn">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── 모바일 날짜 배정 모달 -->
 <div id="assignDateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:600;align-items:flex-end;justify-content:center;">
   <div style="background:var(--surface);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:1.25rem;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;">
@@ -162,6 +226,85 @@
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
+
+// ════════════════════════════════════════
+// 종목 상세 편집 모달
+// ════════════════════════════════════════
+let _editDraft = null;
+let _editMember = null;
+
+function openPresEditModal(member, draft) {
+  _editDraft  = draft;
+  _editMember = member;
+
+  const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
+  document.getElementById('presEditModalTitle').textContent = member.name + ' — ' + topicName;
+  document.getElementById('edit-cur-cap').value  = draft.market_cap_at || '';
+  document.getElementById('edit-tgt-cap').value  = draft.target_cap    || '';
+  document.getElementById('edit-reason').value   = draft.reason        || '';
+  document.getElementById('edit-risk').value     = draft.risk          || '';
+
+  // 상승여력 미리보기
+  const calcEditPreview = () => {
+    const c = parseInt(document.getElementById('edit-cur-cap').value);
+    const t = parseInt(document.getElementById('edit-tgt-cap').value);
+    const prev = document.getElementById('edit-cap-preview');
+    if (c > 0 && t > 0) {
+      prev.style.display = 'block';
+      prev.textContent = c.toLocaleString() + '억 → ' + t.toLocaleString() + '억 (+' + ((t-c)/c*100).toFixed(1) + '%)';
+    } else { prev.style.display = 'none'; }
+  };
+  document.getElementById('edit-cur-cap').oninput = calcEditPreview;
+  document.getElementById('edit-tgt-cap').oninput = calcEditPreview;
+  calcEditPreview();
+
+  document.getElementById('presEditModal').style.display = 'flex';
+}
+
+function closePresEditModal() {
+  document.getElementById('presEditModal').style.display = 'none';
+  _editDraft = null; _editMember = null;
+}
+
+async function savePresEditModal() {
+  if (!_editDraft) return;
+  const btn = document.getElementById('edit-save-btn');
+  btn.textContent = '저장 중...'; btn.disabled = true;
+  try {
+    const payload = {
+      market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
+      target_cap:    parseInt(document.getElementById('edit-tgt-cap').value) || null,
+      reason:        document.getElementById('edit-reason').value.trim()     || null,
+      risk:          document.getElementById('edit-risk').value.trim()       || null,
+    };
+    const { error } = await sb.from('presentations').update(payload).eq('id', _editDraft.id);
+    if (error) throw error;
+    presentations = await sb.from('presentations')
+      .select('*, members(name)').order('created_at').then(r => r.data || []);
+    toast('✅ 저장 완료');
+    closePresEditModal();
+    renderMemberPresPanel();
+    renderPresOrderCalendar();
+  } catch(e) {
+    toast('저장 오류: ' + e.message);
+  } finally {
+    btn.textContent = '저장'; btn.disabled = false;
+  }
+}
+
+async function clearPresEditStock() {
+  if (!_editDraft || !confirm('종목을 초기화하고 다시 입력하시겠습니까?')) return;
+  await sb.from('presentations').delete().eq('id', _editDraft.id);
+  presentations = await sb.from('presentations')
+    .select('*, members(name)').order('created_at').then(r => r.data || []);
+  closePresEditModal();
+  renderMemberPresPanel();
+  renderPresOrderCalendar();
+}
+
+document.getElementById('presEditModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('presEditModal')) closePresEditModal();
+});
 
 // ════════════════════════════════════════
 // 이번 턴 설정
@@ -425,235 +568,186 @@ function renderMemberPresPanel() {
 
   panel.innerHTML = '';
 
-  members.forEach((m, mi) => {
-    const avColors = ['av1','av2','av3','av4','av1','av2'];
-    const row = document.createElement('div');
-    row.className = 'pres-member-row';
-    row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);';
+  // memberOrder: 표시 순서 배열 (처음엔 members 순서 그대로)
+  if (!panel._orderInitialized) {
+    panel._order = members.map(m => m.id);
+    panel._orderInitialized = true;
+  }
+  // 삭제된 멤버 제거, 새 멤버 추가
+  panel._order = panel._order.filter(id => members.find(m => m.id === id));
+  members.forEach(m => { if (!panel._order.includes(m.id)) panel._order.push(m.id); });
 
-    // 아바타
+  const orderedMembers = panel._order.map(id => members.find(m => m.id === id)).filter(Boolean);
+  const avColors = ['av1','av2','av3','av4','av1','av2'];
+
+  panel.innerHTML = '';
+  orderedMembers.forEach((m, idx) => {
+    const mi   = members.indexOf(m);
+    const row  = document.createElement('div');
+    row.className = 'pres-member-row';
+    row.dataset.memberId = m.id;
+
+    // ── 순서 변경 버튼 (↑↓)
+    const orderBtns = document.createElement('div');
+    orderBtns.className = 'order-btns';
+    const upBtn = document.createElement('button');
+    upBtn.className = 'order-btn'; upBtn.textContent = '▲'; upBtn.title = '위로';
+    upBtn.disabled = idx === 0;
+    upBtn.onclick = () => {
+      const arr = panel._order;
+      [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+      renderMemberPresPanel();
+    };
+    const dnBtn = document.createElement('button');
+    dnBtn.className = 'order-btn'; dnBtn.textContent = '▼'; dnBtn.title = '아래로';
+    dnBtn.disabled = idx === orderedMembers.length - 1;
+    dnBtn.onclick = () => {
+      const arr = panel._order;
+      [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]];
+      renderMemberPresPanel();
+    };
+    orderBtns.appendChild(upBtn);
+    orderBtns.appendChild(dnBtn);
+
+    // ── 아바타
     const av = document.createElement('div');
     av.className = 'avatar ' + avColors[mi % 6];
     av.style.cssText = 'width:28px;height:28px;font-size:11px;flex-shrink:0;';
     av.textContent = m.name.slice(0, 2);
 
-    // 이름
+    // ── 이름
     const nameDiv = document.createElement('div');
-    nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:52px;flex-shrink:0;';
+    nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:48px;flex-shrink:0;';
     nameDiv.textContent = m.name;
 
-    // 종목 검색 입력
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'flex:1;position:relative;';
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = '종목 검색...';
-    input.style.cssText = 'width:100%;font-size:12px;padding:5px 8px;';
-    input.dataset.memberId   = m.id;
-    input.dataset.memberName = m.name;
-    input.dataset.stockCode  = '';
-    input.dataset.priceAt    = '';
-    input.dataset.capAt      = '';
-
-    // DB의 draft 항목에서 복원
+    // ── Draft 확인
     const draft = presentations.find(p =>
       p.member_id === m.id && p.status === 'planned' && !p.schedule_id
     );
-    if (draft) {
-      const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic || '');
-      input.value = topicName;
-      input.dataset.stockCode = draft.stock_code || '';
-      input.dataset.priceAt   = draft.price_at   || '';
-      input.dataset.capAt     = draft.market_cap_at || '';
-    } else if (saved[m.id]) {
-      input.value = saved[m.id].v;
-      input.dataset.stockCode = saved[m.id].code  || '';
-      input.dataset.priceAt   = saved[m.id].price || '';
-      input.dataset.capAt     = saved[m.id].cap   || '';
-    }
 
-    const dd = document.createElement('div');
-    dd.className = 'pres-stock-dropdown';
-    dd.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:400;' +
-      'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
-      'box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;';
+    // ── 우측 영역: 종목 입력 or 선택 칩
+    const rightArea = document.createElement('div');
+    rightArea.style.cssText = 'flex:1;min-width:0;display:flex;align-items:center;gap:6px;';
 
-    initMemberStockSearch(input, dd);
+    if (draft?.stock_code) {
+      // 종목 선택됨 → 칩으로 표시
+      const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
+      const upside    = draft.target_cap && draft.market_cap_at
+        ? ((draft.target_cap - draft.market_cap_at) / draft.market_cap_at * 100).toFixed(0) : null;
 
-    wrap.appendChild(input);
-    wrap.appendChild(dd);
+      const chip = document.createElement('div');
+      chip.className = 'pres-stock-chip';
+      chip.title = '클릭하여 편집';
+      chip.onclick = () => openPresEditModal(m, draft);
+      chip.innerHTML =
+        '<span class="chip-name">✅ ' + topicName + '</span>' +
+        (upside ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
+        (draft.reason ? '<span class="chip-cap" style="max-width:80px;overflow:hidden;text-overflow:ellipsis;" title="' + draft.reason + '">📝</span>' : '');
 
-    // 드래그 핸들 (데스크톱)
-    const handle = document.createElement('div');
-    handle.draggable = true;
-    handle.title = '달력의 일정 셀로 드래그하세요';
-    handle.style.cssText = 'font-size:20px;color:var(--muted);cursor:grab;padding:0 4px;user-select:none;line-height:1;flex-shrink:0;';
-    handle.textContent = '⠿';
-    handle.addEventListener('dragstart', e => {
-      const stockName = input.value.trim();
-      if (!stockName) { e.preventDefault(); toast('종목을 먼저 입력하세요.'); return; }
-      e.dataTransfer.effectAllowed = 'copy';
-      e.dataTransfer.setData('memberId',   m.id);
-      e.dataTransfer.setData('memberName', m.name);
-      e.dataTransfer.setData('stockName',  stockName);
-      e.dataTransfer.setData('stockCode',  input.dataset.stockCode || '');
-      e.dataTransfer.setData('priceAt',    input.dataset.priceAt   || '');
-      e.dataTransfer.setData('capAt',      input.dataset.capAt     || '');
-      e.dataTransfer.setData('targetCap',  input.dataset.targetCap || '');
-      e.dataTransfer.setData('reason',     input.dataset.reason    || '');
-      e.dataTransfer.setData('risk',       input.dataset.risk      || '');
-      handle.style.opacity = '0.3';
-    });
-    handle.addEventListener('dragend', () => { handle.style.opacity = '1'; });
-
-    // 배정 버튼 (모바일 터치 전용)
-    const assignBtn = document.createElement('button');
-    assignBtn.className = 'btn assign-btn-mobile';
-    assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;flex-shrink:0;white-space:nowrap;';
-    assignBtn.textContent = '📅 배정';
-    assignBtn.onclick = () => {
-      const stockName = input.value.trim();
-      if (!stockName || !input.dataset.stockCode) { toast('종목을 먼저 검색해서 선택하세요.'); return; }
-      openAssignModal({
-        memberId:   m.id,
-        memberName: m.name,
-        stockName,
-        stockCode:  input.dataset.stockCode,
-        priceAt:    input.dataset.priceAt,
-        capAt:      input.dataset.capAt,
-        targetCap:  input.dataset.targetCap,
-        reason:     input.dataset.reason,
-        risk:       input.dataset.risk,
+      // 드래그 핸들
+      const handle = document.createElement('div');
+      handle.draggable = true;
+      handle.title = '달력으로 드래그';
+      handle.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;user-select:none;flex-shrink:0;';
+      handle.textContent = '⠿';
+      handle.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('memberId',   m.id);
+        e.dataTransfer.setData('memberName', m.name);
+        e.dataTransfer.setData('stockName',  topicName);
+        e.dataTransfer.setData('stockCode',  draft.stock_code || '');
+        e.dataTransfer.setData('priceAt',    draft.price_at   || '');
+        e.dataTransfer.setData('capAt',      draft.market_cap_at || '');
+        e.dataTransfer.setData('targetCap',  draft.target_cap || '');
+        e.dataTransfer.setData('reason',     draft.reason     || '');
+        e.dataTransfer.setData('risk',       draft.risk       || '');
+        handle.style.opacity = '0.3';
       });
-    };
+      handle.addEventListener('dragend', () => handle.style.opacity = '1');
 
-    // 지우기 버튼
-    const clearBtn = document.createElement('button');
-    clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 2px;line-height:1;flex-shrink:0;';
-    clearBtn.textContent = '×';
-    clearBtn.title = '입력 초기화';
-    clearBtn.onclick = async () => {
-      const memberId = input.dataset.memberId;
-      const draft = presentations.find(p =>
-        p.member_id === memberId && p.status === 'planned' && !p.schedule_id
-      );
-      if (draft) {
+      // 배정 버튼 (모바일)
+      const assignBtn = document.createElement('button');
+      assignBtn.className = 'btn assign-btn-mobile';
+      assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;';
+      assignBtn.textContent = '📅';
+      assignBtn.onclick = () => openAssignModal({
+        memberId: m.id, memberName: m.name, stockName: topicName,
+        stockCode: draft.stock_code, priceAt: draft.price_at,
+        capAt: draft.market_cap_at, targetCap: draft.target_cap,
+        reason: draft.reason, risk: draft.risk,
+      });
+
+      // 지우기
+      const clearBtn = document.createElement('button');
+      clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0;flex-shrink:0;';
+      clearBtn.textContent = '×';
+      clearBtn.onclick = async () => {
         await sb.from('presentations').delete().eq('id', draft.id);
         presentations = await sb.from('presentations')
           .select('*, members(name)').order('created_at').then(r => r.data || []);
-        renderPresOrderCalendar();
-        renderPresScheduleList();
-        renderUpcoming();
-        renderScheduleList();
-      }
-      input.value = ''; input.dataset.stockCode = '';
-      input.dataset.priceAt = ''; input.dataset.capAt = '';
-      input.dataset.targetCap = ''; input.dataset.reason = ''; input.dataset.risk = '';
-      // 추가 입력 영역 숨김
-      const extraWrap = input.closest('.pres-member-row')?.querySelector('.pres-extra-wrap');
-      if (extraWrap) extraWrap.style.display = 'none';
-    };
+        renderPresOrderCalendar(); renderPresScheduleList();
+        renderMemberPresPanel();
+      };
 
-    // ── 추가 입력 영역 (목표시총 / 투자사유 / 투자리스크)
-    // 종목 선택 후 아래에 펼쳐지는 영역
-    const extraWrap = document.createElement('div');
-    extraWrap.className = 'pres-extra-wrap';
-    extraWrap.style.cssText = 'display:none;padding:8px 0 4px;border-top:0.5px solid var(--border);margin-top:6px;';
+      rightArea.appendChild(chip);
+      rightArea.appendChild(handle);
+      rightArea.appendChild(assignBtn);
+      rightArea.appendChild(clearBtn);
 
-    // 목표 시총 입력
-    const capRow = document.createElement('div');
-    capRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;';
+    } else {
+      // 종목 미입력 → 검색 입력창
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'flex:1;position:relative;';
 
-    const curCapGrp = document.createElement('div');
-    curCapGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">현재 시총 (억원)</label>';
-    const curCapInput = document.createElement('input');
-    curCapInput.type = 'number'; curCapInput.placeholder = '자동 입력됨';
-    curCapInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;';
-    curCapInput.dataset.field = 'curCap';
-    curCapGrp.appendChild(curCapInput);
+      const input = document.createElement('input');
+      input.type = 'text'; input.placeholder = '종목 검색...';
+      input.style.cssText = 'width:100%;font-size:12px;padding:5px 8px;';
+      input.dataset.memberId   = m.id;
+      input.dataset.memberName = m.name;
+      input.dataset.stockCode  = '';
+      input.dataset.priceAt    = '';
+      input.dataset.capAt      = '';
 
-    const tgtCapGrp = document.createElement('div');
-    tgtCapGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">목표 시총 (억원)</label>';
-    const tgtCapInput = document.createElement('input');
-    tgtCapInput.type = 'number'; tgtCapInput.placeholder = '예: 4200000';
-    tgtCapInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;';
-    tgtCapInput.dataset.field = 'targetCap';
+      const dd = document.createElement('div');
+      dd.className = 'pres-stock-dropdown';
+      dd.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:400;' +
+        'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
+        'box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;';
 
-    // 시총 상승여력 미리보기
-    const capPreview = document.createElement('div');
-    capPreview.style.cssText = 'display:none;font-size:11px;color:var(--green);margin-top:3px;';
-    const calcCapPreview = () => {
-      const cur = parseInt(curCapInput.value); const tgt = parseInt(tgtCapInput.value);
-      if (cur > 0 && tgt > 0) {
-        const u = ((tgt - cur) / cur * 100).toFixed(1);
-        capPreview.textContent = cur.toLocaleString() + '억 → ' + tgt.toLocaleString() + '억 (+' + u + '%)';
-        capPreview.style.display = 'block';
-      } else { capPreview.style.display = 'none'; }
-      input.dataset.targetCap = tgtCapInput.value;
-    };
-    tgtCapInput.oninput = calcCapPreview;
-    curCapInput.oninput = calcCapPreview;
+      // 종목 선택 시 → draft 저장 후 재렌더
+      bindStockSearch(input, dd, async s => {
+        const cat      = document.getElementById('thisTurnCategory').value;
+        const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
+        const topic    = (cat === 'industry' && industry) ? industry + ' > ' + s.stock_name : s.stock_name;
+        const payload  = {
+          member_id: m.id, status: 'planned',
+          topic, category: cat,
+          stock_code:    s.stock_code   || null,
+          price_at:      s.price        || null,
+          market_cap_at: s.market_cap   || null,
+        };
+        const { error } = await sb.from('presentations').insert(payload);
+        if (error) { toast('저장 오류: ' + error.message); return; }
+        presentations = await sb.from('presentations')
+          .select('*, members(name)').order('created_at').then(r => r.data || []);
+        renderPresOrderCalendar(); renderPresScheduleList();
+        renderMemberPresPanel();
+        // 바로 편집 모달 열기
+        const newDraft = presentations.find(p =>
+          p.member_id === m.id && p.status === 'planned' && !p.schedule_id
+        );
+        if (newDraft) openPresEditModal(m, newDraft);
+      }, { limit: 8 });
 
-    tgtCapGrp.appendChild(tgtCapInput);
-    tgtCapGrp.appendChild(capPreview);
-    capRow.appendChild(curCapGrp);
-    capRow.appendChild(tgtCapGrp);
-
-    // 투자 사유
-    const reasonGrp = document.createElement('div');
-    reasonGrp.style.cssText = 'margin-bottom:6px;';
-    reasonGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">투자 사유</label>';
-    const reasonInput = document.createElement('textarea');
-    reasonInput.placeholder = '매수 근거, 투자 thesis 등';
-    reasonInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;min-height:56px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;';
-    reasonInput.dataset.field = 'reason';
-    reasonInput.oninput = () => { input.dataset.reason = reasonInput.value; };
-    reasonGrp.appendChild(reasonInput);
-
-    // 투자 리스크
-    const riskGrp = document.createElement('div');
-    riskGrp.innerHTML = '<label style="font-size:11px;color:var(--muted);font-weight:500;display:block;margin-bottom:3px;">투자 리스크</label>';
-    const riskInput = document.createElement('textarea');
-    riskInput.placeholder = '주요 리스크 요인';
-    riskInput.style.cssText = 'font-size:12px;padding:5px 8px;width:100%;min-height:48px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;';
-    riskInput.dataset.field = 'risk';
-    riskInput.oninput = () => { input.dataset.risk = riskInput.value; };
-    riskGrp.appendChild(riskInput);
-
-    extraWrap.appendChild(capRow);
-    extraWrap.appendChild(reasonGrp);
-    extraWrap.appendChild(riskGrp);
-
-    // draft에서 추가 필드 복원
-    if (draft) {
-      if (draft.market_cap_at)    curCapInput.value   = draft.market_cap_at;
-      if (draft.target_cap)       { tgtCapInput.value = draft.target_cap; calcCapPreview(); }
-      if (draft.reason)           reasonInput.value   = draft.reason;
-      if (draft.risk)             riskInput.value     = draft.risk;
-      if (draft.stock_code)       extraWrap.style.display = 'block';
-      input.dataset.targetCap = draft.target_cap || '';
-      input.dataset.reason    = draft.reason     || '';
-      input.dataset.risk      = draft.risk       || '';
+      wrap.appendChild(input);
+      wrap.appendChild(dd);
+      rightArea.appendChild(wrap);
     }
 
-    // 전체 행: 1행(아바타+이름+검색+핸들+X) + 2행(추가 입력)
-    const rowInner = document.createElement('div');
-    rowInner.style.cssText = 'flex:1;min-width:0;';
-
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
-    topRow.appendChild(wrap);
-    topRow.appendChild(handle);
-    topRow.appendChild(assignBtn);
-    topRow.appendChild(clearBtn);
-
-    rowInner.appendChild(topRow);
-    rowInner.appendChild(extraWrap);
-
+    row.appendChild(orderBtns);
     row.appendChild(av);
     row.appendChild(nameDiv);
-    row.appendChild(rowInner);
+    row.appendChild(rightArea);
     panel.appendChild(row);
   });
 }

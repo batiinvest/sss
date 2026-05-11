@@ -346,9 +346,11 @@ function bindStockSearch(input, ddEl, onSelect, options = {}) {
 
 // ── app_config: 키-값 설정 저장소
 async function getConfig(key) {
-  const { data } = await sb.from('app_config').select('value').eq('key', key).maybeSingle();
+  const { data, error } = await sb.from('app_config').select('value').eq('key', key).maybeSingle();
+  if (error) { console.error('getConfig 오류:', error.message); return null; }
   return data?.value ?? null;
 }
 async function setConfig(key, value) {
-  await sb.from('app_config').upsert({ key, value }, { onConflict: 'key' });
+  const { error } = await sb.from('app_config').upsert({ key, value }, { onConflict: 'key' });
+  if (error) { console.error('setConfig 오류:', error.message); toast('설정 저장 오류: ' + error.message); }
 }

@@ -62,15 +62,22 @@ const ModalPres = (() => {
       return;
     }
 
-    // 내 draft + 전체 멤버 draft(산업명 공유용) 동시 로드
-    const [myRes, allRes] = await Promise.all([
+    // 내 draft 로드 (미배정 우선, 없으면 배정된 것도 포함)
+    const [myUnassigned, myAssigned, allRes] = await Promise.all([
       sb.from('presentations')
         .select('*').eq('status','planned').is('schedule_id',null).eq('member_id',_me.id),
+      sb.from('presentations')
+        .select('*').eq('status','planned').not('schedule_id','is',null).eq('member_id',_me.id)
+        .order('created_at', { ascending: false }).limit(1),
       sb.from('presentations')
         .select('category,topic').eq('status','planned').is('schedule_id',null)
         .order('created_at', { ascending: false }).limit(10)
     ]);
-    _drafts = myRes.data || [];
+
+    // 미배정 draft 우선, 없으면 배정된 것
+    const unassigned = myUnassigned.data || [];
+    const assigned   = myAssigned.data   || [];
+    _drafts = unassigned.length ? unassigned : assigned;
 
     // 이번 세션의 카테고리 + 산업명 추론
     // 1순위: 전체 draft에서 가장 최근 category/industry
@@ -145,8 +152,21 @@ const ModalPres = (() => {
     const panel = document.getElementById('pm-memberPanel');
     const draft = _drafts.find(p => p.member_id === _me.id);
     const stockName = draft?.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft?.topic || '');
+    const isAssigned = draft && !!draft.schedule_id;
+
+    // draft 카테고리·산업명 복원
+    if (draft?.category) {
+      const catEl = document.getElementById('pm-category');
+      if (catEl) { catEl.value = draft.category; onCategoryChange(); }
+    }
+    if (draft?.category === 'industry' && draft?.topic?.includes('>')) {
+      const industryEl = document.getElementById('pm-industry');
+      if (industryEl) industryEl.value = draft.topic.split('>')[0].trim();
+    }
 
     panel.innerHTML =
+      // 배정 완료 안내
+      (isAssigned ? '<div style="padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:12px;color:var(--green);margin-bottom:10px;">📅 <strong>' + (draft.presented_at||'날짜 미정') + '</strong> 발표 배정 완료 · 종목 변경 시 아래에서 수정</div>' : '') +
       // 종목 검색
       '<div style="position:relative;margin-bottom:10px;">' +
         '<input type="text" id="pm-input" placeholder="종목명 또는 코드 검색" ' +
@@ -249,11 +269,11 @@ const ModalPres = (() => {
     myDraft.topic = newTopic;
   }
 
-  // ── Draft 자동 저장
+  // ── Draft 자동 저장 (update 우선, 없으면 insert)
   async function saveDraft(inp) {
     if (!_me) return;
     const stockName = inp?.value?.trim();
-    if (!stockName || !inp.dataset.stockCode) return;
+    if (!stockName) return;
 
     const cat      = document.getElementById('pm-category')?.value || 'stock';
     const industry = document.getElementById('pm-industry')?.value?.trim() || '';
@@ -270,6 +290,7 @@ const ModalPres = (() => {
 
     const existing = _drafts.find(p => p.member_id === _me.id);
     if (existing) {
+      // 기존 draft 수정 (배정된 것 포함)
       await sb.from('presentations').update(payload).eq('id', existing.id);
       Object.assign(existing, payload);
     } else {

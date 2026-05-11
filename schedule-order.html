@@ -334,25 +334,127 @@ function onTurnCategoryChange() {
 // 마지막 발표 기준으로 다음 턴 자동 추천
 function guessNextTurn() {
   const guide = document.getElementById('turnGuide');
-  if (!presentations.length) { guide.textContent = ''; return; }
 
-  const last = [...presentations]
-    .filter(p => p.status === 'done' || p.presented_at)
-    .sort((a,b) => (b.presented_at||'').localeCompare(a.presented_at||''))[0];
+  // ── 카테고리 추정 (마지막 완료 발표 기준으로 기업↔산업 교대)
+  const lastDone = [...presentations]
+    .filter(p => p.status === 'done' && p.presented_at)
+    .sort((a,b) => b.presented_at.localeCompare(a.presented_at))[0];
 
-  if (!last) { guide.textContent = ''; return; }
-
-  const lastCat  = last.category || 'stock';
-  const nextCat  = lastCat === 'stock' ? 'industry' : 'stock';
+  const lastCat   = lastDone?.category || 'industry'; // 없으면 기업부터 시작
+  const nextCat   = lastCat === 'stock' ? 'industry' : 'stock';
   const nextLabel = nextCat === 'stock' ? '기업 분석' : '산업 분석';
-
-  guide.innerHTML =
-    '마지막 발표: <strong>' + (lastCat === 'stock' ? '기업 분석' : '산업 분석') + '</strong>' +
-    ' (' + (last.presented_at||'').slice(0,10) + ')' +
-    ' → 이번 추천: <strong style="color:var(--accent);">' + nextLabel + '</strong>';
 
   document.getElementById('thisTurnCategory').value = nextCat;
   onTurnCategoryChange();
+
+  // ── 다음 발표자 계산 (presOrder 기준 사이클)
+  // 완료된 발표에서 presOrder 상 가장 마지막에 발표한 멤버의 인덱스 찾기
+  const doneByMember = {};
+  presentations
+    .filter(p => p.status === 'done' && p.presented_at)
+    .forEach(p => {
+      if (!doneByMember[p.member_id] || p.presented_at > doneByMember[p.member_id]) {
+        doneByMember[p.member_id] = p.presented_at;
+      }
+    });
+
+  // presOrder 순서대로 마지막 발표일 배열
+  const cycleMembers = presOrder
+    .map(id => members.find(m => m.id === id))
+    .filter(Boolean);
+
+  // 사이클에서 마지막으로 발표한 멤버 인덱스 (발표일 기준)
+  let lastIdx = -1;
+  let lastDate = '';
+  cycleMembers.forEach((m, i) => {
+    const d = doneByMember[m.id] || '';
+    if (d > lastDate) { lastDate = d; lastIdx = i; }
+  });
+
+  // 다음 발표자 = lastIdx 다음부터 한 바퀴
+  const nextStart = (lastIdx + 1) % cycleMembers.length;
+  const nextPresenter = cycleMembers[nextStart];
+
+  // 안내 문구
+  let guideHtml = '';
+  if (lastDone) {
+    guideHtml += '마지막 발표: <strong>' + (lastCat === 'stock' ? '기업' : '산업') + '</strong>' +
+      ' (' + lastDone.presented_at.slice(0,10) + ')' +
+      ' → 이번: <strong style="color:var(--accent);">' + nextLabel + '</strong>';
+  } else {
+    guideHtml += '이번 발표: <strong style="color:var(--accent);">' + nextLabel + '</strong>';
+  }
+
+  if (nextPresenter && lastIdx >= 0) {
+    // 다음 1사이클 발표자 순서 표시
+    const cycle = [];
+    for (let i = 0; i < cycleMembers.length; i++) {
+      cycle.push(cycleMembers[(nextStart + i) % cycleMembers.length].name);
+    }
+    guideHtml += ' &nbsp;|&nbsp; 다음 순서: <strong>' + cycle.slice(0,3).join(' → ') + '</strong>';
+    if (cycle.length > 3) guideHtml += ' → …';
+  }
+
+  guide.innerHTML = guideHtml;
+}
+
+// ── 다음 발표 일정에 사이클 기반으로 발표자 자동 배정
+async function autoAssignNextCycle(scheduleId) {
+  if (!adminUser) return;
+  const sched = schedules.find(s => s.id === scheduleId);
+  if (!sched) return;
+
+  // 이미 배정된 발표자 제외
+  const alreadyAssigned = presentations
+    .filter(p => p.schedule_id === scheduleId)
+    .map(p => p.member_id);
+
+  // 사이클에서 다음 발표자 계산
+  const cycleMembers = presOrder
+    .map(id => members.find(m => m.id === id)).filter(Boolean);
+
+  const doneByMember = {};
+  presentations
+    .filter(p => p.status === 'done' && p.presented_at)
+    .forEach(p => {
+      if (!doneByMember[p.member_id] || p.presented_at > doneByMember[p.member_id])
+        doneByMember[p.member_id] = p.presented_at;
+    });
+
+  let lastIdx = -1, lastDate = '';
+  cycleMembers.forEach((m, i) => {
+    const d = doneByMember[m.id] || '';
+    if (d > lastDate) { lastDate = d; lastIdx = i; }
+  });
+
+  const nextStart = (lastIdx + 1) % cycleMembers.length;
+  // 이번 일정에 발표할 멤버 수: 아직 배정 안 된 멤버 중 순서대로
+  // (전체 멤버 수 / 2 씩 배정하거나, 남은 전체 배정 - 선택 가능)
+  // 기본: 이번 일정에 해당 순서의 멤버 1명 배정 (드래그로 추가 배정 가능)
+  const nextMember = cycleMembers[nextStart];
+  if (!nextMember || alreadyAssigned.includes(nextMember.id)) return;
+
+  // 해당 멤버의 draft 찾기
+  const draft = presentations.find(p =>
+    p.member_id === nextMember.id && p.status === 'planned' && !p.schedule_id
+  );
+  if (!draft) {
+    toast(nextMember.name + '님의 발표종목을 먼저 입력해주세요.');
+    return;
+  }
+
+  await sb.from('presentations').update({
+    schedule_id: scheduleId,
+    presented_at: sched.event_date,
+  }).eq('id', draft.id);
+
+  presentations = await sb.from('presentations')
+    .select('*, members(name)').order('created_at').then(r => r.data || []);
+
+  renderPresOrderCalendar();
+  renderPresScheduleList();
+  renderMemberPresPanel();
+  toast('✅ ' + nextMember.name + ' → ' + sched.event_date + ' 자동 배정');
 }
 
 // 초기화: 선택한 일정의 발표 배정 삭제
@@ -609,6 +711,7 @@ function renderMemberPresPanel() {
       [presOrder[idx-1], presOrder[idx]] = [presOrder[idx], presOrder[idx-1]];
       await setConfig('pres_order', presOrder);
       renderMemberPresPanel();
+      guessNextTurn();
     };
     const dnBtn = document.createElement('button');
     dnBtn.className = 'order-btn'; dnBtn.textContent = '▼'; dnBtn.title = '아래로';
@@ -617,6 +720,7 @@ function renderMemberPresPanel() {
       [presOrder[idx], presOrder[idx+1]] = [presOrder[idx+1], presOrder[idx]];
       await setConfig('pres_order', presOrder);
       renderMemberPresPanel();
+      guessNextTurn();
     };
     orderBtns.appendChild(upBtn);
     orderBtns.appendChild(dnBtn);
@@ -943,7 +1047,14 @@ async function renderPresScheduleList() {
     tdTime.textContent = s.event_time ? s.event_time.slice(0,5) : '-';
 
     const tdAct = document.createElement('td');
-    if (!past) {
+    if (!past && adminUser) {
+      const autoBtn = document.createElement('button');
+      autoBtn.className = 'btn';
+      autoBtn.style.cssText = 'font-size:11px;padding:3px 8px;margin-right:4px;';
+      autoBtn.textContent = '🔄 자동';
+      autoBtn.title = '사이클 순서로 다음 발표자 자동 배정';
+      autoBtn.onclick = () => autoAssignNextCycle(s.id);
+
       const delBtn = document.createElement('button');
       delBtn.className = 'btn';
       delBtn.style.cssText = 'font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);';
@@ -958,6 +1069,9 @@ async function renderPresScheduleList() {
         renderUpcoming();
         renderScheduleList();
         toast('초기화 완료');
+      };
+      tdAct.appendChild(autoBtn);
+      tdAct.appendChild(delBtn);
       };
       tdAct.appendChild(delBtn);
     } else {

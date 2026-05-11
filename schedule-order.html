@@ -737,11 +737,11 @@ function renderMemberPresPanel() {
     nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:48px;flex-shrink:0;';
     nameDiv.textContent = m.name;
 
-    // ── Draft 확인 (미배정 우선, 없으면 배정된 것 — 모든 멤버 표시)
+    // ── Draft 확인 (배정된 것 우선, 없으면 미배정 draft)
     const draft = presentations.find(p =>
-      p.member_id === m.id && p.status === 'planned' && !p.schedule_id
-    ) || presentations.find(p =>
       p.member_id === m.id && p.status === 'planned' && !!p.schedule_id
+    ) || presentations.find(p =>
+      p.member_id === m.id && p.status === 'planned' && !p.schedule_id
     );
 
     const isAssigned   = draft && !!draft.schedule_id;

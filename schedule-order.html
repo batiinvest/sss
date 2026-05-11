@@ -225,7 +225,8 @@
 <script src="js/schedule-shared.js?v=20260427"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
-let presOrder = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
+let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
+let adminUser   = false; // 관리자 여부
 
 
 // ════════════════════════════════════════
@@ -631,16 +632,16 @@ function renderMemberPresPanel() {
     nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:48px;flex-shrink:0;';
     nameDiv.textContent = m.name;
 
-    // ── Draft 확인 (미배정 우선, 없으면 배정된 것)
+    // ── Draft 확인 (미배정 우선, 없으면 배정된 것 — 모든 멤버 표시)
     const draft = presentations.find(p =>
       p.member_id === m.id && p.status === 'planned' && !p.schedule_id
     ) || presentations.find(p =>
-      p.member_id === m.id && p.status === 'planned' && p.schedule_id
+      p.member_id === m.id && p.status === 'planned' && !!p.schedule_id
     );
 
-    const isAssigned = draft && !!draft.schedule_id;
+    const isAssigned   = draft && !!draft.schedule_id;
     const assignedDate = isAssigned
-      ? schedules.find(s => s.id === draft.schedule_id)?.event_date || draft.presented_at
+      ? (schedules.find(s => s.id === draft.schedule_id)?.event_date || draft.presented_at)
       : null;
 
     // ── 우측 영역: 종목 입력 or 선택 칩
@@ -666,34 +667,40 @@ function renderMemberPresPanel() {
         (upside && !isAssigned ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
         (draft.reason ? '<span class="chip-cap" title="' + draft.reason + '">📝</span>' : '');
 
-      // 지우기 버튼 (공통)
-      const clearBtn = document.createElement('button');
-      clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0;flex-shrink:0;';
-      clearBtn.textContent = '×';
-      clearBtn.onclick = async () => {
-        await sb.from('presentations').delete().eq('id', draft.id);
-        presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at').then(r => r.data || []);
-        renderPresOrderCalendar(); renderPresScheduleList();
-        renderMemberPresPanel();
-      };
-
-      rightArea.appendChild(chip);
-
-      if (isAssigned) {
-        // 배정 완료 → 배정 취소 버튼
-        const unassignBtn = document.createElement('button');
-        unassignBtn.className = 'btn';
-        unassignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;color:var(--muted);';
-        unassignBtn.textContent = '배정 취소';
-        unassignBtn.onclick = async () => {
-          await sb.from('presentations').update({ schedule_id: null, presented_at: null }).eq('id', draft.id);
+      // 지우기 버튼 (관리자 또는 본인만)
+      if (adminUser) {
+        const clearBtn = document.createElement('button');
+        clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0;flex-shrink:0;';
+        clearBtn.textContent = '×';
+        clearBtn.onclick = async () => {
+          if (!confirm(m.name + '의 발표종목을 초기화할까요?')) return;
+          await sb.from('presentations').delete().eq('id', draft.id);
           presentations = await sb.from('presentations')
             .select('*, members(name)').order('created_at').then(r => r.data || []);
           renderPresOrderCalendar(); renderPresScheduleList();
           renderMemberPresPanel();
         };
-        rightArea.appendChild(unassignBtn);
+        rightArea.appendChild(clearBtn);
+      }
+
+      rightArea.appendChild(chip);
+
+      if (isAssigned) {
+        // 배정 완료 → 관리자만 배정 취소 버튼 표시
+        if (adminUser) {
+          const unassignBtn = document.createElement('button');
+          unassignBtn.className = 'btn';
+          unassignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;color:var(--muted);';
+          unassignBtn.textContent = '배정 취소';
+          unassignBtn.onclick = async () => {
+            await sb.from('presentations').update({ schedule_id: null, presented_at: null }).eq('id', draft.id);
+            presentations = await sb.from('presentations')
+              .select('*, members(name)').order('created_at').then(r => r.data || []);
+            renderPresOrderCalendar(); renderPresScheduleList();
+            renderMemberPresPanel();
+          };
+          rightArea.appendChild(unassignBtn);
+        }
       } else {
         // 미배정 → 드래그 핸들 + 모바일 배정 버튼
         const handle = document.createElement('div');
@@ -729,8 +736,6 @@ function renderMemberPresPanel() {
         rightArea.appendChild(handle);
         rightArea.appendChild(assignBtn);
       }
-
-      rightArea.appendChild(clearBtn);
 
     } else {
       // 종목 미입력 → 검색 입력창
@@ -1137,6 +1142,7 @@ async function init() {
   _loadCalState();   // 일정 관리에서 이동한 달 상태 복원
 
   try {
+    [adminUser] = await Promise.all([isAdmin()]);
     await loadSharedData();   // js/schedule-shared.js
     // 발표자 순서 DB에서 불러오기
     const savedOrder = await getConfig('pres_order');

@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <title>SSS · 결산 관리</title>
+  <link rel="stylesheet" href="css/style.css?v=20260428">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -79,9 +79,9 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>결산일</th><th>참여자</th><th>종목</th>
-            <th>매수가</th><th>매도가</th><th>수수료</th>
-            <th>순손익</th><th>수익률</th><th>결산 후 기준금액</th>
+            <th class="col-hide-mobile">결산일</th><th class="col-hide-mobile">참여자</th><th>종목</th>
+            <th class="col-hide-mobile">매수가</th><th class="col-hide-mobile">매도가</th><th class="col-hide-mobile">수수료</th>
+            <th>순손익</th><th>수익률</th><th class="col-hide-mobile">결산 후 기준금액</th>
           </tr></thead>
           <tbody id="settleTbody">
             <tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>
@@ -96,8 +96,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260424"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/config.js?v=20260428"></script>
+<script src="js/db.js?v=20260428"></script>
 <script>
 let allSettles = [];
 
@@ -122,8 +122,7 @@ function renderSettles(settles) {
     return;
   }
   tbody.innerHTML = settles.map(s => {
-    const d = new Date(s.settled_at);
-    const ds = `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`;
+    const ds = fmtDate(s.settled_at);
     return `<tr>
       <td class="muted">${ds}</td>
       <td>${s.members?.name || '-'}</td>

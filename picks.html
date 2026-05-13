@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 탑픽 관리</title>
-  <link rel="stylesheet" href="css/style.css?v=20260426">
+  <link rel="stylesheet" href="css/style.css?v=20260428">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -30,9 +30,9 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>추천자</th><th>종목</th><th>시장</th>
-            <th>매수가</th><th>매도가</th><th>확정 수익률</th>
-            <th>목표가</th><th>시총 상승여력</th><th>상태</th>
+            <th>추천자</th><th>종목</th><th class="col-hide-mobile">시장</th>
+            <th class="col-hide-mobile">매수가</th><th class="col-hide-mobile">매도가</th><th>확정 수익률</th>
+            <th class="col-hide-mobile">목표가</th><th class="col-hide-mobile">시총 상승여력</th><th>상태</th>
           </tr></thead>
           <tbody id="monthPicksTbody">
             <tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>
@@ -73,7 +73,7 @@
             <th style="width:90px;">매도가</th>
             <th style="width:80px;">수익률</th>
             <th style="width:70px;">상태</th>
-            <th>매수 사유</th>
+            <th class="col-hide-mobile">매수 사유</th>
           </tr></thead>
           <tbody id="historyTbody">
             <tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>
@@ -161,9 +161,9 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260426"></script>
-<script src="js/db.js?v=20260426"></script>
-<script src="js/modal-pick.js?v=20260427"></script>
+<script src="js/config.js?v=20260428"></script>
+<script src="js/db.js?v=20260428"></script>
+<script src="js/modal-pick.js?v=20260428"></script>
 <script>
 let allPicks = [];
 let members  = [];

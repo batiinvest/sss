@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260427">
+  <link rel="stylesheet" href="css/style.css?v=20260428">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -87,7 +87,7 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th>등락</th><th>수익률<br><span style="font-size:10px;font-weight:400;color:var(--muted);">(누적 수익률)</span></th><th>목표가</th><th>상태</th></tr></thead>
+          <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th class="col-hide-mobile">등락</th><th>수익률<br><span style="font-size:10px;font-weight:400;color:var(--muted);">(누적 수익률)</span></th><th class="col-hide-mobile">목표가</th><th>상태</th></tr></thead>
           <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
         </table>
       </div>
@@ -110,7 +110,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>일시</th><th>추천자</th><th>종목</th><th>구분</th><th>체결가</th><th>수량</th><th>금액</th></tr></thead>
+        <thead><tr><th>일시</th><th class="col-hide-mobile">추천자</th><th>종목</th><th>구분</th><th>체결가</th><th class="col-hide-mobile">수량</th><th>금액</th></tr></thead>
         <tbody id="tradesTbody"><tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr></tbody>
       </table>
     </div>
@@ -173,10 +173,10 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260427"></script>
-<script src="js/db.js?v=20260427"></script>
-<script src="js/modal-pick.js?v=20260427"></script>
-<script src="js/modal-pres.js?v=20260427"></script>
+<script src="js/config.js?v=20260428"></script>
+<script src="js/db.js?v=20260428"></script>
+<script src="js/modal-pick.js?v=20260428"></script>
+<script src="js/modal-pres.js?v=20260428"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];

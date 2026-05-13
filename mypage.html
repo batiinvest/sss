@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 내 정보</title>
-  <link rel="stylesheet" href="css/style.css?v=20260426">
+  <link rel="stylesheet" href="css/style.css?v=20260428">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -131,7 +131,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>월</th><th>종목</th><th>매수가</th><th>현재가</th><th>평가손익</th><th>목표가</th><th>상태</th>
+            <th class="col-hide-mobile">월</th><th>종목</th><th>매수가</th><th>현재가</th><th>평가손익</th><th class="col-hide-mobile">목표가</th><th>상태</th>
           </tr></thead>
           <tbody id="myPicksTbody">
             <tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr>
@@ -181,8 +181,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260426"></script>
-<script src="js/db.js?v=20260426"></script>
+<script src="js/config.js?v=20260428"></script>
+<script src="js/db.js?v=20260428"></script>
 <script>
 let myMember    = null;
 let myPriceMap  = {};

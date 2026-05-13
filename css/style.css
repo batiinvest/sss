@@ -763,3 +763,144 @@ html.in-iframe .main {
 .expense-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 8px 0; border-bottom: .5px solid var(--border); font-size: 13px; }
 .total-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
 .total-bar-fill { height: 100%; background: #185fa5; border-radius: 3px; transition: width .4s; }
+
+/* ============================================================
+   모바일 UX 개선 v20260428
+   당장 수정 항목 — 터치 타겟 / 모달 / 카드 / 테이블 / 탭
+   ============================================================ */
+
+/* ① 탭 버튼 터치 타겟 최소 44px */
+.tab {
+  min-height: 36px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+}
+@media (max-width: 768px) {
+  .tab { min-height: 40px; padding: 10px 14px; font-size: 13px; }
+}
+
+/* ② ▲▼ 순서 변경 버튼 터치 타겟 */
+.order-btn {
+  min-width: 28px !important;
+  min-height: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 10px !important;
+}
+
+/* ③ 모달 모바일 padding 축소 */
+@media (max-width: 480px) {
+  /* 팝업 모달 컨테이너 여백 축소 */
+  #pickModal > div,
+  #presModal > div,
+  #pickFormModal > div,
+  #presEditModal .modal-box,
+  #assignDateModal > div {
+    padding: 1rem 0.875rem !important;
+    margin: 0.5rem auto !important;
+  }
+  /* 모달 오버레이 패딩 축소 */
+  #pickModal,
+  #presModal,
+  #pickFormModal,
+  #presEditModal {
+    padding: 0.5rem !important;
+  }
+}
+
+/* ④ 내 탑픽 카드 그리드 4열 → 모바일 2열 */
+@media (max-width: 600px) {
+  /* 내 탑픽 4칸 그리드 */
+  [style*="repeat(4,1fr)"],
+  [style*="repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+}
+
+/* ⑤ 테이블 모바일 핵심 컬럼만 — 공통 숨김 클래스 */
+.col-hide-mobile { }
+@media (max-width: 600px) {
+  .col-hide-mobile { display: none !important; }
+}
+
+/* ⑥ 사이드바 메뉴 터치 타겟 */
+@media (max-width: 768px) {
+  .sidebar.nav-open .nav-item {
+    padding: 14px 1.25rem !important;
+    min-height: 44px !important;
+  }
+}
+
+/* ⑦ topbar 버튼 모바일 — full-width 방지 */
+@media (max-width: 600px) {
+  .topbar > div:last-child {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .topbar > div:last-child .btn,
+  .topbar > div:last-child button {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    justify-content: center !important;
+  }
+}
+
+/* ⑧ 발표순서 멤버 패널 모바일 — 배정 버튼 기본 노출 */
+@media (max-width: 768px) {
+  .assign-btn-mobile {
+    display: inline-flex !important;
+  }
+  /* 드래그 핸들 숨김 */
+  [title="달력으로 드래그"] {
+    display: none !important;
+  }
+}
+
+/* ⑨ 입력 폼 모바일 터치 타겟 */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important; /* iOS 자동 줌 방지 */
+    min-height: 44px;
+    padding: 10px 12px !important;
+  }
+  textarea { min-height: 80px !important; }
+}
+
+/* ⑩ 카드 내부 4열 그리드 모바일 2열 (내 탑픽·참여자 카드) */
+@media (max-width: 480px) {
+  .member-card [style*="grid-template-columns:repeat(4"],
+  .member-card [style*="grid-template-columns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* ⑪ 테이블 모바일 우선 컬럼 전략
+   index.html 탑픽 테이블: 등락 컬럼 숨김 */
+@media (max-width: 600px) {
+  #picksTbody tr td:nth-child(5),
+  #picksTbody tr td:nth-child(7),
+  #picksThead tr th:nth-child(5),
+  #picksThead tr th:nth-child(7) {
+    display: none !important;
+  }
+}
+
+/* ⑫ 스크롤 힌트 — 가로 스크롤 가능 영역 표시 */
+.table-wrap::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 24px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.8));
+  pointer-events: none;
+  display: none;
+}
+@media (max-width: 768px) {
+  .table-wrap { position: relative; }
+  .table-wrap::after { display: block; }
+}

@@ -6,58 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 순서</title>
   <link rel="stylesheet" href="css/style.css">
-  <style>
-    .cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 1px; background: var(--border); border-radius: var(--r-md); overflow: hidden; }
-    .cal-head { background: var(--bg); padding: 8px 4px; text-align: center; font-size: 12px; font-weight: 500; color: var(--muted); }
-    .cal-day  { background: var(--surface); padding: 6px 8px; min-height: 72px; cursor: pointer; }
-    .cal-day:hover { background: var(--bg); }
-    .cal-day.today { background: #e6f1fb; }
-    .cal-day.other-month .cal-day-num { color: var(--hint); }
-    .cal-day-num  { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-    .cal-day.today .cal-day-num { color: #185fa5; }
-    .cal-event { font-size: 11px; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .ev-meeting  { background: #e8f4fd; color: #0c447c; }
-    .ev-deadline { background: #fdecea; color: #a32d2d; }
-    .ev-other    { background: var(--bg); color: var(--muted); }
-    .ev-dinner   { background: #faeeda; color: #633806; }
-    .ev-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
-
-    /* 멤버 패널 컴팩트 */
-    .pres-member-row {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 4px; border-bottom: 0.5px solid var(--border);
-    }
-    .pres-member-row:last-child { border-bottom: none; }
-    .order-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
-    .order-btn  {
-      background: none; border: 0.5px solid var(--border); border-radius: 3px;
-      width: 18px; height: 16px; cursor: pointer; font-size: 9px; line-height: 1;
-      color: var(--muted); display: flex; align-items: center; justify-content: center;
-      padding: 0;
-    }
-    .order-btn:hover { background: var(--bg); color: var(--text); }
-    .pres-stock-chip {
-      display: flex; align-items: center; gap: 6px;
-      background: var(--greenbg); border: 0.5px solid #9fe1cb;
-      border-radius: var(--r-md); padding: 4px 8px;
-      font-size: 12px; color: var(--green); cursor: pointer;
-      flex: 1; min-width: 0; overflow: hidden;
-    }
-    .pres-stock-chip:hover { opacity: 0.85; }
-    .pres-stock-chip .chip-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pres-stock-chip .chip-cap  { font-size: 11px; color: var(--muted); white-space: nowrap; }
-
-    /* 편집 모달 */
-    #presEditModal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:700;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem; }
-    #presEditModal .modal-box { background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:500px;border:0.5px solid var(--border);margin:auto; }
-  </style>
+  <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
-<style>
-  html.in-iframe .sidebar,
-  html.in-iframe .hamburger { display: none !important; }
-  html.in-iframe .layout    { display: block !important; }
-  html.in-iframe .main      { min-height: 100vh; }
-</style>
+
 </head>
 <body>
 <div class="layout" style="display:block;"><main class="main">
@@ -760,15 +711,12 @@ function renderMemberPresPanel() {
         ? ((draft.target_cap - draft.market_cap_at) / draft.market_cap_at * 100).toFixed(0) : null;
 
       const chip = document.createElement('div');
-      chip.className = 'pres-stock-chip';
-      chip.style.background = isAssigned ? '#e8f4fd' : '';
-      chip.style.borderColor = isAssigned ? '#7ec0f0' : '';
-      chip.style.color       = isAssigned ? '#0c447c' : '';
+      chip.className = 'pres-stock-chip ' + (isAssigned ? 'chip-assigned' : 'chip-unassigned');
       chip.title = '클릭하여 편집';
       chip.onclick = () => openPresEditModal(m, draft);
       chip.innerHTML =
         '<span class="chip-name">' + (isAssigned ? '📅 ' : '✅ ') + topicName + '</span>' +
-        (assignedDate ? '<span class="chip-cap" style="color:#185fa5;font-weight:500;">' + assignedDate + '</span>' : '') +
+        (isAssigned && assignedDate ? '<span class="chip-date">' + assignedDate + '</span>' : '') +
         (upside && !isAssigned ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
         (draft.reason ? '<span class="chip-cap" title="' + draft.reason + '">📝</span>' : '');
 
@@ -812,7 +760,7 @@ function renderMemberPresPanel() {
           const handle = document.createElement('div');
           handle.draggable = true;
           handle.title = '달력으로 드래그';
-          handle.style.cssText = 'font-size:18px;color:var(--muted);cursor:grab;user-select:none;flex-shrink:0;';
+          handle.className = 'drag-handle';
           handle.textContent = '⠿';
           handle.addEventListener('dragstart', e => {
             e.dataTransfer.effectAllowed = 'copy';
@@ -825,9 +773,9 @@ function renderMemberPresPanel() {
             e.dataTransfer.setData('targetCap',  draft.target_cap || '');
             e.dataTransfer.setData('reason',     draft.reason     || '');
             e.dataTransfer.setData('risk',       draft.risk       || '');
-            handle.style.opacity = '0.3';
+            handle.classList.add('dragging');
           });
-          handle.addEventListener('dragend', () => handle.style.opacity = '1');
+          handle.addEventListener('dragend', () => handle.classList.remove('dragging'));
 
           const assignBtn = document.createElement('button');
           assignBtn.className = 'btn assign-btn-mobile';

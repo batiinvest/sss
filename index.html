@@ -631,7 +631,7 @@ async function loadTopPresentationReturns() {
 
   try {
     const { data: presRows, error: presError } = await sb.from('presentations')
-      .select('id, member_id, stock_name, stock_code, price_at, presented_at, status')
+      .select('id, member_id, topic, stock_code, price_at, presented_at, status')
       .not('stock_code', 'is', null)
       .not('price_at', 'is', null);
     if (presError) throw presError;
@@ -653,6 +653,7 @@ async function loadTopPresentationReturns() {
       sb.from('members').select('id, name')
     ]);
     if (priceRes.error) throw priceRes.error;
+    if (memberRes.error) throw memberRes.error;
 
     const priceMap = {};
     for (const row of (priceRes.data || [])) {
@@ -684,9 +685,10 @@ async function loadTopPresentationReturns() {
     tbody.innerHTML = ranked.map((p, i) => {
       const d = p.presented_at ? new Date(p.presented_at) : null;
       const dateText = d && !Number.isNaN(d.getTime()) ? `${d.getMonth()+1}/${d.getDate()}` : '-';
+      const stockName = p.topic?.includes(' > ') ? p.topic.split(' > ')[1].trim() : (p.topic || '-');
       return `<tr>
         <td style="font-weight:600;">${i + 1}</td>
-        <td style="font-weight:500;">${p.stock_name || '-'}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code || ''}</span></td>
+        <td style="font-weight:500;">${stockName}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code || ''}</span></td>
         <td>${p.presenter}</td>
         <td class="muted">${dateText}</td>
         <td>${won(p.basePrice)}</td>

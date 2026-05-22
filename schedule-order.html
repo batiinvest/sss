@@ -173,7 +173,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
 <script src="js/db.js?v=20260428"></script>
-<script src="js/schedule-shared.js?v=20260428"></script>
+<script src="js/schedule-shared.js?v=20260522"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -1241,6 +1241,69 @@ document.addEventListener('click', (e) => {
     document.querySelectorAll('.pres-stock-dropdown').forEach(d => d.style.display = 'none');
   }
 });
+
+function getOrderedCycleMembers() {
+  return presOrder
+    .map(id => members.find(m => m.id === id))
+    .filter(Boolean);
+}
+
+function guessNextTurn() {
+  const guide = document.getElementById('turnGuide');
+  const turn = getPresentationTurnState(presentations, getOrderedCycleMembers(), {
+    includePlanned: true,
+  });
+
+  document.getElementById('thisTurnCategory').value = turn.category;
+  onTurnCategoryChange();
+
+  let guideHtml = '이번 발표: <strong style="color:var(--accent);">' + turn.label + '</strong>';
+  if (turn.total) guideHtml += ' &nbsp;|&nbsp; 사이클: ' + turn.completedCount + '/' + turn.total;
+  if (turn.nextMember) {
+    const cycle = turn.pendingMembers.map(m => m.name);
+    guideHtml += ' &nbsp;|&nbsp; 다음 순서: <strong>' + cycle.slice(0, 3).join(' → ') + '</strong>';
+    if (cycle.length > 3) guideHtml += ' …';
+  }
+  guide.innerHTML = guideHtml;
+}
+
+async function autoAssignNextCycle(scheduleId) {
+  if (!adminUser) return;
+  const sched = schedules.find(s => s.id === scheduleId);
+  if (!sched) return;
+
+  const alreadyAssigned = presentations
+    .filter(p => p.schedule_id === scheduleId)
+    .map(p => p.member_id);
+  const turn = getPresentationTurnState(presentations, getOrderedCycleMembers(), {
+    includePlanned: true,
+    untilDate: sched.event_date,
+  });
+  const nextMember = turn.pendingMembers.find(m => !alreadyAssigned.includes(m.id));
+  if (!nextMember) return;
+
+  const draft = presentations.find(p =>
+    p.member_id === nextMember.id && p.status === 'planned' && !p.schedule_id
+  );
+  if (!draft) {
+    toast(nextMember.name + '의 발표종목을 먼저 입력해주세요.');
+    return;
+  }
+
+  await sb.from('presentations').update({
+    schedule_id: sched.id,
+    presented_at: sched.event_date,
+    category: sched.category,
+  }).eq('id', draft.id);
+
+  presentations = await sb.from('presentations')
+    .select('*, members(name)').order('created_at').then(r => r.data || []);
+
+  renderPresOrderCalendar();
+  renderPresScheduleList();
+  renderMemberPresPanel();
+  toast('📌 ' + nextMember.name + ' → ' + sched.event_date + ' 자동 배정');
+}
 
 async function init() {
   await requireAuth();

@@ -7,6 +7,43 @@ const ModalPres = (() => {
   let _drafts  = [];   // 현재 유저의 planned presentations (draft)
   let _me      = null;
 
+  function getModalTurnState(allPresentations, orderedMembers) {
+    if (typeof getPresentationTurnState === 'function') {
+      return getPresentationTurnState(allPresentations, orderedMembers, { includePlanned: true });
+    }
+
+    const ordered = (orderedMembers || []).filter(Boolean);
+    const orderedIds = ordered.map(m => m.id);
+    let category = 'industry';
+    const doneInCycle = new Set();
+
+    (allPresentations || [])
+      .filter(p =>
+        p.member_id &&
+        p.presented_at &&
+        ['industry', 'stock'].includes(p.category) &&
+        (p.status === 'done' || (p.status === 'planned' && p.schedule_id))
+      )
+      .sort((a, b) =>
+        String(a.presented_at || '').localeCompare(String(b.presented_at || '')) ||
+        String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      )
+      .forEach(p => {
+        if (!orderedIds.length || !orderedIds.includes(p.member_id)) return;
+        if (p.category !== category) {
+          if (doneInCycle.size === 0) category = p.category;
+          else return;
+        }
+        doneInCycle.add(p.member_id);
+        if (doneInCycle.size >= orderedIds.length) {
+          category = category === 'industry' ? 'stock' : 'industry';
+          doneInCycle.clear();
+        }
+      });
+
+    return { category };
+  }
+
   // ── 팝업 HTML 마운트
   function mount() {
     if (document.getElementById('presModal')) return;
@@ -63,7 +100,7 @@ const ModalPres = (() => {
     }
 
     // 내 draft 로드 (미배정 우선, 없으면 배정된 것도 포함)
-    const [myUnassigned, myAssigned, allRes] = await Promise.all([
+    const [myUnassigned, myAssigned, allRes, membersRes, orderRes, turnRes] = await Promise.all([
       sb.from('presentations')
         .select('*').eq('status','planned').is('schedule_id',null).eq('member_id',_me.id),
       sb.from('presentations')
@@ -71,7 +108,11 @@ const ModalPres = (() => {
         .order('created_at', { ascending: false }).limit(1),
       sb.from('presentations')
         .select('category,topic').eq('status','planned').is('schedule_id',null)
-        .order('created_at', { ascending: false }).limit(10)
+        .order('created_at', { ascending: false }).limit(10),
+      sb.from('members').select('*').eq('is_active', true).order('joined_at'),
+      sb.from('app_settings').select('value').eq('key', 'pres_order').maybeSingle(),
+      sb.from('presentations')
+        .select('member_id,category,status,schedule_id,presented_at,created_at')
     ]);
 
     // 미배정 draft 우선, 없으면 배정된 것
@@ -94,14 +135,13 @@ const ModalPres = (() => {
       }
     }
 
-    // 카테고리 추천 (draft 없을 때만 이전 완료 발표 기반으로)
+    // 카테고리 추천: 산업/종목 한 사이클이 끝날 때만 다음 구분으로 전환
     if (!sharedCat) {
-      try {
-        const { data: last } = await sb.from('presentations')
-          .select('category').eq('status','done')
-          .order('presented_at', { ascending: false }).limit(1);
-        if (last?.[0]) sharedCat = last[0].category === 'stock' ? 'industry' : 'stock';
-      } catch(e) {}
+      const allMembers = membersRes.data || [];
+      const savedOrder = orderRes.data?.value;
+      const order = Array.isArray(savedOrder) ? savedOrder : allMembers.map(m => m.id);
+      const orderedMembers = order.map(id => allMembers.find(m => m.id === id)).filter(Boolean);
+      sharedCat = getModalTurnState(turnRes.data || [], orderedMembers).category;
     }
 
     if (sharedCat) {

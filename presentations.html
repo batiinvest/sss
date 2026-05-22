@@ -238,6 +238,8 @@ async function init() {
       console.log(`✅ stock_code ${dbUpdates.length}건 자동 연결`);
     }
 
+    await autoFillPresentationPrices();
+
     // 마지막 업데이트 시각
     const latest = allPrices
       .filter(p => p.updated_at)
@@ -274,6 +276,94 @@ function getCurPrice(p) {
     sp.stock_name?.includes(sName) ||
     sName?.includes(sp.stock_name)
   ) || null;
+}
+
+function toUnixSeconds(dateStr, offsetDays = 0) {
+  const d = new Date(dateStr + 'T00:00:00+09:00');
+  d.setDate(d.getDate() + offsetDays);
+  return Math.floor(d.getTime() / 1000);
+}
+
+function yahooSymbolFor(p) {
+  const code = p.stock_code;
+  if (!code) return null;
+  const cur = getCurPrice(p);
+  const market = (cur?.market || p.market || '').toUpperCase();
+  if (/^\d{6}$/.test(code)) {
+    return code + (market.includes('KOSDAQ') ? '.KQ' : '.KS');
+  }
+  return code;
+}
+
+function dateInSeoul(tsSec) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(tsSec * 1000));
+  const get = type => parts.find(p => p.type === type)?.value;
+  return get('year') + '-' + get('month') + '-' + get('day');
+}
+
+async function fetchHistoricalClose(p) {
+  const symbol = yahooSymbolFor(p);
+  if (!symbol || !p.presented_at) return null;
+
+  const url =
+    'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol) +
+    '?period1=' + toUnixSeconds(p.presented_at, -3) +
+    '&period2=' + toUnixSeconds(p.presented_at, 4) +
+    '&interval=1d&events=history';
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const chart = await res.json();
+  const result = chart?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const rows = timestamps
+    .map((ts, i) => ({ date: dateInSeoul(ts), close: closes[i] }))
+    .filter(r => Number.isFinite(r.close) && r.close > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return rows.find(r => r.date === p.presented_at)?.close ||
+    [...rows].reverse().find(r => r.date < p.presented_at)?.close ||
+    rows.find(r => r.date > p.presented_at)?.close ||
+    null;
+}
+
+async function autoFillPresentationPrices() {
+  const targets = allData.filter(p =>
+    (p.status || 'done') === 'done' &&
+    p.presented_at &&
+    p.stock_code &&
+    !p.price_at
+  );
+  if (!targets.length) return;
+
+  let filled = 0;
+  for (const p of targets) {
+    try {
+      const close = await fetchHistoricalClose(p);
+      if (!close) continue;
+      const priceAt = Math.round(close);
+      const cur = getCurPrice(p);
+      const patch = { price_at: priceAt };
+      if (!p.market_cap_at && cur?.price && cur?.market_cap) {
+        patch.market_cap_at = Math.round(cur.market_cap * (priceAt / cur.price));
+      }
+
+      const { error } = await sb.from('presentations').update(patch).eq('id', p.id);
+      if (error) throw error;
+      Object.assign(p, patch);
+      filled++;
+    } catch (e) {
+      console.warn('발표 당시가 자동 입력 실패:', p.stock_code, p.presented_at, e.message);
+    }
+  }
+
+  if (filled) toast('발표 당시가 ' + filled + '건 자동 입력 완료');
 }
 
 function getReturn(p) {

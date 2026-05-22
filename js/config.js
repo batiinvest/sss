@@ -150,7 +150,13 @@ async function doLogin() {
     errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
   } else {
     document.getElementById('auth-overlay')?.remove();
-    location.reload();
+    const page = location.pathname.split('/').pop() || 'index.html';
+    if (window === window.parent && page !== 'app.html') {
+      const route = page.replace(/\.html$/i, '') || 'index';
+      location.href = 'app.html#' + route;
+    } else {
+      location.reload();
+    }
   }
 }
 

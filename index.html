@@ -5,7 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
   <link rel="stylesheet" href="css/style.css?v=20260428">
-  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
+  <script>
+    (function () {
+      if (window === window.parent) {
+        var params = new URLSearchParams(window.location.search);
+        if (!params.has('standalone')) {
+          window.location.replace('app.html#index');
+        }
+      } else {
+        document.documentElement.classList.add('in-iframe');
+      }
+    })();
+  </script>
 </head>
 <body>
 <div class="layout layout-page"><main class="main">
@@ -173,7 +184,7 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260428"></script>
+<script src="js/config.js?v=20260522"></script>
 <script src="js/db.js?v=20260428"></script>
 <script src="js/modal-pick.js?v=20260428"></script>
 <script src="js/modal-pres.js?v=20260428"></script>

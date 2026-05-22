@@ -125,12 +125,18 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260427"></script>
+<script src="js/config.js?v=20260522"></script>
 <script src="js/db.js?v=20260427"></script>
 <script>
 let currentPage = 'index';
+let currentUserIsAdmin = false;
 
 function loadPage(pageName) {
+  if (pageName === 'admin' && !currentUserIsAdmin) {
+    toast('관리자만 접근할 수 있습니다.');
+    pageName = 'index';
+  }
+
   const frame = document.getElementById('page-frame');
   const isSamePage = currentPage === pageName;
 
@@ -194,6 +200,7 @@ window.addEventListener('message', (e) => {
 // 초기 실행
 async function initApp() {
   await requireAuth();
+  currentUserIsAdmin = await isAdmin();
   initSidebarAuth();
 
   // 인증 완료 표시 (iframe에서 세션 공유 확인용)

@@ -95,13 +95,40 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260424"></script>
+<script src="js/db.js?v=20260522"></script>
 <script>
 let allData  = [];
 let members  = [];
 let priceMap = {};
 
 let currentTab = 'done';  // 'planned' | 'done'
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
+async function syncPastPresentationsDone(rows) {
+  const today = todayStr();
+  const targets = (rows || []).filter(p =>
+    p.status === 'planned' &&
+    p.schedule_id &&
+    p.presented_at &&
+    p.presented_at < today
+  );
+  if (!targets.length) return rows || [];
+
+  const updates = targets.map(p =>
+    sb.from('presentations').update({ status: 'done' }).eq('id', p.id)
+  );
+  await Promise.all(updates);
+
+  return (rows || []).map(p =>
+    targets.some(t => t.id === p.id) ? { ...p, status: 'done' } : p
+  );
+}
 
 function switchTab(tab) {
   currentTab = tab;
@@ -138,7 +165,7 @@ async function init() {
     return;
   }
 
-  allData = presRes || [];
+  allData = await syncPastPresentationsDone(presRes || []);
   members = memberData || [];
 
   // 필터 멤버 채우기

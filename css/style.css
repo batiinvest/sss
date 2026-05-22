@@ -157,7 +157,13 @@ html, body {
   margin-bottom: 1.25rem;
 }
 
-.top-return-card { margin-bottom: 1.25rem; }
+.performance-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 12px;
+  margin-bottom: 1.25rem;
+}
+.top-picks-card { margin-bottom: 1.25rem; }
 .rank-list { display: flex; flex-direction: column; gap: 8px; }
 .rank-item {
   display: grid;
@@ -187,6 +193,16 @@ html, body {
 .rank-caption { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .rank-price { font-size: 12px; color: var(--text); text-align: right; white-space: nowrap; }
 .rank-return { font-size: 17px; font-weight: 700; text-align: right; white-space: nowrap; }
+.performance-grid .rank-item {
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 9px;
+}
+.performance-grid .rank-price {
+  grid-column: 2 / -1;
+  text-align: left;
+  color: var(--muted);
+  white-space: normal;
+}
 
 /* ── Two-column grid ── */
 .grid-2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; margin-bottom: 1.25rem; }
@@ -345,6 +361,7 @@ textarea { resize: vertical; min-height: 72px; }
   /* ── Grid-2: 1열 ── */
   .grid-2 { grid-template-columns: 1fr; }
   .dashboard-my-grid { grid-template-columns: 1fr; }
+  .performance-grid { grid-template-columns: 1fr; }
 
   /* ── Form row: 1열 ── */
   .form-row { grid-template-columns: 1fr; }

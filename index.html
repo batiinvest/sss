@@ -87,6 +87,19 @@
   </div>
 
   <!-- ── 이번 달 탑픽 + 참여자 수익률 ── -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">발표종목 수익률 Top 5</div>
+      <a href="presentations.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>순위</th><th>종목</th><th>발표자</th><th>발표일</th><th>발표가</th><th>현재가</th><th>수익률</th></tr></thead>
+        <tbody id="topPresentationReturns"><tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="grid-2">
     <div class="card">
       <div class="card-head">
@@ -235,6 +248,7 @@ async function init() {
   renderMemberBars(members);
   renderNotices(members, picks);
   renderTradesTable(trades);
+  loadTopPresentationReturns();
 
   // 내 섹션: 데이터가 준비됐으면 바로 렌더 (현재가 없어도 먼저 표시)
   if (me) {
@@ -607,6 +621,82 @@ async function refreshPrices() {
     console.error('refreshPrices 오류:', e);
     if (pnlEl)  { pnlEl.textContent = '오류'; pnlEl.className = 'metric-value'; }
     if (rateEl) rateEl.textContent = e.message;
+  }
+}
+
+async function loadTopPresentationReturns() {
+  const tbody = document.getElementById('topPresentationReturns');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr>';
+
+  try {
+    const { data: presRows, error: presError } = await sb.from('presentations')
+      .select('id, member_id, stock_name, stock_code, price_at, presented_at, status')
+      .not('stock_code', 'is', null)
+      .not('price_at', 'is', null);
+    if (presError) throw presError;
+
+    const presentations = (presRows || []).filter(p =>
+      (p.status || 'done') === 'done' &&
+      p.stock_code &&
+      Number(p.price_at) > 0
+    );
+
+    if (!presentations.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">발표가가 입력된 발표종목이 없습니다.</td></tr>';
+      return;
+    }
+
+    const codes = [...new Set(presentations.map(p => p.stock_code).filter(Boolean))];
+    const [priceRes, memberRes] = await Promise.all([
+      sb.from('stock_prices').select('stock_code, price, change_rate').in('stock_code', codes),
+      sb.from('members').select('id, name')
+    ]);
+    if (priceRes.error) throw priceRes.error;
+
+    const priceMap = {};
+    for (const row of (priceRes.data || [])) {
+      if (Number(row.price) > 0) priceMap[row.stock_code] = Number(row.price);
+    }
+
+    const memberNameMap = new Map();
+    (currentMembers || []).forEach(m => memberNameMap.set(m.id, m.name));
+    (memberRes.data || []).forEach(m => memberNameMap.set(m.id, m.name));
+
+    const ranked = presentations.map(p => {
+      const currentPrice = priceMap[p.stock_code];
+      const basePrice = Number(p.price_at);
+      if (!currentPrice || !basePrice) return null;
+      return {
+        ...p,
+        currentPrice,
+        basePrice,
+        returnRate: (currentPrice - basePrice) / basePrice * 100,
+        presenter: memberNameMap.get(p.member_id) || '-'
+      };
+    }).filter(Boolean).sort((a, b) => b.returnRate - a.returnRate).slice(0, 5);
+
+    if (!ranked.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">현재가를 찾을 수 있는 발표종목이 없습니다.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = ranked.map((p, i) => {
+      const d = p.presented_at ? new Date(p.presented_at) : null;
+      const dateText = d && !Number.isNaN(d.getTime()) ? `${d.getMonth()+1}/${d.getDate()}` : '-';
+      return `<tr>
+        <td style="font-weight:600;">${i + 1}</td>
+        <td style="font-weight:500;">${p.stock_name || '-'}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code || ''}</span></td>
+        <td>${p.presenter}</td>
+        <td class="muted">${dateText}</td>
+        <td>${won(p.basePrice)}</td>
+        <td>${won(p.currentPrice)}</td>
+        <td class="${rCls(p.returnRate)}" style="font-weight:600;">${pct(p.returnRate)}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    console.error('loadTopPresentationReturns 오류:', e);
+    tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">발표종목 수익률을 불러오지 못했습니다.</td></tr>';
   }
 }
 

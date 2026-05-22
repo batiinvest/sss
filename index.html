@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260527">
+  <link rel="stylesheet" href="css/style.css?v=20260528">
   <script>
     (function () {
       if (window === window.parent) {
@@ -627,7 +627,7 @@ async function loadTopPresentationReturns() {
 
   try {
     const { data: presRows, error: presError } = await sb.from('presentations')
-      .select('id, member_id, topic, stock_code, price_at, presented_at, status')
+      .select('id, member_id, category, topic, stock_code, price_at, presented_at, status')
       .not('stock_code', 'is', null)
       .not('price_at', 'is', null);
     if (presError) throw presError;
@@ -682,10 +682,11 @@ async function loadTopPresentationReturns() {
       const d = p.presented_at ? new Date(p.presented_at) : null;
       const dateText = d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}` : '-';
       const stockName = p.topic?.includes(' > ') ? p.topic.split(' > ')[1].trim() : (p.topic || '-');
+      const categoryText = p.category === 'industry' ? '산업' : '종목';
       return `<div class="rank-item">
         <div class="rank-num">${i + 1}</div>
         <div class="rank-main">
-          <div class="rank-name">${stockName}</div>
+          <div class="rank-name">${stockName}<span class="rank-tag ${p.category === 'industry' ? 'rank-tag-industry' : 'rank-tag-stock'}">${categoryText}</span></div>
           <div class="rank-meta">${p.stock_code || '-'} · ${p.presenter} · ${dateText}</div>
         </div>
         <div class="rank-price">

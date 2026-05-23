@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260529">
+  <link rel="stylesheet" href="css/style.css?v=20260530">
   <script>
     (function () {
       if (window === window.parent) {
@@ -90,7 +90,13 @@
     <div class="card top-return-card">
       <div class="card-head">
         <div class="card-title">발표종목 수익률 Top 5</div>
-        <a href="presentations.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="tab-row" style="gap:3px;">
+            <button class="tab active" id="topReturnTabAll" onclick="setTopPresentationReturnScope('all')">전체기간</button>
+            <button class="tab" id="topReturnTabYear" onclick="setTopPresentationReturnScope('year')">올해</button>
+          </div>
+          <a href="presentations.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+        </div>
       </div>
       <div id="topPresentationReturns" class="rank-list">
         <div class="empty-cell">불러오는 중...</div>
@@ -205,6 +211,7 @@ let currentPicks   = [];
 let currentMembers = [];
 let allCurrentPicks = [];
 let globalPriceMap = {};   // 현재가 캐시 (내 섹션에서도 재사용)
+let topPresentationReturnScope = 'all';
 
 // ── 팝업: modal-pick.js + modal-pres.js 참조
 // 콜백 등록: 제출/닫기 후 내 섹션 갱신
@@ -619,7 +626,14 @@ async function refreshPrices() {
   }
 }
 
-async function loadTopPresentationReturns() {
+function setTopPresentationReturnScope(scope) {
+  topPresentationReturnScope = scope === 'year' ? 'year' : 'all';
+  document.getElementById('topReturnTabAll')?.classList.toggle('active', topPresentationReturnScope === 'all');
+  document.getElementById('topReturnTabYear')?.classList.toggle('active', topPresentationReturnScope === 'year');
+  loadTopPresentationReturns(topPresentationReturnScope);
+}
+
+async function loadTopPresentationReturns(scope = topPresentationReturnScope) {
   const list = document.getElementById('topPresentationReturns');
   if (!list) return;
   list.innerHTML = '<div class="empty-cell">불러오는 중...</div>';
@@ -631,14 +645,21 @@ async function loadTopPresentationReturns() {
       .not('price_at', 'is', null);
     if (presError) throw presError;
 
-    const presentations = (presRows || []).filter(p =>
+    let presentations = (presRows || []).filter(p =>
       (p.status || 'done') === 'done' &&
       p.stock_code &&
       Number(p.price_at) > 0
     );
+    if (scope === 'year') {
+      const year = new Date().getFullYear();
+      presentations = presentations.filter(p => {
+        const d = p.presented_at ? new Date(p.presented_at) : null;
+        return d && !Number.isNaN(d.getTime()) && d.getFullYear() === year;
+      });
+    }
 
     if (!presentations.length) {
-      list.innerHTML = '<div class="muted" style="text-align:center;padding:1.5rem;">발표가가 입력된 발표종목이 없습니다.</div>';
+      list.innerHTML = `<div class="muted" style="text-align:center;padding:1.5rem;">${scope === 'year' ? '올해 ' : ''}발표가가 입력된 발표종목이 없습니다.</div>`;
       return;
     }
 

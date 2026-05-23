@@ -95,7 +95,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260522"></script>
+<script src="js/utils/returns.js?v=20260529"></script>
+<script src="js/utils/presentation.js?v=20260529"></script>
+<script src="js/services/price-service.js?v=20260529"></script>
+<script src="js/db.js?v=20260529"></script>
 <script>
 let allData  = [];
 let members  = [];
@@ -142,43 +145,52 @@ async function init() {
   checkDBConnection();
 
   const tbody = document.getElementById('histTbody');
-
-  // presentations 테이블 로드 시도
-  let presRes, memberData;
   try {
-    [{ data: presRes }, memberData] = await Promise.all([
-      sb.from('presentations')
-        .select('*, members(name)')
-        .order('presented_at', { ascending: false })
-        .order('created_at',   { ascending: true }),
-      fetchMembers()
-    ]);
+    const pageData = await loadPresentationPageData();
+    if (pageData.presentations === undefined) {
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-cell">presentations 테이블을 먼저 생성하세요. (supabase_add_presentations.sql 실행)</td></tr>';
+      return;
+    }
+
+    allData = await syncPastPresentationsDone(pageData.presentations || []);
+    members = pageData.members || [];
+    populateMemberFilter(members);
+
+    if (!allData.length) {
+      renderAll([]);
+      return;
+    }
+
+    await loadPresentationPriceContext();
   } catch(e) {
-    console.error('데이터 로드 오류:', e.message);
+    console.error('발표 히스토리 초기화 오류:', e.message);
     tbody.innerHTML = '<tr><td colspan="10" class="empty-cell">데이터 로드 오류: ' + e.message + '</td></tr>';
     return;
   }
 
-  // presentations 테이블이 없는 경우
-  if (presRes === undefined) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-cell">presentations 테이블을 먼저 생성하세요. (supabase_add_presentations.sql 실행)</td></tr>';
-    return;
-  }
+  const tabFiltered = allData.filter(p => (p.status || 'done') === currentTab);
+  renderAll(tabFiltered);
+}
 
-  allData = await syncPastPresentationsDone(presRes || []);
-  members = memberData || [];
+async function loadPresentationPageData() {
+  const [{ data: presentations }, memberData] = await Promise.all([
+    sb.from('presentations')
+      .select('*, members(name)')
+      .order('presented_at', { ascending: false })
+      .order('created_at',   { ascending: true }),
+    fetchMembers()
+  ]);
+  return { presentations, members: memberData || [] };
+}
 
-  // 필터 멤버 채우기
+function populateMemberFilter(memberRows) {
   const sel = document.getElementById('filterMember');
-  members.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">전체 멤버</option>';
+  memberRows.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+}
 
-  // 데이터 없으면 바로 렌더
-  if (!allData.length) {
-    renderAll([]);
-    return;
-  }
-
-  // 현재가 조회
+async function loadPresentationPriceContext() {
   try {
     // 1. stock_code 있는 항목 - 코드로 직접 조회
     const codes = [...new Set(allData.filter(p => p.stock_code).map(p => p.stock_code))];
@@ -192,27 +204,15 @@ async function init() {
     )];
 
     // 코드 조회 + 종목명 OR 조회를 동시에 실행
-    const [codeRes, nameRes] = await Promise.all([
-      codes.length > 0
-        ? sb.from('stock_prices')
-            .select('stock_code,stock_name,price,change_rate,market_cap,updated_at')
-            .in('stock_code', codes)
-        : Promise.resolve({ data: [] }),
-
-      stockNames.length > 0
-        ? sb.from('stock_prices')
-            .select('stock_code,stock_name,price,change_rate,market_cap,updated_at')
-            .or(stockNames.map(n => `stock_name.eq.${n}`).join(','))
-            .gt('price', 0)
-            .order('market_cap', { ascending: false, nullsFirst: false })
-            .limit(stockNames.length * 3)   // 동음이의어 고려
-        : Promise.resolve({ data: [] }),
+    const [codePriceMap, nameRows] = await Promise.all([
+      fetchPriceMapByCodes(codes),
+      fetchPriceRowsByNames(stockNames)
     ]);
 
-    const allPrices = [...(codeRes.data || []), ...(nameRes.data || [])];
+    const allPrices = [...Object.values(codePriceMap), ...nameRows.map(normalizePriceRow).filter(Boolean)];
 
     // priceMap 구성
-    for (const sp of allPrices) priceMap[sp.stock_code] = sp;
+    priceMap = mergePriceMaps(priceMap, codePriceMap, buildPriceMap(nameRows));
 
     // stock_code 없는 항목에 매칭 + DB 업데이트
     const dbUpdates = [];
@@ -252,10 +252,6 @@ async function init() {
   } catch(e) {
     console.warn('현재가 조회 오류:', e.message);
   }
-
-  // 탭에 맞게 렌더
-  const tabFiltered = allData.filter(p => (p.status || 'done') === currentTab);
-  renderAll(tabFiltered);
 }
 
 function applyFilter() {
@@ -368,32 +364,25 @@ async function autoFillPresentationPrices() {
 
 function getReturn(p) {
   const cur = getCurPrice(p);
-  if (!p.price_at || !cur?.price) return null;
-  return (cur.price - p.price_at) / p.price_at * 100;
+  return calcReturnRate(p.price_at, cur?.price);
 }
 
 function getCapReturn(p) {
   const cur = getCurPrice(p);
   if (!cur?.market_cap) return null;
   if (p.price_at && cur.price) {
-    const capAt = Math.round(cur.market_cap * (p.price_at / cur.price));
-    return (cur.market_cap - capAt) / capAt * 100;
+    return calcMarketCapReturn(calcMarketCapAt(p.price_at, cur.price, cur.market_cap), cur.market_cap);
   }
-  if (!p.market_cap_at) return null;
-  return (cur.market_cap - p.market_cap_at) / p.market_cap_at * 100;
+  return calcMarketCapReturn(p.market_cap_at, cur.market_cap);
 }
 
 // 산업명 추출 (topic = "테마명 > 종목명" 또는 "종목명")
 function parseIndustry(p) {
-  if (p.category === 'industry' && p.topic?.includes(' > ')) {
-    return p.topic.split(' > ')[0].trim();
-  }
-  return null;
+  return parsePresentationIndustry(p);
 }
 
 function parseStockName(p) {
-  if (p.topic?.includes(' > ')) return p.topic.split(' > ')[1].trim();
-  return p.topic || '';
+  return parsePresentationStockName(p);
 }
 
 function renderAll(data) {

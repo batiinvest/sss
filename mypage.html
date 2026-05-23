@@ -182,7 +182,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260428"></script>
+<script src="js/utils/returns.js?v=20260529"></script>
+<script src="js/services/price-service.js?v=20260529"></script>
+<script src="js/db.js?v=20260529"></script>
 <script>
 let myMember    = null;
 let myPriceMap  = {};
@@ -297,9 +299,7 @@ async function renderMyPicks() {
     // 현재가 조회
     const codes = [...new Set(holds.filter(p => p.stock_code).map(p => p.stock_code))];
     if (codes.length) {
-      const { data: prices } = await sb.from('stock_prices')
-        .select('stock_code,price,change_rate').in('stock_code', codes);
-      for (const p of (prices||[])) myPriceMap[p.stock_code] = p;
+      Object.assign(myPriceMap, await fetchPriceMapByCodes(codes));
     }
 
     tbody.innerHTML = picks.map(p => {
@@ -307,8 +307,8 @@ async function renderMyPicks() {
       const curPrice = cur?.price;
       const pnl      = (p.buy_price && p.buy_quantity && curPrice)
         ? (curPrice - p.buy_price) * p.buy_quantity : null;
-      const pnlRate  = (p.buy_price && curPrice)
-        ? ((curPrice - p.buy_price) / p.buy_price * 100).toFixed(1) : null;
+      const pnlRateNum = calcReturnRate(p.buy_price, curPrice);
+      const pnlRate  = pnlRateNum !== null ? pnlRateNum.toFixed(1) : null;
       const statusBadgeHtml = p.status === 'hold'
         ? statusBadge('hold')
         : statusBadge('sold');
@@ -349,14 +349,14 @@ async function renderMyPresentations() {
     // 현재가 조회
     const codes = [...new Set((pres||[]).filter(p => p.stock_code).map(p => p.stock_code))];
     if (codes.length) {
-      const { data: prices } = await sb.from('stock_prices')
-        .select('stock_code,price').in('stock_code', codes);
-      for (const p of (prices||[])) myPriceMap[p.stock_code] = p;
+      Object.assign(myPriceMap, await fetchPriceMapByCodes(codes));
     }
 
     // 평균 수익률
-    const withRet = pres.filter(p => p.stock_code && myPriceMap[p.stock_code]?.price && p.price_at);
-    const returns = withRet.map(p => (myPriceMap[p.stock_code].price - p.price_at) / p.price_at * 100);
+    const withRet = pres
+      .map(p => ({ item: p, rate: calcReturnRate(p.price_at, myPriceMap[p.stock_code]?.price) }))
+      .filter(x => x.rate !== null);
+    const returns = withRet.map(x => x.rate);
     const avg = returns.length ? returns.reduce((s,r) => s+r, 0) / returns.length : null;
     document.getElementById('myPresAvg').textContent = avg !== null
       ? `평균 수익률 ${avg >= 0 ? '+' : ''}${avg.toFixed(1)}% (${withRet.length}건)`
@@ -365,8 +365,8 @@ async function renderMyPresentations() {
     tbody.innerHTML = pres.map(p => {
       const cur      = p.stock_code ? myPriceMap[p.stock_code] : null;
       const curPrice = cur?.price;
-      const ret = (p.price_at && curPrice)
-        ? ((curPrice - p.price_at) / p.price_at * 100).toFixed(1) : null;
+      const retNum = calcReturnRate(p.price_at, curPrice);
+      const ret = retNum !== null ? retNum.toFixed(1) : null;
       const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
       const catBadge  = p.category === 'industry'
         ? '<span class="badge" style="background:#e8f4fd;color:#0c447c;">산업</span>'

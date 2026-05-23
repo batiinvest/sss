@@ -172,8 +172,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260428"></script>
-<script src="js/schedule-shared.js?v=20260522"></script>
+<script src="js/db.js?v=20260529"></script>
+<script src="js/schedule-shared.js?v=20260529"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -232,12 +232,10 @@ async function savePresEditModal() {
     };
     const { error } = await sb.from('presentations').update(payload).eq('id', _editDraft.id);
     if (error) throw error;
-    presentations = await sb.from('presentations')
-      .select('*, members(name)').order('created_at').then(r => r.data || []);
+    await reloadPresentations();
     toast('✅ 저장 완료');
     closePresEditModal();
-    renderMemberPresPanel();
-    renderPresOrderCalendar();
+    refreshPresentationScheduleViews();
   } catch(e) {
     toast('저장 오류: ' + e.message);
   } finally {
@@ -248,11 +246,9 @@ async function savePresEditModal() {
 async function clearPresEditStock() {
   if (!_editDraft || !confirm('종목을 초기화하고 다시 입력하시겠습니까?')) return;
   await sb.from('presentations').delete().eq('id', _editDraft.id);
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
+  await reloadPresentations();
   closePresEditModal();
-  renderMemberPresPanel();
-  renderPresOrderCalendar();
+  refreshPresentationScheduleViews();
 }
 
 document.getElementById('presEditModal').addEventListener('click', e => {
@@ -399,12 +395,8 @@ async function autoAssignNextCycle(scheduleId) {
     presented_at: sched.event_date,
   }).eq('id', draft.id);
 
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
-
-  renderPresOrderCalendar();
-  renderPresScheduleList();
-  renderMemberPresPanel();
+  await reloadPresentations();
+  refreshPresentationScheduleViews();
   toast('✅ ' + nextMember.name + ' → ' + sched.event_date + ' 자동 배정');
 }
 
@@ -419,10 +411,9 @@ async function resetPresOrder() {
     await sb.from('presentations').delete().eq('id', d.id);
   }
   toast('✅ 초기화 완료');
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
-  renderPresOrderCalendar(); renderMemberPresPanel();
-  renderPresScheduleList(); renderUpcoming(); renderScheduleList();
+  await reloadPresentations();
+  refreshPresentationScheduleViews();
+  renderUpcoming(); renderScheduleList();
 }
 
 
@@ -595,12 +586,9 @@ function renderPresOrderCalendar() {
           toast('✅ ' + memberName + ' → ' + stockName + ' 등록!');
         }
 
-        presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at').then(r => r.data || []);
+        await reloadPresentations();
         schedules = await fetchSchedules();
-        renderPresOrderCalendar();
-        renderPresScheduleList();
-        renderMemberPresPanel();  // 멤버 패널 갱신
+        refreshPresentationScheduleViews();
         renderUpcoming();
         renderScheduleList();
       });
@@ -728,10 +716,8 @@ function renderMemberPresPanel() {
         clearBtn.onclick = async () => {
           if (!confirm(m.name + '의 발표종목을 초기화할까요?')) return;
           await sb.from('presentations').delete().eq('id', draft.id);
-          presentations = await sb.from('presentations')
-            .select('*, members(name)').order('created_at').then(r => r.data || []);
-          renderPresOrderCalendar(); renderPresScheduleList();
-          renderMemberPresPanel();
+          await reloadPresentations();
+          refreshPresentationScheduleViews();
         };
         rightArea.appendChild(clearBtn);
       }
@@ -747,10 +733,8 @@ function renderMemberPresPanel() {
           unassignBtn.textContent = '배정 취소';
           unassignBtn.onclick = async () => {
             await sb.from('presentations').update({ schedule_id: null, presented_at: null }).eq('id', draft.id);
-            presentations = await sb.from('presentations')
-              .select('*, members(name)').order('created_at').then(r => r.data || []);
-            renderPresOrderCalendar(); renderPresScheduleList();
-            renderMemberPresPanel();
+            await reloadPresentations();
+            refreshPresentationScheduleViews();
           };
           rightArea.appendChild(unassignBtn);
         }
@@ -843,10 +827,8 @@ function renderMemberPresPanel() {
         };
         const { error } = await sb.from('presentations').insert(payload);
         if (error) { toast('저장 오류: ' + error.message); return; }
-        presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at').then(r => r.data || []);
-        renderPresOrderCalendar(); renderPresScheduleList();
-        renderMemberPresPanel();
+        await reloadPresentations();
+        refreshPresentationScheduleViews();
         const newDraft = presentations.find(p =>
           p.member_id === m.id && p.status === 'planned' && !p.schedule_id
         );
@@ -867,10 +849,8 @@ function renderMemberPresPanel() {
         };
         const { error } = await sb.from('presentations').insert(payload);
         if (error) { toast('저장 오류: ' + error.message); return; }
-        presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at').then(r => r.data || []);
-        renderPresOrderCalendar(); renderPresScheduleList();
-        renderMemberPresPanel();
+        await reloadPresentations();
+        refreshPresentationScheduleViews();
         const newDraft = presentations.find(p =>
           p.member_id === m.id && p.status === 'planned' && !p.schedule_id
         );
@@ -926,8 +906,7 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt, targe
 
   toast('✅ 저장됨 · 달력 일정으로 드래그하여 배정하세요', 2500);
 
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
+  await reloadPresentations();
 }
 
 // 멤버 패널 종목 자동완성
@@ -1053,10 +1032,8 @@ async function renderPresScheduleList() {
       delBtn.onclick = async () => {
         if (!confirm(s.event_date + ' 발표 배정을 초기화할까요?')) return;
         await sb.from('presentations').delete().eq('schedule_id', s.id);
-        presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at').then(r => r.data || []);
-        renderPresOrderCalendar();
-        renderPresScheduleList();
+        await reloadPresentations();
+        refreshPresentationScheduleViews();
         renderUpcoming();
         renderScheduleList();
         toast('초기화 완료');
@@ -1197,11 +1174,10 @@ async function doAssign(scheduleId, dateStr, payload) {
     toast('✅ ' + memberName + ' → ' + stockName + ' 등록!');
   }
 
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
+  await reloadPresentations();
   schedules = await fetchSchedules();
-  renderPresOrderCalendar(); renderPresScheduleList(); renderUpcoming(); renderScheduleList();
-  renderMemberPresPanel();  // 멤버 패널도 갱신 (배정 상태 칩 반영)
+  refreshPresentationScheduleViews();
+  renderUpcoming(); renderScheduleList();
 }
 
 document.getElementById('assignDateModal').addEventListener('click', e => {
@@ -1296,12 +1272,8 @@ async function autoAssignNextCycle(scheduleId) {
     category: sched.category,
   }).eq('id', draft.id);
 
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
-
-  renderPresOrderCalendar();
-  renderPresScheduleList();
-  renderMemberPresPanel();
+  await reloadPresentations();
+  refreshPresentationScheduleViews();
   toast('📌 ' + nextMember.name + ' → ' + sched.event_date + ' 자동 배정');
 }
 

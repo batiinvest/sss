@@ -78,12 +78,31 @@ async function loadSharedData() {
   const [s, m, p] = await Promise.all([
     fetchSchedules(),
     fetchMembers(),
-    sb.from('presentations').select('*, members(name)').order('created_at').then(r => r.data || [])
+    reloadPresentations()
   ]);
   schedules     = s;
   members       = m;
   presentations = p;
   await repairKnownScheduleData();
+}
+
+async function reloadPresentations() {
+  const { data, error } = await sb.from('presentations')
+    .select('*, members(name)')
+    .order('created_at');
+  if (error) {
+    console.error('reloadPresentations:', error);
+    return [];
+  }
+  presentations = data || [];
+  return presentations;
+}
+
+function refreshPresentationScheduleViews() {
+  if (typeof renderPresOrderCalendar === 'function') renderPresOrderCalendar();
+  if (typeof renderPresScheduleList === 'function') renderPresScheduleList();
+  if (typeof renderMemberPresPanel === 'function') renderMemberPresPanel();
+  if (typeof updatePanelGuide === 'function') updatePanelGuide();
 }
 
 async function repairKnownScheduleData() {

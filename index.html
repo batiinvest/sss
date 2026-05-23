@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260528">
+  <link rel="stylesheet" href="css/style.css?v=20260529">
   <script>
     (function () {
       if (window === window.parent) {
@@ -194,7 +194,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260428"></script>
+<script src="js/utils/returns.js?v=20260529"></script>
+<script src="js/utils/presentation.js?v=20260529"></script>
+<script src="js/services/price-service.js?v=20260529"></script>
+<script src="js/db.js?v=20260529"></script>
 <script src="js/modal-pick.js?v=20260428"></script>
 <script src="js/modal-pres.js?v=20260522"></script>
 <script>
@@ -224,7 +227,34 @@ async function init() {
   // 내 섹션 스켈레톤 먼저 표시 (로딩 중 UI)
   showMySectionSkeleton();
 
-  // 전체 데이터 + 내 섹션 데이터를 동시에 요청
+  const dashboardData = await loadDashboardData();
+  const { members, picks, allPicks, trades, allTradesData, me } = dashboardData;
+
+  currentMembers  = members;
+  currentPicks    = picks;
+  allCurrentPicks = allPicks;
+
+  renderDashboard(dashboardData);
+
+  if (me) {
+    const myData = await loadMyDashboardData(me.id);
+    document.getElementById('mySection').style.display = 'grid';
+    renderMyPicksData(me, myData.picks);
+    await renderMyPresData(me, myData.presentations, {});
+
+    refreshPrices().then(() => {
+      if (globalPriceMap && Object.keys(globalPriceMap).length) {
+        renderMyPicksData(me, myData.picks);
+        renderMyPresData(me, myData.presentations, globalPriceMap);
+      }
+    });
+  } else {
+    document.getElementById('myMemberNotice').style.display = 'block';
+    refreshPrices();
+  }
+}
+
+async function loadDashboardData() {
   const [members, picks, allPicks, trades, allTradesData, me] = await Promise.all([
     fetchMemberStats(),
     fetchPicksByMonth(currentMonth()),
@@ -233,45 +263,27 @@ async function init() {
     fetchAllTrades(),
     getCurrentMember(),
   ]);
+  return { members, picks, allPicks, trades, allTradesData, me };
+}
 
-  currentMembers  = members;
-  currentPicks    = picks;
-  allCurrentPicks = allPicks;
+async function loadMyDashboardData(memberId) {
+  const [myPicksRes, myPresRes] = await Promise.all([
+    sb.from('picks_with_trades').select('*').eq('member_id', memberId).order('month', { ascending: false }),
+    sb.from('presentations').select('*').eq('member_id', memberId).order('presented_at', { ascending: false }).limit(10),
+  ]);
+  return {
+    picks: myPicksRes.data || [],
+    presentations: myPresRes.data || [],
+  };
+}
 
-  // 전체 카드 렌더
+function renderDashboard({ members, picks, trades, allTradesData }) {
   renderMetrics(members, picks, allTradesData);
   renderPicksTable(picks, {});
   renderMemberBars(members);
   renderNotices(members, picks);
   renderTradesTable(trades);
   loadTopPresentationReturns();
-
-  // 내 섹션: 데이터가 준비됐으면 바로 렌더 (현재가 없어도 먼저 표시)
-  if (me) {
-    document.getElementById('mySection').style.display = 'grid';
-
-    // 내 탑픽·발표종목 데이터 병렬 요청
-    const [myPicksRes, myPresRes] = await Promise.all([
-      sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
-      sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10),
-    ]);
-    const myPicksData = myPicksRes.data || [];
-    const myPresData  = myPresRes.data  || [];
-
-    renderMyPicksData(me, myPicksData);
-    await renderMyPresData(me, myPresData, {});
-
-    // 현재가 갱신 후 평가손익 업데이트 (백그라운드)
-    refreshPrices().then(() => {
-      if (globalPriceMap && Object.keys(globalPriceMap).length) {
-        renderMyPicksData(me, myPicksData);
-        renderMyPresData(me, myPresData, globalPriceMap);
-      }
-    });
-  } else {
-    document.getElementById('myMemberNotice').style.display = 'block';
-    refreshPrices();
-  }
 }
 
 // ── 내 섹션 스켈레톤 (로딩 중 표시)
@@ -360,8 +372,7 @@ function renderMyPicksData(me, picks) {
     // price_at 기준 수익률 (이번 달 성과)
     const pnl     = (basePrice && p.buy_quantity && curPrice)
       ? (curPrice - basePrice) * p.buy_quantity : null;
-    const pnlRate = (basePrice && curPrice)
-      ? ((curPrice - basePrice) / basePrice * 100) : null;
+    const pnlRate = calcReturnRate(basePrice, curPrice);
 
     // 실제 보유 수익률 — 이월인 경우 원본 월 탑픽의 buy_price로 계산
     const isCarried = !!p.carried_from;
@@ -375,8 +386,8 @@ function renderMyPicksData(me, picks) {
       );
       realBuy = origPick?.buy_price || null;
     }
-    const realRate = (isCarried && realBuy && curPrice && realBuy !== basePrice)
-      ? ((curPrice - realBuy) / realBuy * 100) : null;
+    const realRate = (isCarried && realBuy && realBuy !== basePrice)
+      ? calcReturnRate(realBuy, curPrice) : null;
 
     const upside   = (p.target_price && curPrice) ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
     const pnlColor = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
@@ -455,11 +466,7 @@ async function renderMyPresData(me, presData, priceMap) {
   const mergedMap = { ...priceMap };
   if (missingCodes.length) {
     try {
-      const { data: prices } = await sb.from('stock_prices')
-        .select('stock_code,price,change_rate').in('stock_code', missingCodes);
-      for (const r of (prices || [])) {
-        if (r.price > 0) mergedMap[r.stock_code] = { price: r.price, change: r.change_rate };
-      }
+      Object.assign(mergedMap, await fetchPriceMapByCodes(missingCodes));
     } catch(e) { console.error('발표종목 현재가 조회 오류:', e); }
   }
 
@@ -467,7 +474,7 @@ async function renderMyPresData(me, presData, priceMap) {
     const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
     const cur       = p.stock_code ? mergedMap[p.stock_code] : null;
     const curPrice  = cur?.price;
-    const ret       = (p.price_at && curPrice) ? ((curPrice - p.price_at) / p.price_at * 100) : null;
+    const ret       = calcReturnRate(p.price_at, curPrice);
     const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
     return `<tr>
       <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at || '—'}</td>
@@ -572,15 +579,7 @@ async function refreshPrices() {
     }
 
     document.getElementById('priceUpdated').textContent = '현재가 조회 중...';
-    const { data: priceRows } = await sb.from('stock_prices')
-      .select('stock_code, price, change_rate')
-      .in('stock_code', codes);
-
-    // 전역 현재가 캐시 갱신
-    globalPriceMap = {};
-    for (const row of (priceRows || [])) {
-      if (row.price > 0) globalPriceMap[row.stock_code] = { price: row.price, change: row.change_rate || 0 };
-    }
+    globalPriceMap = await fetchPriceMapByCodes(codes);
 
     renderPicksTable(currentPicks, globalPriceMap);
     const t = new Date();
@@ -644,31 +643,26 @@ async function loadTopPresentationReturns() {
     }
 
     const codes = [...new Set(presentations.map(p => p.stock_code).filter(Boolean))];
-    const [priceRes, memberRes] = await Promise.all([
-      sb.from('stock_prices').select('stock_code, price, change_rate').in('stock_code', codes),
+    const [priceMap, memberRes] = await Promise.all([
+      fetchPriceMapByCodes(codes),
       sb.from('members').select('id, name')
     ]);
-    if (priceRes.error) throw priceRes.error;
     if (memberRes.error) throw memberRes.error;
-
-    const priceMap = {};
-    for (const row of (priceRes.data || [])) {
-      if (Number(row.price) > 0) priceMap[row.stock_code] = Number(row.price);
-    }
 
     const memberNameMap = new Map();
     (currentMembers || []).forEach(m => memberNameMap.set(m.id, m.name));
     (memberRes.data || []).forEach(m => memberNameMap.set(m.id, m.name));
 
     const ranked = presentations.map(p => {
-      const currentPrice = priceMap[p.stock_code];
+      const currentPrice = priceMap[p.stock_code]?.price;
       const basePrice = Number(p.price_at);
-      if (!currentPrice || !basePrice) return null;
+      const returnRate = calcReturnRate(basePrice, currentPrice);
+      if (returnRate === null) return null;
       return {
         ...p,
         currentPrice,
         basePrice,
-        returnRate: (currentPrice - basePrice) / basePrice * 100,
+        returnRate,
         presenter: memberNameMap.get(p.member_id) || '-'
       };
     }).filter(Boolean).sort((a, b) => b.returnRate - a.returnRate).slice(0, 5);
@@ -681,8 +675,8 @@ async function loadTopPresentationReturns() {
     list.innerHTML = ranked.map((p, i) => {
       const d = p.presented_at ? new Date(p.presented_at) : null;
       const dateText = d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}` : '-';
-      const stockName = p.topic?.includes(' > ') ? p.topic.split(' > ')[1].trim() : (p.topic || '-');
-      const categoryText = p.category === 'industry' ? '산업' : '종목';
+      const stockName = parsePresentationStockName(p) || '-';
+      const categoryText = getPresentationCategoryLabel(p.category);
       return `<div class="rank-item">
         <div class="rank-num">${i + 1}</div>
         <div class="rank-main">
@@ -743,16 +737,13 @@ function renderPicksTable(picks, prices) {
     const curPrice  = priceInfo?.price;
 
     // 이번 달 추천 수익률 (price_at 기준)
-    let recRate = null;
-    if (p.price_at && curPrice) {
-      recRate = (curPrice - p.price_at) / p.price_at * 100;
-    }
+    const recRate = calcReturnRate(p.price_at, curPrice);
 
     // 실질 보유 수익률 (buy_price 또는 buy_price_ref 기준)
     const refPrice = p.buy_price || p.buy_price_ref;
     let holdRate = null;
     if (p.status === 'hold' && curPrice && refPrice) {
-      holdRate = (curPrice - refPrice) / refPrice * 100;
+      holdRate = calcReturnRate(refPrice, curPrice);
     } else if (p.status === 'sold') {
       holdRate = p.realized_return ?? null;
     }
@@ -794,7 +785,7 @@ function renderPicksTable(picks, prices) {
         op.buy_price
       );
       if (origPick?.buy_price) {
-        origRate = (curPrice - origPick.buy_price) / origPick.buy_price * 100;
+        origRate = calcReturnRate(origPick.buy_price, curPrice);
       }
     }
 

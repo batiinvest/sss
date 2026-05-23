@@ -13,8 +13,12 @@ async function fetchMembers() {
 
 async function fetchMemberStats() {
   const [members, settlements] = await Promise.all([fetchMembers(), fetchSettlements()]);
+  const profitByMember = new Map();
+  for (const s of settlements) {
+    profitByMember.set(s.member_id, (profitByMember.get(s.member_id) || 0) + (s.net_profit || 0));
+  }
   return members.map((m, i) => {
-    const netProfit  = settlements.filter(s => s.member_id === m.id).reduce((sum, s) => sum + (s.net_profit || 0), 0);
+    const netProfit  = profitByMember.get(m.id) || 0;
     const returnRate = parseFloat(((m.base_amount - BASE_AMOUNT) / BASE_AMOUNT * 100).toFixed(1));
     return { ...m, net_profit: netProfit, return_rate: returnRate, av_cls: avCls[i % 6] };
   });
@@ -101,6 +105,9 @@ async function submitSettlement(payload) {
 // ── 현재가
 async function fetchCurrentPrices(codes) {
   if (!codes?.length) return {};
+  if (typeof fetchPriceMapByCodes === 'function') {
+    return fetchPriceMapByCodes(codes);
+  }
   const { data, error } = await sb.from('stock_prices')
     .select('stock_code, price, change_rate, market_cap, updated_at')
     .in('stock_code', codes);

@@ -203,7 +203,7 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260529"></script>
+<script src="js/db.js?v=20260615"></script>
 <script src="js/modal-pick.js?v=20260428"></script>
 <script src="js/modal-pres.js?v=20260522"></script>
 <script>
@@ -262,9 +262,11 @@ async function init() {
 }
 
 async function loadDashboardData() {
+  const month = currentMonth();
+  await ensurePickCarryForward(month);
   const [members, picks, allPicks, trades, allTradesData, me] = await Promise.all([
     fetchMemberStats(),
-    fetchPicksByMonth(currentMonth()),
+    fetchPicksByMonth(month),
     fetchAllPicks({ status: 'hold' }),
     fetchTrades(8),
     fetchAllTrades(),

@@ -43,6 +43,7 @@ async function deactivateMember(id) {
 
 // ── 탑픽
 async function fetchPicksByMonth(month) {
+  await ensurePickCarryForward(month);
   const { data, error } = await sb.from('picks_with_trades').select('*').eq('month', month).order('submitted_at');
   if (error) { console.error('fetchPicksByMonth:', error); return []; }
   return data;
@@ -61,6 +62,86 @@ async function submitPick(payload) {
   const { data, error } = await sb.from('picks').insert(payload).select().single();
   if (error) throw error;
   return data;
+}
+
+function prevMonthOf(month) {
+  const [year, mon] = String(month || currentMonth()).split('-').map(Number);
+  if (!year || !mon) return null;
+  return mon === 1
+    ? `${year - 1}-12`
+    : `${year}-${String(mon - 1).padStart(2, '0')}`;
+}
+
+async function fetchRawPriceMap(codes) {
+  const uniqueCodes = [...new Set((codes || []).filter(Boolean))];
+  if (!uniqueCodes.length) return {};
+  if (typeof fetchPriceMapByCodes === 'function') return fetchPriceMapByCodes(uniqueCodes);
+
+  const { data, error } = await sb.from('stock_prices')
+    .select('stock_code, price, change_rate, market_cap')
+    .in('stock_code', uniqueCodes);
+  if (error) {
+    console.error('fetchRawPriceMap:', error);
+    return {};
+  }
+  return Object.fromEntries((data || []).filter(r => Number(r.price) > 0).map(r => [r.stock_code, r]));
+}
+
+async function ensurePickCarryForward(month = currentMonth()) {
+  const prevMonth = prevMonthOf(month);
+  if (!prevMonth) return 0;
+
+  const { data: currentPicks, error: curErr } = await sb.from('picks')
+    .select('member_id')
+    .eq('month', month);
+  if (curErr) {
+    console.error('ensurePickCarryForward current:', curErr);
+    return 0;
+  }
+
+  const submittedMemberIds = new Set((currentPicks || []).map(p => p.member_id));
+  const activeMemberIds = new Set((await fetchMembers()).map(m => m.id));
+  const { data: prevPicks, error: prevErr } = await sb.from('picks_with_trades')
+    .select('member_id, stock_name, stock_code, market, target_price, current_cap, target_cap, reason, price_at, buy_price, buy_price_ref, month, carried_from, status')
+    .eq('month', prevMonth)
+    .eq('status', 'hold');
+  if (prevErr) {
+    console.error('ensurePickCarryForward previous:', prevErr);
+    return 0;
+  }
+
+  const targets = (prevPicks || []).filter(p =>
+    p.member_id &&
+    activeMemberIds.has(p.member_id) &&
+    p.stock_name &&
+    !submittedMemberIds.has(p.member_id)
+  );
+  if (!targets.length) return 0;
+
+  const priceMap = await fetchRawPriceMap(targets.map(p => p.stock_code));
+  const payloads = targets.map(p => {
+    const cur = p.stock_code ? priceMap[p.stock_code] : null;
+    return {
+      member_id: p.member_id,
+      month,
+      stock_name: p.stock_name,
+      stock_code: p.stock_code,
+      market: p.market || 'KOSPI',
+      target_price: p.target_price || null,
+      current_cap: cur?.market_cap || p.current_cap || null,
+      target_cap: p.target_cap || null,
+      reason: p.reason || null,
+      price_at: cur?.price || p.price_at || p.buy_price || p.buy_price_ref || null,
+      carried_from: p.carried_from || p.month,
+    };
+  });
+
+  const { error } = await sb.from('picks').insert(payloads);
+  if (error) {
+    console.error('ensurePickCarryForward insert:', error);
+    return 0;
+  }
+  return payloads.length;
 }
 
 // ── 거래

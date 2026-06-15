@@ -162,7 +162,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260428"></script>
+<script src="js/db.js?v=20260615"></script>
 <script src="js/modal-pick.js?v=20260428"></script>
 <script>
 let allPicks = [];
@@ -175,6 +175,7 @@ async function init() {
   checkDBConnection();
 
   // 멤버·탑픽 병렬 로드
+  await ensurePickCarryForward(selMonth);
   [members, allPicks] = await Promise.all([
     fetchMembers(),
     fetchAllPicks(),

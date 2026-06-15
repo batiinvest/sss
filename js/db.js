@@ -87,10 +87,31 @@ async function fetchRawPriceMap(codes) {
   return Object.fromEntries((data || []).filter(r => Number(r.price) > 0).map(r => [r.stock_code, r]));
 }
 
-async function ensurePickCarryForward(month = currentMonth()) {
-  const prevMonth = prevMonthOf(month);
-  if (!prevMonth) return 0;
+async function fetchLatestPriorPicks(month, fields = '*') {
+  const { data, error } = await sb.from('picks_with_trades')
+    .select(fields)
+    .lt('month', month)
+    .order('month', { ascending: false });
+  if (error) {
+    console.error('fetchLatestPriorPicks:', error);
+    return [];
+  }
 
+  const latestByMember = new Map();
+  for (const pick of data || []) {
+    if (pick.member_id && !latestByMember.has(pick.member_id)) {
+      latestByMember.set(pick.member_id, pick);
+    }
+  }
+  return [...latestByMember.values()];
+}
+
+async function fetchCarryForwardSourcePicks(month, fields = '*') {
+  const latestPicks = await fetchLatestPriorPicks(month, fields);
+  return latestPicks.filter(p => p.status === 'hold');
+}
+
+async function ensurePickCarryForward(month = currentMonth()) {
   const { data: currentPicks, error: curErr } = await sb.from('picks')
     .select('member_id')
     .eq('month', month);
@@ -101,16 +122,11 @@ async function ensurePickCarryForward(month = currentMonth()) {
 
   const submittedMemberIds = new Set((currentPicks || []).map(p => p.member_id));
   const activeMemberIds = new Set((await fetchMembers()).map(m => m.id));
-  const { data: prevPicks, error: prevErr } = await sb.from('picks_with_trades')
-    .select('member_id, stock_name, stock_code, market, target_price, current_cap, target_cap, reason, price_at, buy_price, buy_price_ref, month, carried_from, status')
-    .eq('month', prevMonth)
-    .eq('status', 'hold');
-  if (prevErr) {
-    console.error('ensurePickCarryForward previous:', prevErr);
-    return 0;
-  }
-
-  const targets = (prevPicks || []).filter(p =>
+  const priorHoldPicks = await fetchCarryForwardSourcePicks(
+    month,
+    'member_id, stock_name, stock_code, market, target_price, current_cap, target_cap, reason, price_at, buy_price, buy_price_ref, month, carried_from, status'
+  );
+  const targets = priorHoldPicks.filter(p =>
     p.member_id &&
     activeMemberIds.has(p.member_id) &&
     p.stock_name &&

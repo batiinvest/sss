@@ -282,20 +282,12 @@ async function loadDashboardData() {
 async function loadDashboardPicks(month) {
   const currentPicks = await fetchPicksByMonth(month);
   const currentMemberIds = new Set((currentPicks || []).map(p => p.member_id));
-  const prevMonth = typeof prevMonthOf === 'function' ? prevMonthOf(month) : null;
-  if (!prevMonth) return currentPicks || [];
-
   const activeMemberIds = new Set((await fetchMembers()).map(m => m.id));
-  const { data: prevPicks, error } = await sb.from('picks_with_trades')
-    .select('*')
-    .eq('month', prevMonth)
-    .eq('status', 'hold');
-  if (error) {
-    console.error('loadDashboardPicks previous:', error);
-    return currentPicks || [];
-  }
+  const priorHoldPicks = typeof fetchCarryForwardSourcePicks === 'function'
+    ? await fetchCarryForwardSourcePicks(month, '*')
+    : [];
 
-  const fallbackPicks = (prevPicks || [])
+  const fallbackPicks = priorHoldPicks
     .filter(p =>
       p.member_id &&
       activeMemberIds.has(p.member_id) &&

@@ -264,15 +264,52 @@ async function init() {
 async function loadDashboardData() {
   const month = currentMonth();
   await ensurePickCarryForward(month);
-  const [members, picks, allPicks, trades, allTradesData, me] = await Promise.all([
+  const [members, picks, allPicksRaw, trades, allTradesData, me] = await Promise.all([
     fetchMemberStats(),
-    fetchPicksByMonth(month),
+    loadDashboardPicks(month),
     fetchAllPicks({ status: 'hold' }),
     fetchTrades(8),
     fetchAllTrades(),
     getCurrentMember(),
   ]);
+  const allPicks = [
+    ...allPicksRaw,
+    ...picks.filter(p => p._isCarryFallback),
+  ];
   return { members, picks, allPicks, trades, allTradesData, me };
+}
+
+async function loadDashboardPicks(month) {
+  const currentPicks = await fetchPicksByMonth(month);
+  const currentMemberIds = new Set((currentPicks || []).map(p => p.member_id));
+  const prevMonth = typeof prevMonthOf === 'function' ? prevMonthOf(month) : null;
+  if (!prevMonth) return currentPicks || [];
+
+  const activeMemberIds = new Set((await fetchMembers()).map(m => m.id));
+  const { data: prevPicks, error } = await sb.from('picks_with_trades')
+    .select('*')
+    .eq('month', prevMonth)
+    .eq('status', 'hold');
+  if (error) {
+    console.error('loadDashboardPicks previous:', error);
+    return currentPicks || [];
+  }
+
+  const fallbackPicks = (prevPicks || [])
+    .filter(p =>
+      p.member_id &&
+      activeMemberIds.has(p.member_id) &&
+      !currentMemberIds.has(p.member_id)
+    )
+    .map(p => ({
+      ...p,
+      month,
+      carried_from: p.carried_from || p.month,
+      price_at: p.price_at || p.buy_price || p.buy_price_ref || null,
+      _isCarryFallback: true,
+    }));
+
+  return [...(currentPicks || []), ...fallbackPicks];
 }
 
 async function loadMyDashboardData(memberId) {

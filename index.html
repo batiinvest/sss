@@ -203,7 +203,7 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260615"></script>
+<script src="js/db.js?v=20260616"></script>
 <script src="js/modal-pick.js?v=20260428"></script>
 <script src="js/modal-pres.js?v=20260522"></script>
 <script>
@@ -280,28 +280,7 @@ async function loadDashboardData() {
 }
 
 async function loadDashboardPicks(month) {
-  const currentPicks = await fetchPicksByMonth(month);
-  const currentMemberIds = new Set((currentPicks || []).map(p => p.member_id));
-  const activeMemberIds = new Set((await fetchMembers()).map(m => m.id));
-  const priorHoldPicks = typeof fetchCarryForwardSourcePicks === 'function'
-    ? await fetchCarryForwardSourcePicks(month, '*')
-    : [];
-
-  const fallbackPicks = priorHoldPicks
-    .filter(p =>
-      p.member_id &&
-      activeMemberIds.has(p.member_id) &&
-      !currentMemberIds.has(p.member_id)
-    )
-    .map(p => ({
-      ...p,
-      month,
-      carried_from: p.carried_from || p.month,
-      price_at: p.price_at || p.buy_price || p.buy_price_ref || null,
-      _isCarryFallback: true,
-    }));
-
-  return [...(currentPicks || []), ...fallbackPicks];
+  return fetchPicksByMonthWithCarryFallback(month);
 }
 
 async function loadMyDashboardData(memberId) {

@@ -111,6 +111,52 @@ async function fetchCarryForwardSourcePicks(month, fields = '*') {
   return latestPicks.filter(p => p.status === 'hold');
 }
 
+function buildCarryForwardPicks(month, currentPicks = [], priorPicks = [], opts = {}) {
+  const activeMemberIds = opts.activeMemberIds || null;
+  const currentMemberIds = new Set((currentPicks || []).map(p => p.member_id));
+  const latestPriorByMember = new Map();
+
+  [...(priorPicks || [])]
+    .filter(p => p.month && p.month < month)
+    .sort((a, b) => String(b.month).localeCompare(String(a.month)))
+    .forEach(p => {
+      if (p.member_id && !latestPriorByMember.has(p.member_id)) {
+        latestPriorByMember.set(p.member_id, p);
+      }
+    });
+
+  const fallbackPicks = [...latestPriorByMember.values()]
+    .filter(p =>
+      p.status === 'hold' &&
+      p.member_id &&
+      !currentMemberIds.has(p.member_id) &&
+      (!activeMemberIds || activeMemberIds.has(p.member_id))
+    )
+    .map(p => ({
+      ...p,
+      month,
+      carried_from: p.carried_from || p.month,
+      price_at: p.price_at || p.buy_price || p.buy_price_ref || null,
+      _isCarryFallback: true,
+    }));
+
+  return [...(currentPicks || []), ...fallbackPicks];
+}
+
+async function fetchPicksByMonthWithCarryFallback(month, opts = {}) {
+  const fields = opts.fields || '*';
+  const activeOnly = opts.activeOnly !== false;
+  const [currentPicks, priorHoldPicks, activeMembers] = await Promise.all([
+    opts.currentPicks ? Promise.resolve(opts.currentPicks) : fetchPicksByMonth(month),
+    fetchCarryForwardSourcePicks(month, fields),
+    activeOnly && !opts.activeMemberIds ? fetchMembers() : Promise.resolve([]),
+  ]);
+  const activeMemberIds = activeOnly
+    ? (opts.activeMemberIds || new Set((activeMembers || []).map(m => m.id)))
+    : null;
+  return buildCarryForwardPicks(month, currentPicks, priorHoldPicks, { activeMemberIds });
+}
+
 async function ensurePickCarryForward(month = currentMonth()) {
   const { data: currentPicks, error: curErr } = await sb.from('picks')
     .select('member_id')

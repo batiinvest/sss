@@ -162,7 +162,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260615"></script>
+<script src="js/db.js?v=20260616"></script>
 <script src="js/modal-pick.js?v=20260428"></script>
 <script>
 let allPicks = [];
@@ -184,32 +184,6 @@ function recentMonthsFrom(month, count = 8) {
 
 async function reloadPicksData() {
   allPicks = await fetchAllPicks();
-}
-
-function getMonthPicksWithCarryFallback(month) {
-  const currentPicks = allPicks.filter(p => p.month === month);
-  const currentMemberIds = new Set(currentPicks.map(p => p.member_id));
-  const latestPriorByMember = new Map();
-
-  [...allPicks]
-    .filter(p => p.month && p.month < month)
-    .sort((a, b) => String(b.month).localeCompare(String(a.month)))
-    .forEach(p => {
-      if (p.member_id && !latestPriorByMember.has(p.member_id)) {
-        latestPriorByMember.set(p.member_id, p);
-      }
-    });
-
-  const fallbackPicks = [...latestPriorByMember.values()]
-    .filter(p => p.status === 'hold' && !currentMemberIds.has(p.member_id))
-    .map(p => ({
-      ...p,
-      month,
-      carried_from: p.carried_from || p.month,
-      _isCarryFallback: true,
-    }));
-
-  return [...currentPicks, ...fallbackPicks];
 }
 
 async function init() {
@@ -400,7 +374,9 @@ async function switchMonth(month, el) {
   applyFilter();
 }
 function renderMonthPicks(month) {
-  const picks = getMonthPicksWithCarryFallback(month);
+  const activeMemberIds = new Set((members || []).map(m => m.id));
+  const currentPicks = allPicks.filter(p => p.month === month);
+  const picks = buildCarryForwardPicks(month, currentPicks, allPicks, { activeMemberIds });
   const tbody = document.getElementById('monthPicksTbody');
   if (!picks.length) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-cell">${month} 탑픽 없음</td></tr>`;

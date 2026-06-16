@@ -170,6 +170,22 @@ let members  = [];
 let selMonth = currentMonth();
 let autoLookupTimer = null;
 
+function recentMonthsFrom(month, count = 8) {
+  const [year, mon] = String(month || currentMonth()).split('-').map(Number);
+  if (!year || !mon) return [currentMonth()];
+
+  const months = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(year, mon - 1 - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+
+async function reloadPicksData() {
+  allPicks = await fetchAllPicks();
+}
+
 async function init() {
   await requireAuth();
   checkDBConnection();
@@ -192,7 +208,7 @@ async function init() {
 
   // 탑픽 제출 후 목록 자동 갱신
   ModalPick.mount();
-  ModalPick._onSubmit = () => { allPicks = []; fetchAllPicks().then(p => { allPicks = p; renderMonthPicks(selMonth); renderHistory(); }); };
+  ModalPick._onSubmit = async () => { await ensurePickCarryForward(selMonth); await reloadPicksData(); buildMonthTabs(); renderMonthPicks(selMonth); applyFilter(); };
 }
 
 // ── 종목 자동완성 — db.js의 bindStockSearch 사용
@@ -329,21 +345,34 @@ function calcCapUpside() {
 
 // ── 월 탭
 function buildMonthTabs() {
-  const months = [...new Set(allPicks.map(p => p.month))].sort().reverse();
-  if (!months.includes(selMonth)) months.unshift(selMonth);
-  document.getElementById('monthTabs').innerHTML = months.slice(0,8).map(m => {
+  const months = [...new Set([
+    ...recentMonthsFrom(currentMonth(), 8),
+    ...allPicks.map(p => p.month),
+    selMonth,
+  ].filter(Boolean))].sort().reverse();
+  const visibleMonths = months.slice(0, 8);
+  if (!visibleMonths.includes(selMonth)) {
+    visibleMonths.pop();
+    visibleMonths.unshift(selMonth);
+  }
+  document.getElementById('monthTabs').innerHTML = visibleMonths.map(m => {
     const label = m.replace('-','년 ') + '월';
     return `<div class="tab ${m===selMonth?'active':''}" onclick="switchMonth('${m}',this)">${label}</div>`;
   }).join('');
 }
 
-function switchMonth(month, el) {
+async function switchMonth(month, el) {
   selMonth = month;
   document.querySelectorAll('#monthTabs .tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  renderMonthPicks(month);
-}
+  el?.classList.add('active');
+  document.getElementById('monthPicksTbody').innerHTML = '<tr><td colspan="9" class="empty-cell">불러오는 중...</td></tr>';
 
+  await ensurePickCarryForward(month);
+  await reloadPicksData();
+  buildMonthTabs();
+  renderMonthPicks(month);
+  applyFilter();
+}
 function renderMonthPicks(month) {
   const picks = allPicks.filter(p => p.month === month);
   const tbody = document.getElementById('monthPicksTbody');
@@ -453,10 +482,10 @@ async function submitPickForm() {
     });
     toast('탑픽이 제출되었습니다!');
     closePickForm();
-    allPicks = await fetchAllPicks();
+    await reloadPicksData();
     buildMonthTabs();
     renderMonthPicks(selMonth);
-    renderHistory();
+    applyFilter();
   } catch(e) {
     toast('오류: ' + (e.message || '제출 실패'));
   } finally {

@@ -186,6 +186,32 @@ async function reloadPicksData() {
   allPicks = await fetchAllPicks();
 }
 
+function getMonthPicksWithCarryFallback(month) {
+  const currentPicks = allPicks.filter(p => p.month === month);
+  const currentMemberIds = new Set(currentPicks.map(p => p.member_id));
+  const latestPriorByMember = new Map();
+
+  [...allPicks]
+    .filter(p => p.month && p.month < month)
+    .sort((a, b) => String(b.month).localeCompare(String(a.month)))
+    .forEach(p => {
+      if (p.member_id && !latestPriorByMember.has(p.member_id)) {
+        latestPriorByMember.set(p.member_id, p);
+      }
+    });
+
+  const fallbackPicks = [...latestPriorByMember.values()]
+    .filter(p => p.status === 'hold' && !currentMemberIds.has(p.member_id))
+    .map(p => ({
+      ...p,
+      month,
+      carried_from: p.carried_from || p.month,
+      _isCarryFallback: true,
+    }));
+
+  return [...currentPicks, ...fallbackPicks];
+}
+
 async function init() {
   await requireAuth();
   checkDBConnection();
@@ -374,7 +400,7 @@ async function switchMonth(month, el) {
   applyFilter();
 }
 function renderMonthPicks(month) {
-  const picks = allPicks.filter(p => p.month === month);
+  const picks = getMonthPicksWithCarryFallback(month);
   const tbody = document.getElementById('monthPicksTbody');
   if (!picks.length) {
     tbody.innerHTML = `<tr><td colspan="9" class="empty-cell">${month} 탑픽 없음</td></tr>`;
@@ -389,7 +415,7 @@ function renderMonthPicks(month) {
       ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
-      <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}</span></td>
+      <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}${p.carried_from ? ` · ${p.carried_from.replace('-','년 ')}월 이월` : ''}</span></td>
       <td><span class="badge b-hold">${p.market||'KOSPI'}</span></td>
       <td>${won(p.buy_price)}</td>
       <td>${won(p.sell_price)}</td>

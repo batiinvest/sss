@@ -18,6 +18,11 @@ const ADMIN_EMAILS = [
 // ── GitHub 저장소 (현재가 갱신 Actions용) ← 버그 수정
 window.GH_REPO = 'batiinvestment/SSS';
 
+// Kakao JavaScript key for KakaoTalk share.
+// Fill this with the JavaScript key from Kakao Developers to enable sharing.
+window.KAKAO_JS_KEY = '';
+window.APP_PUBLIC_URL = '';
+
 // ── Supabase 클라이언트 초기화
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);

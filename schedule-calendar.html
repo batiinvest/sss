@@ -131,7 +131,7 @@
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>메모</th><th style="width:100px;">작업</th>
+          <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>메모</th><th style="width:150px;">작업</th>
         </tr></thead>
         <tbody id="scheduleListTbody">
           <tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
@@ -166,6 +166,7 @@
     </div>
 
     <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn" id="detailKakaoShareBtn" style="font-size:12px;background:#fee500;border-color:#f0d000;color:#191919;">카톡 공유</button>
       <button class="btn" id="detailEditBtn">수정</button>
       <button class="btn btn-danger" id="detailDeleteBtn">삭제</button>
     </div>
@@ -175,13 +176,83 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260522"></script>
+<script src="js/config.js?v=20260619"></script>
+<script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
 <script src="js/db.js?v=20260529"></script>
 <script src="js/schedule-shared.js?v=20260529"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
 
+function getScheduleShareUrl(scheduleId) {
+  if (window.APP_PUBLIC_URL) {
+    return `${window.APP_PUBLIC_URL.replace(/\/$/, '')}/schedule-calendar.html?schedule=${encodeURIComponent(scheduleId || '')}`;
+  }
+  const origin = window.parent && window.parent !== window ? window.parent.location.origin : window.location.origin;
+  const rawPath = window.parent && window.parent !== window ? window.parent.location.pathname : window.location.pathname;
+  const path = rawPath.replace(/[^/]*$/, 'schedule-calendar.html');
+  const isLocalFile = !origin || origin === 'null' || window.location.protocol === 'file:';
+  if (isLocalFile) return 'https://github.com/batiinvest/sss';
+  return `${origin}${path}?schedule=${encodeURIComponent(scheduleId || '')}`;
+}
+
+function getSchedulePresentations(scheduleId, date) {
+  return (presentations || [])
+    .filter(p =>
+      (p.schedule_id === scheduleId || (!p.schedule_id && p.presented_at === date)) &&
+      (p.status === 'planned' || p.status === 'done')
+    )
+    .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+}
+
+function buildScheduleShareText(s) {
+  const parts = [];
+  parts.push(`${s.event_date}${s.event_time ? ' ' + s.event_time.slice(0, 5) : ''}`);
+  if (s.location) parts.push(s.location);
+  parts.push(CAT_LABEL[s.category] || '일정');
+
+  const pres = getSchedulePresentations(s.id, s.event_date);
+  const presText = pres.length
+    ? '\n\n발표 순서\n' + pres.map((p, i) => {
+        const name = p.members?.name || '발표자';
+        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '발표종목');
+        return `${i + 1}. ${name} - ${topic}`;
+      }).join('\n')
+    : '';
+
+  return `${parts.join(' · ')}${presText}`;
+}
+
+function ensureKakaoShareReady() {
+  const key = window.KAKAO_JS_KEY;
+  if (!key) {
+    toast('Kakao JavaScript 키를 js/config.js에 설정하면 공유할 수 있습니다.');
+    return false;
+  }
+  if (!window.Kakao || !Kakao.Share) {
+    toast('카카오 공유 SDK를 불러오지 못했습니다.');
+    return false;
+  }
+  if (!Kakao.isInitialized()) Kakao.init(key);
+  return true;
+}
+
+function shareScheduleToKakao(scheduleId, e) {
+  if (e) e.stopPropagation();
+  const s = schedules.find(item => item.id === scheduleId);
+  if (!s || !ensureKakaoShareReady()) return;
+
+  const url = getScheduleShareUrl(scheduleId);
+  Kakao.Share.sendDefault({
+    objectType: 'text',
+    text: `[SSS 스터디 일정]\n${s.title}\n${buildScheduleShareText(s)}`,
+    link: {
+      mobileWebUrl: url,
+      webUrl: url,
+    },
+    buttonTitle: '일정 보기',
+  });
+}
 async function init() {
   await requireAuth();
   checkDBConnection();
@@ -200,6 +271,11 @@ async function init() {
   renderCalendar();
   renderUpcoming();
   renderScheduleList();
+
+  const sharedScheduleId = new URLSearchParams(location.search).get('schedule');
+  if (sharedScheduleId) {
+    setTimeout(() => showDetail(sharedScheduleId), 0);
+  }
 }
 
 // ── 달력 렌더링
@@ -355,7 +431,10 @@ function renderUpcoming() {
           <span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${CAT_LABEL[s.category]||'기타'}</span>
           <span style="font-size:11px;color:${dDiff<=3?'#a32d2d':'var(--muted)'};">${dStr}</span>
         </div>
-        <div style="font-weight:500;font-size:14px;">${s.title}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="font-weight:500;font-size:14px;">${s.title}</div>
+          <button class="btn" style="font-size:11px;padding:3px 8px;background:#fee500;border-color:#f0d000;color:#191919;flex-shrink:0;" onclick="shareScheduleToKakao('${s.id}',event)">카톡 공유</button>
+        </div>
         ${s.event_time ? `<div style="font-size:12px;color:var(--muted);">${s.event_time.slice(0,5)}${s.location?' · '+s.location:''}</div>` : (s.location?`<div style="font-size:12px;color:var(--muted);">${s.location}</div>`:'')}
         ${(s.category === 'stock' || s.category === 'industry') ? presHtml : ''}
       </div>
@@ -384,7 +463,8 @@ function renderScheduleList() {
       <td class="muted">${s.location||'-'}</td>
       <td class="muted" style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.description||'-'}</td>
       <td>
-        <div style="display:flex;gap:4px;">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          <button class="btn" style="font-size:11px;padding:3px 8px;background:#fee500;border-color:#f0d000;color:#191919;" onclick="shareScheduleToKakao('${s.id}',event)">공유</button>
           <button class="btn" style="font-size:11px;padding:3px 8px;" onclick="editSchedule('${s.id}')">수정</button>
           <button class="btn" style="font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);" onclick="confirmDelete('${s.id}')">삭제</button>
         </div>
@@ -623,6 +703,7 @@ async function showDetail(id, e) {
 
   document.getElementById('detailEditBtn').onclick   = () => { closeDetail(); editSchedule(id); };
   document.getElementById('detailDeleteBtn').onclick = () => { closeDetail(); confirmDelete(id); };
+  document.getElementById('detailKakaoShareBtn').onclick = (event) => shareScheduleToKakao(id, event);
   document.getElementById('detailModal').style.display = 'flex';
 
   // 발표 종목 로드

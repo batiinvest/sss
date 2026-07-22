@@ -6,6 +6,13 @@
 const ModalPres = (() => {
   let _drafts  = [];   // 현재 유저의 planned presentations (draft)
   let _me      = null;
+  let _draftSaveTimer = null;
+  let _draftSaveInput = null;
+  let _draftSaveQueue = Promise.resolve();
+  let _lastSavedDraftKey = null;
+  let _lastQueuedDraftKey = null;
+  let _returnFocus = null;
+  const DRAFT_SAVE_DELAY = 500;
 
   function getModalTurnState(allPresentations, orderedMembers) {
     if (typeof getPresentationTurnState === 'function') {
@@ -74,8 +81,8 @@ const ModalPres = (() => {
     <div id="pm-memberPanel"></div>
     <!-- 하단 -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border);">
-      <span style="font-size:12px;color:var(--muted);">저장 후 스터디 일정 → 발표 순서 탭에서 날짜 배정</span>
-      <button class="btn btn-primary" style="font-size:13px;" onclick="ModalPres.close()">완료</button>
+      <div><span id="pm-save-status" role="status" aria-live="polite" style="display:block;font-size:12px;color:var(--green);">변경 내용은 자동 저장됩니다.</span><span style="font-size:11px;color:var(--muted);">저장 후 스터디 일정에서 날짜를 배정하세요.</span></div>
+      <button class="btn btn-primary" style="font-size:13px;" onclick="ModalPres.close()">입력 완료</button>
     </div>
   </div>
 </div>`;
@@ -88,6 +95,7 @@ const ModalPres = (() => {
   // ── 열기
   async function open() {
     mount();
+    _returnFocus = document.activeElement;
     document.getElementById('presModal').style.display = 'flex';
     document.getElementById('pm-memberPanel').innerHTML =
       '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">불러오는 중...</div>';
@@ -178,7 +186,10 @@ const ModalPres = (() => {
   // ── 닫기
   function close() {
     document.getElementById('presModal').style.display = 'none';
-    if (typeof ModalPres._onClose === 'function') ModalPres._onClose();
+    flushDraftSave().finally(() => {
+      if (typeof ModalPres._onClose === 'function') ModalPres._onClose();
+      _returnFocus?.focus?.();
+    });
   }
 
   function onCategoryChange() {
@@ -206,13 +217,13 @@ const ModalPres = (() => {
 
     panel.innerHTML =
       // 배정 완료 안내
-      (isAssigned ? '<div style="padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:12px;color:var(--green);margin-bottom:10px;">📅 <strong>' + (draft.presented_at||'날짜 미정') + '</strong> 발표 배정 완료 · 종목 변경 시 아래에서 수정</div>' : '') +
+      (isAssigned ? '<div style="padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:12px;color:var(--green);margin-bottom:10px;">📅 <strong>' + escapeHtml(draft.presented_at||'날짜 미정') + '</strong> 발표 배정 완료 · 종목 변경 시 아래에서 수정</div>' : '') +
       // 종목 검색 + 직접 입력
       '<div style="position:relative;margin-bottom:10px;">' +
         '<div style="display:flex;gap:4px;">' +
           '<div style="flex:1;position:relative;">' +
-            '<input type="text" id="pm-input" placeholder="종목명·코드 검색 또는 직접 입력" ' +
-              'style="width:100%;font-size:14px;padding:8px 12px;" value="' + stockName + '" />' +
+            '<input type="text" id="pm-input" aria-label="발표종목 검색" placeholder="종목명·코드 검색 또는 직접 입력" ' +
+              'style="width:100%;font-size:14px;padding:8px 12px;" value="' + escapeHtml(stockName) + '" />' +
             '<div id="pm-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:700;' +
               'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
               'box-shadow:0 4px 16px rgba(0,0,0,0.15);max-height:200px;overflow-y:auto;margin-top:2px;"></div>' +
@@ -225,27 +236,27 @@ const ModalPres = (() => {
       '<div id="pm-badge" style="display:' + (draft?.stock_code ? 'flex' : 'none') + ';align-items:center;gap:8px;' +
         'padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);' +
         'font-size:13px;color:var(--green);margin-bottom:10px;">' +
-        (draft?.stock_code ? '✅ <strong>' + stockName + '</strong> <span style="color:var(--muted);font-size:12px;">' + draft.stock_code + '</span>' : '') +
+        (draft?.stock_code ? '✅ <strong>' + escapeHtml(stockName) + '</strong> <span style="color:var(--muted);font-size:12px;">' + escapeHtml(draft.stock_code) + '</span>' : '') +
         '<button onclick="ModalPres.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>' +
       '</div>' +
       // 현재 시총 / 목표 시총
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">' +
-        '<div><label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">현재 시총 (억원)</label>' +
-          '<input type="number" id="pm-cur-cap" placeholder="자동 입력됨" value="' + (draft?.market_cap_at||'') + '" style="font-size:13px;padding:7px 10px;width:100%;"></div>' +
-        '<div><label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">목표 시총 (억원)</label>' +
-          '<input type="number" id="pm-tgt-cap" placeholder="예: 4200000" value="' + (draft?.target_cap||'') + '" style="font-size:13px;padding:7px 10px;width:100%;"></div>' +
+      '<div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">' +
+        '<div><label for="pm-cur-cap" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">현재 시총 (억원)</label>' +
+          '<input type="number" id="pm-cur-cap" inputmode="numeric" min="1" placeholder="자동 입력됨" value="' + (draft?.market_cap_at||'') + '" style="font-size:13px;padding:7px 10px;width:100%;"></div>' +
+        '<div><label for="pm-tgt-cap" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">목표 시총 (억원)</label>' +
+          '<input type="number" id="pm-tgt-cap" inputmode="numeric" min="1" placeholder="예: 420,000" value="' + (draft?.target_cap||'') + '" style="font-size:13px;padding:7px 10px;width:100%;"></div>' +
       '</div>' +
       '<div id="pm-cap-prev" style="display:none;padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:13px;color:var(--green);margin-bottom:10px;"></div>' +
-      // 투자 사유
-      '<div style="margin-bottom:10px;"><label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 사유</label>' +
-        '<textarea id="pm-reason" placeholder="매수 근거, 투자 thesis 등" ' +
+      // 핵심 발표 아이디어
+      '<div style="margin-bottom:10px;"><label for="pm-reason" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">핵심 발표 아이디어</label>' +
+        '<textarea id="pm-reason" placeholder="발표에서 전달할 핵심 투자 아이디어" ' +
           'style="font-size:13px;padding:7px 10px;width:100%;min-height:64px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;">' +
-          (draft?.reason||'') + '</textarea></div>' +
+          escapeHtml(draft?.reason||'') + '</textarea></div>' +
       // 투자 리스크
-      '<div><label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 리스크</label>' +
+      '<div><label for="pm-risk" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 리스크</label>' +
         '<textarea id="pm-risk" placeholder="주요 리스크 요인" ' +
           'style="font-size:13px;padding:7px 10px;width:100%;min-height:52px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;">' +
-          (draft?.risk||'') + '</textarea></div>';
+          escapeHtml(draft?.risk||'') + '</textarea></div>';
 
     const inp     = document.getElementById('pm-input');
     const dd      = document.getElementById('pm-dd');
@@ -256,6 +267,8 @@ const ModalPres = (() => {
 
     inp.dataset.stockCode = draft?.stock_code || '';
     inp.dataset.capAt     = draft?.market_cap_at || '';
+    const initialState = readDraftState(inp);
+    _lastSavedDraftKey = draft && initialState ? initialState.key : null;
 
     // 직접 입력 버튼 — 검색 안 되는 종목 (해외주식 등)
     const manualBtn = document.getElementById('pm-manual-btn');
@@ -269,7 +282,7 @@ const ModalPres = (() => {
         ' <span style="color:var(--muted);font-size:12px;">직접 입력</span>' +
         '<button onclick="ModalPres.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>';
       dd.style.display = 'none';
-      await saveDraft(inp);
+      await saveDraftNow(inp);
       toast('✅ ' + name + ' 저장됨');
     };
     manualBtn.onclick = doManualSave;
@@ -290,23 +303,29 @@ const ModalPres = (() => {
         '<button onclick="ModalPres.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>';
       if (s.market_cap) curC.value = s.market_cap;
       curC.dispatchEvent(new Event('input'));
-      saveDraft(inp);
+      saveDraftNow(inp);
     });
 
     // 상승여력
-    const calcCap = () => {
+    const calcCap = (shouldSave = true) => {
       const c = parseInt(curC.value), t = parseInt(tgtC.value);
       capPrev.style.display = (c>0&&t>0) ? 'block' : 'none';
       if (c>0&&t>0)
         capPrev.innerHTML = '시총 상승여력: ' + c.toLocaleString() + '억 → ' + t.toLocaleString() + '억 <strong>(+' + ((t-c)/c*100).toFixed(1) + '%)</strong>';
-      saveDraft(inp);
+      if (shouldSave) scheduleDraftSave(inp);
     };
-    curC.addEventListener('input', calcCap);
-    tgtC.addEventListener('input', calcCap);
-    document.getElementById('pm-reason').addEventListener('input', () => saveDraft(inp));
-    document.getElementById('pm-risk').addEventListener('input',   () => saveDraft(inp));
+    const reasonEl = document.getElementById('pm-reason');
+    const riskEl = document.getElementById('pm-risk');
+    curC.addEventListener('input', () => calcCap());
+    tgtC.addEventListener('input', () => calcCap());
+    reasonEl.addEventListener('input', () => scheduleDraftSave(inp));
+    riskEl.addEventListener('input',   () => scheduleDraftSave(inp));
+    [curC, tgtC, reasonEl, riskEl].forEach(el => {
+      el.addEventListener('blur', () => saveDraftNow(inp));
+    });
 
-    if (draft?.target_cap && draft?.market_cap_at) calcCap();
+    if (draft?.target_cap && draft?.market_cap_at) calcCap(false);
+    setTimeout(() => inp.focus(), 0);
   }
 
   // ── 종목 초기화
@@ -337,11 +356,10 @@ const ModalPres = (() => {
     myDraft.topic = newTopic;
   }
 
-  // ── Draft 자동 저장 (update 우선, 없으면 insert)
-  async function saveDraft(inp) {
-    if (!_me) return;
+  function readDraftState(inp) {
+    if (!_me) return null;
     const stockName = inp?.value?.trim();
-    if (!stockName) return;
+    if (!stockName) return null;
 
     const cat      = document.getElementById('pm-category')?.value || 'stock';
     const industry = document.getElementById('pm-industry')?.value?.trim() || '';
@@ -355,17 +373,85 @@ const ModalPres = (() => {
       risk:          document.getElementById('pm-risk')?.value?.trim()        || null,
       status: 'planned',
     };
+    return { payload, key: JSON.stringify(payload) };
+  }
+
+  // ── Draft 자동 저장 (trailing debounce + 직렬 쓰기)
+  async function persistDraft(state) {
+    const { payload, key } = state;
 
     const existing = _drafts.find(p => p.member_id === _me.id);
     if (existing) {
       // 기존 draft 수정 (배정된 것 포함)
-      await sb.from('presentations').update(payload).eq('id', existing.id);
+      const { error } = await sb.from('presentations').update(payload).eq('id', existing.id);
+      if (error) throw error;
       Object.assign(existing, payload);
     } else {
       const { data, error } = await sb.from('presentations')
         .insert({ member_id: _me.id, ...payload }).select().single();
-      if (!error && data) _drafts.push(data);
+      if (error) throw error;
+      if (data) _drafts.push(data);
     }
+    _lastSavedDraftKey = key;
+    setDraftSaveStatus('자동 저장됨', false);
+  }
+
+  function setDraftSaveStatus(message, isError = false) {
+    const element = document.getElementById('pm-save-status');
+    if (!element) return;
+    element.textContent = message;
+    element.style.color = isError ? 'var(--up)' : 'var(--green)';
+  }
+
+  function enqueueDraftSave(inp) {
+    const state = readDraftState(inp);
+    const alreadyPersisted = state?.key === _lastSavedDraftKey && !_lastQueuedDraftKey;
+    if (!state || alreadyPersisted || state.key === _lastQueuedDraftKey) {
+      return _draftSaveQueue;
+    }
+
+    _lastQueuedDraftKey = state.key;
+    const queuedKey = state.key;
+    setDraftSaveStatus('저장 중…');
+    _draftSaveQueue = _draftSaveQueue
+      .then(() => persistDraft(state))
+      .catch(error => {
+        console.error('발표 초안 자동 저장 오류:', error);
+        toast('발표 초안을 저장하지 못했습니다.');
+        setDraftSaveStatus('저장 실패 · 다시 입력하거나 잠시 후 시도하세요.', true);
+      })
+      .finally(() => {
+        if (_lastQueuedDraftKey === queuedKey) _lastQueuedDraftKey = null;
+      });
+    return _draftSaveQueue;
+  }
+
+  function scheduleDraftSave(inp) {
+    clearTimeout(_draftSaveTimer);
+    _draftSaveInput = inp;
+    setDraftSaveStatus('저장 대기 중…');
+    _draftSaveTimer = setTimeout(() => {
+      _draftSaveTimer = null;
+      const pendingInput = _draftSaveInput;
+      _draftSaveInput = null;
+      enqueueDraftSave(pendingInput);
+    }, DRAFT_SAVE_DELAY);
+  }
+
+  function saveDraftNow(inp) {
+    clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = null;
+    _draftSaveInput = null;
+    return enqueueDraftSave(inp);
+  }
+
+  function flushDraftSave() {
+    if (!_draftSaveTimer) return _draftSaveQueue;
+    clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = null;
+    const pendingInput = _draftSaveInput;
+    _draftSaveInput = null;
+    return enqueueDraftSave(pendingInput);
   }
 
   return { mount, open, close, onCategoryChange, clearStock };

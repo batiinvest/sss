@@ -1,0 +1,8 @@
+{
+  "appId": "com.batiinvestment.sss",
+  "appName": "SSS",
+  "webDir": "www",
+  "server": {
+    "iosScheme": "capacitor"
+  }
+}

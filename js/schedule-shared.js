@@ -83,7 +83,6 @@ async function loadSharedData() {
   schedules     = s;
   members       = m;
   presentations = p;
-  await repairKnownScheduleData();
 }
 
 async function reloadPresentations() {
@@ -103,26 +102,6 @@ function refreshPresentationScheduleViews() {
   if (typeof renderPresScheduleList === 'function') renderPresScheduleList();
   if (typeof renderMemberPresPanel === 'function') renderMemberPresPanel();
   if (typeof updatePanelGuide === 'function') updatePanelGuide();
-}
-
-async function repairKnownScheduleData() {
-  const target = schedules.find(s => s.event_date === '2026-06-01' && s.category === 'industry');
-  if (!target) return;
-
-  const schedulePatch = { category: 'stock' };
-  if (!target.title || target.title.includes('산업')) schedulePatch.title = '종목 분석';
-
-  const { error } = await sb.from('schedules').update(schedulePatch).eq('id', target.id);
-  if (error) {
-    console.warn('schedule repair skipped:', error.message);
-    return;
-  }
-
-  await sb.from('presentations').update({ category: 'stock' }).eq('schedule_id', target.id);
-  Object.assign(target, schedulePatch);
-  presentations = presentations.map(p =>
-    p.schedule_id === target.id ? { ...p, category: 'stock' } : p
-  );
 }
 
 // ── 탭 버튼 전환 헬퍼 (app.html iframe 또는 직접 이동)

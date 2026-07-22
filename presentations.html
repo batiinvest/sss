@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <title>SSS · 발표종목</title>
+  <link rel="stylesheet" href="css/style.css?v=20260711.2">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -15,10 +15,10 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">발표 히스토리</div>
-        <div class="updated" id="priceUpdatedAt">발표 당시 주가 vs 현재 주가 비교</div>
+        <div class="page-title">발표종목</div>
+        <div class="updated" id="priceUpdatedAt">발표 아이디어와 현재 성과를 확인하세요.</div>
       </div>
-      <div class="btn-row" style="flex-wrap:wrap;gap:8px;">
+      <div class="btn-row presentation-desktop-controls" style="flex-wrap:wrap;gap:8px;">
         <!-- 예정/완료 탭 -->
         <div class="tab-toggle">
           <button id="tabPlanned" onclick="switchTab('planned')">
@@ -28,22 +28,35 @@
             ✅ 완료
           </button>
         </div>
-        <select id="filterMember" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
+        <select id="filterMember" aria-label="발표자 필터" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
           <option value="">전체 발표자</option>
         </select>
-        <select id="filterCategory" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
+        <select id="filterCategory" aria-label="발표 구분 필터" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
           <option value="">전체 구분</option>
           <option value="industry">산업 분석</option>
           <option value="stock">기업 분석</option>
         </select>
+        <button type="button" class="btn btn-primary" onclick="navigateToAppRoute('index?action=presentation')">발표종목 등록</button>
       </div>
     </div>
 
+    <div class="mobile-only mobile-page-tools">
+      <label class="mobile-page-search" for="presentationSearch"><span aria-hidden="true">⌕</span><input type="search" id="presentationSearch" placeholder="종목명 또는 코드 검색" autocomplete="off"></label>
+      <button type="button" class="btn mobile-filter-toggle" onclick="togglePresentationFilters()" aria-controls="presentationMobileFilters" aria-expanded="false">필터</button>
+    </div>
+    <div id="presentationMobileFilters" class="mobile-only mobile-filter-panel" hidden>
+      <label>발표 상태<select id="mobilePresentationStatus" onchange="applyMobilePresentationFilters()"><option value="done">발표 완료</option><option value="planned">발표 예정</option></select></label>
+      <label>발표자<select id="mobileFilterMember" onchange="applyMobilePresentationFilters()"><option value="">전체 발표자</option></select></label>
+      <label>구분<select id="mobileFilterCategory" onchange="applyMobilePresentationFilters()"><option value="">전체 구분</option><option value="industry">산업 분석</option><option value="stock">기업 분석</option></select></label>
+      <button type="button" class="btn" onclick="resetPresentationFilters()">필터 초기화</button>
+    </div>
+    <div id="mobilePresentationList" class="mobile-stock-list" aria-live="polite"><div class="mobile-list-skeleton"></div><div class="mobile-list-skeleton"></div></div>
+
     <!-- 요약 카드 -->
-    <div id="summaryCards" class="metric-grid" class="mb-card"></div>
+    <div id="summaryCards" class="metric-grid mb-card desktop-summary-on-mobile"></div>
 
     <!-- 산업별 수익률 -->
-    <div class="card" class="mb-card" id="industrySection">
+    <div class="card mb-card desktop-summary-on-mobile" id="industrySection">
       <div class="card-head">
         <div class="card-title">산업별 평균 수익률</div>
         <div style="font-size:12px;color:var(--muted);">산업 분석 기준</div>
@@ -52,7 +65,7 @@
     </div>
 
     <!-- 기업별 수익률 -->
-    <div class="card" class="mb-card" id="memberSection">
+    <div class="card mb-card desktop-summary-on-mobile" id="memberSection">
       <div class="card-head">
         <div class="card-title">기업별 평균 수익률</div>
         <div style="font-size:12px;color:var(--muted);">발표자별 · 기업 분석 종목 기준</div>
@@ -61,13 +74,14 @@
     </div>
 
     <!-- 전체 발표 히스토리 -->
-    <div class="card">
+    <div class="card desktop-history-shell-on-mobile">
       <div class="card-head">
         <div class="card-title">발표 히스토리</div>
         <div style="font-size:12px;color:var(--muted);" id="countLabel"></div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap desktop-table-on-mobile">
         <table id="histTable">
+          <caption class="sr-only">발표종목별 발표일, 발표자, 발표 당시 가격, 현재가와 수익률</caption>
           <thead>
             <tr>
               <th>발표일</th>
@@ -93,16 +107,33 @@
 </div>
 <div id="toast" class="toast"></div>
 
+<div id="presentationDetailModal" class="detail-overlay" role="dialog" aria-modal="true" aria-labelledby="presentationDetailTitle" onclick="if(event.target===this) closePresentationDetail()">
+  <section class="detail-panel">
+    <div class="detail-head">
+      <div><h2 id="presentationDetailTitle" class="detail-title">발표종목</h2><p id="presentationDetailSubtitle" class="detail-subtitle"></p></div>
+      <button type="button" class="detail-close" onclick="closePresentationDetail()" aria-label="상세 닫기">×</button>
+    </div>
+    <div id="presentationDetailBody"></div>
+    <div class="detail-actions">
+      <button type="button" class="btn" id="presentationShareBtn">공유 링크 복사</button>
+      <button type="button" class="btn btn-primary" id="presentationConvertBtn">투자종목으로 전환</button>
+    </div>
+  </section>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260522"></script>
+<script src="js/config.js?v=20260711.2"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260529"></script>
+<script src="js/db.js?v=20260711.2"></script>
 <script>
 let allData  = [];
 let members  = [];
 let priceMap = {};
+let presentationSearchTerm = '';
+let presentationDetailId = null;
+let presentationDetailReturnFocus = null;
 
 let currentTab = 'done';  // 'planned' | 'done'
 
@@ -113,35 +144,17 @@ function todayStr() {
     String(d.getDate()).padStart(2, '0');
 }
 
-async function syncPastPresentationsDone(rows) {
-  const today = todayStr();
-  const targets = (rows || []).filter(p =>
-    p.status === 'planned' &&
-    p.schedule_id &&
-    p.presented_at &&
-    p.presented_at < today
-  );
-  if (!targets.length) return rows || [];
-
-  const updates = targets.map(p =>
-    sb.from('presentations').update({ status: 'done' }).eq('id', p.id)
-  );
-  await Promise.all(updates);
-
-  return (rows || []).map(p =>
-    targets.some(t => t.id === p.id) ? { ...p, status: 'done' } : p
-  );
-}
-
 function switchTab(tab) {
   currentTab = tab;
   document.getElementById('tabPlanned').classList.toggle('active', tab === 'planned');
   document.getElementById('tabDone').classList.toggle('active', tab === 'done');
-  renderAll(allData.filter(p => (p.status || 'done') === tab));
+  document.getElementById('mobilePresentationStatus').value = tab;
+  renderAll(getFilteredData());
 }
 
 async function init() {
-  await requireAuth();
+  const session = await requireAuth();
+  if (!session) return;
   checkDBConnection();
 
   const tbody = document.getElementById('histTbody');
@@ -152,9 +165,11 @@ async function init() {
       return;
     }
 
-    allData = await syncPastPresentationsDone(pageData.presentations || []);
+    // 목록 조회는 상태를 변경하지 않는다. 완료 처리는 일정/관리 흐름에서만 수행한다.
+    allData = pageData.presentations || [];
     members = pageData.members || [];
     populateMemberFilter(members);
+    populateMobileMemberFilter(members);
 
     if (!allData.length) {
       renderAll([]);
@@ -168,8 +183,16 @@ async function init() {
     return;
   }
 
-  const tabFiltered = allData.filter(p => (p.status || 'done') === currentTab);
-  renderAll(tabFiltered);
+  const params = new URLSearchParams(location.search);
+  const search = params.get('search');
+  if (search) {
+    presentationSearchTerm = search.trim().toLowerCase();
+    document.getElementById('presentationSearch').value = search;
+  }
+  renderAll(getFilteredData());
+
+  const detailId = params.get('id');
+  if (detailId) await openPresentationDetail(detailId);
 }
 
 async function loadPresentationPageData() {
@@ -187,7 +210,41 @@ function populateMemberFilter(memberRows) {
   const sel = document.getElementById('filterMember');
   if (!sel) return;
   sel.innerHTML = '<option value="">전체 멤버</option>';
-  memberRows.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+  memberRows.forEach(m => sel.innerHTML += `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`);
+}
+
+function populateMobileMemberFilter(memberRows) {
+  const select = document.getElementById('mobileFilterMember');
+  if (!select) return;
+  select.innerHTML = '<option value="">전체 발표자</option>' + memberRows.map(member =>
+    `<option value="${escapeHtml(member.id)}">${escapeHtml(member.name)}</option>`
+  ).join('');
+}
+
+function togglePresentationFilters() {
+  const panel = document.getElementById('presentationMobileFilters');
+  const button = document.querySelector('.mobile-filter-toggle');
+  const willOpen = panel.hidden;
+  panel.hidden = !willOpen;
+  button.setAttribute('aria-expanded', String(willOpen));
+}
+
+function applyMobilePresentationFilters() {
+  currentTab = document.getElementById('mobilePresentationStatus').value;
+  document.getElementById('filterMember').value = document.getElementById('mobileFilterMember').value;
+  document.getElementById('filterCategory').value = document.getElementById('mobileFilterCategory').value;
+  document.getElementById('tabPlanned').classList.toggle('active', currentTab === 'planned');
+  document.getElementById('tabDone').classList.toggle('active', currentTab === 'done');
+  renderAll(getFilteredData());
+}
+
+function resetPresentationFilters() {
+  presentationSearchTerm = '';
+  document.getElementById('presentationSearch').value = '';
+  document.getElementById('mobilePresentationStatus').value = 'done';
+  document.getElementById('mobileFilterMember').value = '';
+  document.getElementById('mobileFilterCategory').value = '';
+  applyMobilePresentationFilters();
 }
 
 async function loadPresentationPriceContext() {
@@ -214,8 +271,8 @@ async function loadPresentationPriceContext() {
     // priceMap 구성
     priceMap = mergePriceMaps(priceMap, codePriceMap, buildPriceMap(nameRows));
 
-    // stock_code 없는 항목에 매칭 + DB 업데이트
-    const dbUpdates = [];
+    // stock_code 없는 이전 데이터는 화면 안에서만 정확히 매칭한다.
+    // 조회만으로 DB를 수정하지 않는다.
     for (const item of noCodeItems) {
       const sName = parseStockName(item);
       if (!sName || sName.length < 2) continue;
@@ -226,19 +283,8 @@ async function loadPresentationPriceContext() {
       if (matched) {
         item.stock_code = matched.stock_code;
         priceMap[matched.stock_code] = matched;
-        dbUpdates.push(
-          sb.from('presentations')
-            .update({ stock_code: matched.stock_code })
-            .eq('id', item.id)
-        );
       }
     }
-    if (dbUpdates.length > 0) {
-      await Promise.all(dbUpdates);
-      console.log(`✅ stock_code ${dbUpdates.length}건 자동 연결`);
-    }
-
-    await autoFillPresentationPrices();
 
     // 마지막 업데이트 시각
     const latest = allPrices
@@ -255,12 +301,9 @@ async function loadPresentationPriceContext() {
 }
 
 function applyFilter() {
-  const member = document.getElementById('filterMember').value;
-  const cat    = document.getElementById('filterCategory').value;
-  renderAll(allData.filter(p =>
-    (!member || p.member_id === member) &&
-    (!cat    || p.category  === cat)
-  ));
+  document.getElementById('mobileFilterMember').value = document.getElementById('filterMember').value;
+  document.getElementById('mobileFilterCategory').value = document.getElementById('filterCategory').value;
+  renderAll(getFilteredData());
 }
 
 function getCurPrice(p) {
@@ -272,94 +315,6 @@ function getCurPrice(p) {
     sp.stock_name?.includes(sName) ||
     sName?.includes(sp.stock_name)
   ) || null;
-}
-
-function toUnixSeconds(dateStr, offsetDays = 0) {
-  const d = new Date(dateStr + 'T00:00:00+09:00');
-  d.setDate(d.getDate() + offsetDays);
-  return Math.floor(d.getTime() / 1000);
-}
-
-function yahooSymbolFor(p) {
-  const code = p.stock_code;
-  if (!code) return null;
-  const cur = getCurPrice(p);
-  const market = (cur?.market || p.market || '').toUpperCase();
-  if (/^\d{6}$/.test(code)) {
-    return code + (market.includes('KOSDAQ') ? '.KQ' : '.KS');
-  }
-  return code;
-}
-
-function dateInSeoul(tsSec) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date(tsSec * 1000));
-  const get = type => parts.find(p => p.type === type)?.value;
-  return get('year') + '-' + get('month') + '-' + get('day');
-}
-
-async function fetchHistoricalClose(p) {
-  const symbol = yahooSymbolFor(p);
-  if (!symbol || !p.presented_at) return null;
-
-  const url =
-    'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(symbol) +
-    '?period1=' + toUnixSeconds(p.presented_at, -3) +
-    '&period2=' + toUnixSeconds(p.presented_at, 4) +
-    '&interval=1d&events=history';
-
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const chart = await res.json();
-  const result = chart?.chart?.result?.[0];
-  const timestamps = result?.timestamp || [];
-  const closes = result?.indicators?.quote?.[0]?.close || [];
-  const rows = timestamps
-    .map((ts, i) => ({ date: dateInSeoul(ts), close: closes[i] }))
-    .filter(r => Number.isFinite(r.close) && r.close > 0)
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  return rows.find(r => r.date === p.presented_at)?.close ||
-    [...rows].reverse().find(r => r.date < p.presented_at)?.close ||
-    rows.find(r => r.date > p.presented_at)?.close ||
-    null;
-}
-
-async function autoFillPresentationPrices() {
-  const targets = allData.filter(p =>
-    (p.status || 'done') === 'done' &&
-    p.presented_at &&
-    p.stock_code &&
-    !p.price_at
-  );
-  if (!targets.length) return;
-
-  let filled = 0;
-  for (const p of targets) {
-    try {
-      const close = await fetchHistoricalClose(p);
-      if (!close) continue;
-      const priceAt = Math.round(close);
-      const cur = getCurPrice(p);
-      const patch = { price_at: priceAt };
-      if (!p.market_cap_at && cur?.price && cur?.market_cap) {
-        patch.market_cap_at = Math.round(cur.market_cap * (priceAt / cur.price));
-      }
-
-      const { error } = await sb.from('presentations').update(patch).eq('id', p.id);
-      if (error) throw error;
-      Object.assign(p, patch);
-      filled++;
-    } catch (e) {
-      console.warn('발표 당시가 자동 입력 실패:', p.stock_code, p.presented_at, e.message);
-    }
-  }
-
-  if (filled) toast('발표 당시가 ' + filled + '건 자동 입력 완료');
 }
 
 function getReturn(p) {
@@ -386,10 +341,42 @@ function parseStockName(p) {
 }
 
 function renderAll(data) {
+  renderPresentationCards(data);
+  if (window.matchMedia('(max-width: 768px)').matches) return;
   renderSummary(data);
   renderIndustryCards(data);
   renderMemberCards(data);
   renderTable(data);
+}
+
+function renderPresentationCards(data) {
+  const container = document.getElementById('mobilePresentationList');
+  if (!container) return;
+  if (!data.length) {
+    const hasFilter = presentationSearchTerm || document.getElementById('filterMember').value || document.getElementById('filterCategory').value;
+    container.innerHTML = hasFilter
+      ? '<div class="mobile-empty-state"><strong>조건에 맞는 발표종목이 없습니다.</strong><span>필터를 초기화하거나 다른 종목을 검색해 보세요.</span><button type="button" class="btn" onclick="resetPresentationFilters()">필터 초기화</button></div>'
+      : '<div class="mobile-empty-state"><strong>아직 등록된 발표종목이 없습니다.</strong><span>첫 발표종목을 등록해 보세요.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'index?action=presentation\')">발표종목 등록</button></div>';
+    return;
+  }
+
+  container.innerHTML = data.map(item => {
+    const current = getCurPrice(item);
+    const rate = getReturn(item);
+    const stockName = parseStockName(item);
+    const memberName = item.members?.name || '발표자 미정';
+    const status = item.status === 'planned' ? '발표 예정' : '발표 완료';
+    return `<button type="button" class="mobile-stock-card" onclick="openPresentationDetail('${escapeHtml(item.id)}')">
+      <span class="mobile-stock-card-head"><strong>${escapeHtml(stockName)}</strong><span class="badge ${item.status === 'planned' ? 'b-warn' : 'b-sold'}">${status}</span></span>
+      <span class="mobile-stock-card-meta">${escapeHtml(memberName)} · ${escapeHtml(item.presented_at || '날짜 미정')} ${item.stock_code ? '· ' + escapeHtml(item.stock_code) : ''}</span>
+      <span class="mobile-stock-card-metrics">
+        <span>발표 당시가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
+        <span>현재가<strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
+        <span>발표 후 수익률<strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></span>
+      </span>
+      <span class="mobile-stock-card-foot">최근 정보 · ${escapeHtml(item.updated_at ? fmtDate(item.updated_at) : item.presented_at || '업데이트 없음')}</span>
+    </button>`;
+  }).join('');
 }
 
 function renderSummary(data) {
@@ -423,7 +410,7 @@ function renderSummary(data) {
     <div class="metric">
       <div class="metric-label">최고 수익</div>
       <div class="metric-value up">${best !== null ? '+' + best.toFixed(1) + '%' : '—'}</div>
-      <div class="metric-sub">${bestP ? parseStockName(bestP) + ' · ' + (bestP.members?.name||'') : '—'}</div>
+      <div class="metric-sub">${bestP ? escapeHtml(parseStockName(bestP) + ' · ' + (bestP.members?.name||'')) : '—'}</div>
     </div>`;
 }
 
@@ -455,8 +442,8 @@ function renderIndustryCards(data) {
     return `<div class="metric" style="cursor:default;">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
         ${isIndustry
-          ? `<span class="industry-tag">${ind}</span>`
-          : `<span class="stock-tag">${ind}</span>`}
+          ? `<span class="industry-tag">${escapeHtml(ind)}</span>`
+          : `<span class="stock-tag">${escapeHtml(ind)}</span>`}
       </div>
       <div class="metric-value ${cls}" style="font-size:20px;">
         ${avg === null ? '—' : sign + avg.toFixed(1) + '%'}
@@ -500,8 +487,8 @@ function renderMemberCards(data) {
     const sign = avg !== null && avg >= 0 ? '+' : '';
     return '<div class="metric" style="cursor:default;">' +
       '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
-        '<div class="avatar ' + avCls[avIdx] + '" style="width:22px;height:22px;font-size:9px;">' + name.slice(0,2) + '</div>' +
-        '<span style="font-size:13px;font-weight:500;">' + name + '</span>' +
+        '<div class="avatar ' + avCls[avIdx] + '" style="width:22px;height:22px;font-size:9px;">' + escapeHtml(name.slice(0,2)) + '</div>' +
+        '<span style="font-size:13px;font-weight:500;">' + escapeHtml(name) + '</span>' +
       '</div>' +
       '<div class="metric-value ' + cls + '" style="font-size:20px;">' +
         (avg === null ? '—' : sign + avg.toFixed(1) + '%') +
@@ -509,6 +496,83 @@ function renderMemberCards(data) {
       '<div class="metric-sub">' + items.length + '종목 · 비교가능 ' + rets.length + '건</div>' +
     '</div>';
   }).join('');
+}
+
+async function openPresentationDetail(id) {
+  const item = allData.find(row => String(row.id) === String(id));
+  if (!item) {
+    toast('발표종목을 찾을 수 없습니다.');
+    return;
+  }
+  presentationDetailId = item.id;
+  presentationDetailReturnFocus = document.activeElement;
+  const modal = document.getElementById('presentationDetailModal');
+  const title = document.getElementById('presentationDetailTitle');
+  const subtitle = document.getElementById('presentationDetailSubtitle');
+  const body = document.getElementById('presentationDetailBody');
+  title.textContent = parseStockName(item);
+  subtitle.textContent = [item.stock_code, item.members?.name, item.presented_at].filter(Boolean).join(' · ');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  body.innerHTML = '<div class="search-loading"><span class="loading-spinner"></span>상세 정보를 불러오는 중…</div>';
+  modal.querySelector('.detail-close').focus();
+
+  let linkedPick = null;
+  if (item.stock_code) {
+    const { data } = await sb.from('picks_with_trades')
+      .select('pick_id,stock_name,stock_code,status,member_name,month,target_price,target_cap,reason,buy_price,buy_quantity,sell_price,realized_return')
+      .eq('stock_code', item.stock_code)
+      .order('month', { ascending: false })
+      .limit(1);
+    linkedPick = data?.[0] || null;
+  }
+
+  // 상세을 불러오는 동안 다른 카드를 열었으면 오래된 응답은 그리지 않는다.
+  if (String(presentationDetailId) !== String(item.id)) return;
+  const current = getCurPrice(item);
+  const rate = getReturn(item);
+  const targetPrice = linkedPick?.target_price || null;
+  const targetCap = item.target_cap || linkedPick?.target_cap || null;
+  const opinion = item.reason || linkedPick?.reason || '';
+  const risk = item.risk || '';
+  const isInvesting = linkedPick && (Number(linkedPick.buy_quantity) > 0 || Number(linkedPick.buy_price) > 0);
+  const statusLabel = item.status === 'planned' ? '발표 예정' : '발표 완료';
+
+  body.innerHTML = `
+    <div class="detail-hero">
+      <div><span>현재가</span><strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></div>
+      <div><span>발표 후 수익률</span><strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></div>
+      <div><span>목표주가</span><strong>${targetPrice ? Number(targetPrice).toLocaleString('ko-KR') + '원' : '미등록'}</strong></div>
+      <div><span>발표 당시가</span><strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '—'}</strong></div>
+      <div><span>상태</span><strong>${statusLabel}</strong></div>
+      <div><span>최근 업데이트</span><strong>${escapeHtml(item.updated_at ? fmtDate(item.updated_at) : item.presented_at || '—')}</strong></div>
+    </div>
+    <section class="detail-section"><h3>발표 내용</h3><p>${escapeHtml(item.topic || parseStockName(item))}</p></section>
+    <section class="detail-section"><h3>핵심 투자 의견</h3><p class="${opinion ? '' : 'muted-copy'}">${escapeHtml(opinion || '아직 등록된 투자 의견이 없습니다.')}</p></section>
+    <section class="detail-section"><h3>주요 리스크</h3><p class="${risk ? '' : 'muted-copy'}">${escapeHtml(risk || '등록된 리스크가 없습니다.')}</p></section>
+    <section class="detail-section"><h3>투자 연결 상태</h3><p>${linkedPick ? (isInvesting ? '현재 투자 진행 중인 종목입니다.' : '투자 아이디어가 등록되어 있으며 매수 대기 중입니다.') : '아직 투자종목으로 전환되지 않았습니다.'}${targetCap ? ` 목표 시가총액 ${Number(targetCap).toLocaleString('ko-KR')}억원` : ''}</p></section>`;
+
+  document.getElementById('presentationShareBtn').onclick = () => copyShareLink(`presentations?id=${encodeURIComponent(item.id)}`);
+  const convertButton = document.getElementById('presentationConvertBtn');
+  if (linkedPick?.pick_id) {
+    convertButton.textContent = '투자현황 보기';
+    convertButton.onclick = () => navigateToAppRoute(`picks?id=${encodeURIComponent(linkedPick.pick_id)}`);
+  } else {
+    convertButton.textContent = '투자종목으로 전환';
+    convertButton.onclick = () => navigateToAppRoute(`picks?action=new&presentation=${encodeURIComponent(item.id)}`);
+  }
+}
+
+function closePresentationDetail() {
+  presentationDetailId = null;
+  document.getElementById('presentationDetailModal').classList.remove('open');
+  document.body.style.overflow = '';
+  if (window.parent !== window && typeof window.parent.replaceRouteState === 'function') {
+    const params = new URLSearchParams(location.search);
+    params.delete('id'); params.delete('v');
+    window.parent.replaceRouteState('presentations' + (params.toString() ? '?' + params.toString() : ''));
+  }
+  presentationDetailReturnFocus?.focus?.();
 }
 
 
@@ -554,7 +618,7 @@ function renderTable(data) {
         <td colspan="10" style="padding:0;">
           <div class="industry-group-header">
             <div style="display:flex;align-items:center;gap:8px;">
-              <span class="${tagClass}">${headerLabel}</span>
+              <span class="${tagClass}">${escapeHtml(headerLabel)}</span>
               <span style="font-size:11px;color:var(--muted);">${p.presented_at} · ${groupItems.length}종목</span>
             </div>
           </div>
@@ -573,18 +637,18 @@ function renderTable(data) {
       <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at}</td>
       <td>
         <div class="flex">
-          <div class="avatar ${avCls[avIdx]}" style="width:22px;height:22px;font-size:9px;">${memberName.slice(0,2)}</div>
-          <span style="font-size:13px;">${memberName}</span>
+          <div class="avatar ${avCls[avIdx]}" style="width:22px;height:22px;font-size:9px;">${escapeHtml(memberName.slice(0,2))}</div>
+          <span style="font-size:13px;">${escapeHtml(memberName)}</span>
         </div>
       </td>
       <td>
         ${industry
-          ? `<span class="industry-tag">${industry}</span>`
+          ? `<span class="industry-tag">${escapeHtml(industry)}</span>`
           : `<span class="stock-tag">기업 분석</span>`}
       </td>
       <td style="font-weight:500;">
-        ${stockName}
-        ${p.stock_code ? `<div style="font-size:11px;color:var(--muted);">${p.stock_code}</div>` : ''}
+        ${escapeHtml(stockName)}
+        ${p.stock_code ? `<div style="font-size:11px;color:var(--muted);">${escapeHtml(p.stock_code)}</div>` : ''}
       </td>
       <td style="text-align:right;">
         ${p.status === 'planned'
@@ -699,11 +763,14 @@ async function savePriceAt(id, priceVal, cell) {
 function getFilteredData() {
   const member = document.getElementById('filterMember').value;
   const cat    = document.getElementById('filterCategory').value;
-  return allData.filter(p =>
-    (p.status || 'done') === currentTab &&
-    (!member || p.member_id === member) &&
-    (!cat    || p.category  === cat)
-  );
+  return allData.filter(p => {
+    const haystack = [parseStockName(p), p.stock_code, p.topic, p.members?.name]
+      .filter(Boolean).join(' ').toLowerCase();
+    return (p.status || 'done') === currentTab &&
+      (!member || p.member_id === member) &&
+      (!cat || p.category === cat) &&
+      (!presentationSearchTerm || haystack.includes(presentationSearchTerm));
+  });
 }
 
 // 행의 수익률·시총 셀을 재계산해서 업데이트
@@ -747,6 +814,16 @@ function updateRowStats(row, id) {
     if (p) p.market_cap_at = capAt;
   }
 }
+
+document.getElementById('presentationSearch').addEventListener('input', event => {
+  presentationSearchTerm = event.target.value.trim().toLowerCase();
+  renderAll(getFilteredData());
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.getElementById('presentationDetailModal').classList.contains('open')) {
+    closePresentationDetail();
+  }
+});
 
 init();
 </script>

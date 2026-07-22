@@ -43,7 +43,6 @@ async function deactivateMember(id) {
 
 // ── 탑픽
 async function fetchPicksByMonth(month) {
-  await ensurePickCarryForward(month);
   const { data, error } = await sb.from('picks_with_trades').select('*').eq('month', month).order('submitted_at');
   if (error) { console.error('fetchPicksByMonth:', error); return []; }
   return data;
@@ -155,55 +154,6 @@ async function fetchPicksByMonthWithCarryFallback(month, opts = {}) {
     ? (opts.activeMemberIds || new Set((activeMembers || []).map(m => m.id)))
     : null;
   return buildCarryForwardPicks(month, currentPicks, priorHoldPicks, { activeMemberIds });
-}
-
-async function ensurePickCarryForward(month = currentMonth()) {
-  const { data: currentPicks, error: curErr } = await sb.from('picks')
-    .select('member_id')
-    .eq('month', month);
-  if (curErr) {
-    console.error('ensurePickCarryForward current:', curErr);
-    return 0;
-  }
-
-  const submittedMemberIds = new Set((currentPicks || []).map(p => p.member_id));
-  const activeMemberIds = new Set((await fetchMembers()).map(m => m.id));
-  const priorHoldPicks = await fetchCarryForwardSourcePicks(
-    month,
-    'member_id, stock_name, stock_code, market, target_price, current_cap, target_cap, reason, price_at, buy_price, buy_price_ref, month, carried_from, status'
-  );
-  const targets = priorHoldPicks.filter(p =>
-    p.member_id &&
-    activeMemberIds.has(p.member_id) &&
-    p.stock_name &&
-    !submittedMemberIds.has(p.member_id)
-  );
-  if (!targets.length) return 0;
-
-  const priceMap = await fetchRawPriceMap(targets.map(p => p.stock_code));
-  const payloads = targets.map(p => {
-    const cur = p.stock_code ? priceMap[p.stock_code] : null;
-    return {
-      member_id: p.member_id,
-      month,
-      stock_name: p.stock_name,
-      stock_code: p.stock_code,
-      market: p.market || 'KOSPI',
-      target_price: p.target_price || null,
-      current_cap: cur?.market_cap || p.current_cap || null,
-      target_cap: p.target_cap || null,
-      reason: p.reason || null,
-      price_at: cur?.price || p.price_at || p.buy_price || p.buy_price_ref || null,
-      carried_from: p.carried_from || p.month,
-    };
-  });
-
-  const { error } = await sb.from('picks').insert(payloads);
-  if (error) {
-    console.error('ensurePickCarryForward insert:', error);
-    return 0;
-  }
-  return payloads.length;
 }
 
 // ── 거래
@@ -419,10 +369,11 @@ async function fetchPresentations(filters = {}) {
  * @returns {Promise<Array>} 종목 배열 { stock_code, stock_name, market, price, change_rate, market_cap }
  */
 async function searchStockPrices(q, limit = 12) {
-  if (!q || q.trim().length < 2) return [];
+  const term = String(q || '').replace(/[%_,().]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (term.length < 2) return [];
   const { data, error } = await sb.from('stock_prices')
     .select('stock_code, stock_name, market, price, change_rate, market_cap')
-    .or(`stock_name.ilike.%${q.trim()}%,stock_code.ilike.%${q.trim()}%`)
+    .or(`stock_name.ilike.%${term}%,stock_code.ilike.%${term}%`)
     .gt('price', 0)
     .order('market_cap', { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -465,8 +416,8 @@ function bindStockSearch(input, ddEl, onSelect, options = {}) {
 
         item.innerHTML =
           `<div>
-            <span style="font-weight:500;">${s.stock_name}</span>
-            <span style="color:var(--muted);font-size:11px;margin-left:6px;">${s.stock_code} · ${s.market}</span>
+            <span style="font-weight:500;">${escapeHtml(s.stock_name)}</span>
+            <span style="color:var(--muted);font-size:11px;margin-left:6px;">${escapeHtml(s.stock_code)} · ${escapeHtml(s.market)}</span>
           </div>
           <div style="text-align:right;">
             <div style="font-weight:500;">${s.price ? s.price.toLocaleString() + '원' : '—'}</div>

@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#185fa5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SSS">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260530">
+  <link rel="stylesheet" href="css/style.css?v=20260722.1">
   <style>
     html, body { height: 100%; margin: 0; }
-    .layout { height: 100vh; display: flex; overflow: hidden; }
+    .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
 
     /* iframe */
     #page-frame {
@@ -56,6 +63,19 @@
 <body>
 <div class="layout">
 
+  <header class="mobile-appbar" aria-label="모바일 앱 헤더">
+    <button class="mobile-brand" type="button" onclick="loadPage('index')" aria-label="SSS 홈으로 이동">
+      <span class="mobile-brand-mark" aria-hidden="true">S</span>
+      <span>SSS</span>
+    </button>
+    <div class="mobile-appbar-actions">
+      <button type="button" class="mobile-icon-btn" onclick="openGlobalSearch()" aria-label="전체 종목 검색">
+        <span aria-hidden="true">⌕</span>
+      </button>
+      <button type="button" class="mobile-add-btn" onclick="openQuickAdd()">+ 등록</button>
+    </div>
+  </header>
+
   <!-- 사이드바: 한 번만 로드, 페이지 이동 시 유지 -->
   <nav class="sidebar">
     <a href="#" onclick="loadPage('index');return false;" class="logo" style="text-decoration:none;color:inherit;cursor:pointer;">
@@ -96,16 +116,17 @@
       </div>
     </div>
 
-    <a href="#" onclick="loadPage('index');return false;" class="nav-item" data-page="index"><div class="nav-dot g"></div>대시보드</a>
+    <a href="#" onclick="loadPage('index');return false;" class="nav-item" data-page="index"><div class="nav-dot g"></div>홈</a>
 
     <div class="nav-section-label">스터디</div>
     <a href="#" onclick="loadPage('schedule-calendar');return false;" class="nav-item" data-page="schedule-calendar"><div class="nav-dot g"></div>스터디 일정</a>
-    <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표 히스토리</a>
+    <a href="#" onclick="loadPage('schedule-order');return false;" class="nav-item" data-page="schedule-order"><div class="nav-dot g"></div>발표 순서</a>
+    <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표종목</a>
     <a href="#" onclick="loadPage('fees');return false;"          class="nav-item" data-page="fees"><div class="nav-dot a"></div>스터디 회비</a>
 
     <div class="nav-section-label">투자</div>
-    <a href="#" onclick="loadPage('picks');return false;"   class="nav-item" data-page="picks"><div class="nav-dot"></div>탑픽 관리</a>
-    <a href="#" onclick="loadPage('trade');return false;"   class="nav-item" data-page="trade"><div class="nav-dot r"></div>매수 / 매도</a>
+    <a href="#" onclick="loadPage('picks');return false;"   class="nav-item" data-page="picks"><div class="nav-dot"></div>투자종목</a>
+    <a href="#" onclick="loadPage('trade');return false;"   class="nav-item" data-page="trade"><div class="nav-dot r"></div>매수·매도 등록</a>
     <a href="#" onclick="loadPage('settle');return false;"  class="nav-item" data-page="settle"><div class="nav-dot a"></div>결산 관리</a>
     <a href="#" onclick="loadPage('members');return false;" class="nav-item" data-page="members"><div class="nav-dot"></div>참여자 현황</a>
 
@@ -119,63 +140,183 @@
   </nav>
 
   <!-- iframe: 각 페이지 컨텐츠 -->
-  <iframe id="page-frame" src="index.html?v=20260530" title="페이지 컨텐츠" scrolling="yes" style="flex:1;border:none;width:100%;height:100vh;background:var(--bg);"></iframe>
+  <iframe id="page-frame" src="about:blank" title="SSS 페이지 콘텐츠" scrolling="yes" style="flex:1;border:none;width:100%;height:100vh;background:var(--bg);"></iframe>
+
+  <nav class="mobile-bottom-nav" aria-label="주요 메뉴">
+    <button type="button" data-page="index" onclick="loadPage('index')"><span aria-hidden="true">⌂</span><span>홈</span></button>
+    <button type="button" data-page="presentations" onclick="loadPage('presentations')"><span aria-hidden="true">▤</span><span>발표종목</span></button>
+    <button type="button" data-search-nav onclick="openGlobalSearch()"><span aria-hidden="true">⌕</span><span>검색</span></button>
+    <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>투자종목</span></button>
+    <button type="button" data-more-nav onclick="openMoreMenu()"><span aria-hidden="true">☰</span><span>내 메뉴</span></button>
+  </nav>
 
 </div>
-<div id="toast" class="toast"></div>
+
+<div id="globalSearch" class="app-sheet app-search-sheet" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle" hidden>
+  <button class="app-sheet-backdrop" type="button" onclick="closeGlobalSearch()" aria-label="검색 닫기"></button>
+  <section class="app-sheet-panel">
+    <div class="app-sheet-handle" aria-hidden="true"></div>
+    <div class="app-sheet-head">
+      <div>
+        <h2 id="globalSearchTitle">전체 종목 검색</h2>
+        <p>종목명이나 종목코드로 발표·투자 기록을 함께 찾습니다.</p>
+      </div>
+      <button type="button" class="app-sheet-close" onclick="closeGlobalSearch()" aria-label="검색 닫기">×</button>
+    </div>
+    <label class="global-search-field" for="globalSearchInput">
+      <span aria-hidden="true">⌕</span>
+      <input id="globalSearchInput" type="search" inputmode="search" autocomplete="off" placeholder="예: 삼성전자 또는 005930" aria-describedby="globalSearchHint">
+    </label>
+    <div id="globalSearchHint" class="sr-only">두 글자 이상 입력하면 검색합니다.</div>
+    <div id="globalSearchResults" class="global-search-results" aria-live="polite"></div>
+  </section>
+</div>
+
+<div id="quickAddSheet" class="app-sheet" role="dialog" aria-modal="true" aria-labelledby="quickAddTitle" hidden>
+  <button class="app-sheet-backdrop" type="button" onclick="closeQuickAdd()" aria-label="등록 메뉴 닫기"></button>
+  <section class="app-sheet-panel app-sheet-panel-small">
+    <div class="app-sheet-handle" aria-hidden="true"></div>
+    <div class="app-sheet-head"><div><h2 id="quickAddTitle">빠른 등록</h2><p>하려는 작업을 선택하세요.</p></div><button type="button" class="app-sheet-close" onclick="closeQuickAdd()" aria-label="등록 메뉴 닫기">×</button></div>
+    <div class="sheet-action-list">
+      <button type="button" onclick="runQuickRoute('index?action=presentation')"><strong>발표종목 등록</strong><span>발표할 종목을 먼저 저장합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>투자종목 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('trade?type=buy')"><strong>매수 등록</strong><span>보유를 시작하거나 추가 매수합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('trade?type=sell')"><strong>매도 등록</strong><span>일부 또는 전량 매도를 기록합니다.</span></button>
+    </div>
+  </section>
+</div>
+
+<div id="moreMenuSheet" class="app-sheet" role="dialog" aria-modal="true" aria-labelledby="moreMenuTitle" hidden>
+  <button class="app-sheet-backdrop" type="button" onclick="closeMoreMenu()" aria-label="내 메뉴 닫기"></button>
+  <section class="app-sheet-panel app-sheet-panel-small">
+    <div class="app-sheet-handle" aria-hidden="true"></div>
+    <div class="app-sheet-head"><div><h2 id="moreMenuTitle">내 메뉴</h2><p>개인 정보와 보조 기능입니다.</p></div><button type="button" class="app-sheet-close" onclick="closeMoreMenu()" aria-label="내 메뉴 닫기">×</button></div>
+    <div class="more-menu-grid">
+      <button type="button" onclick="runMoreRoute('mypage')">내 정보</button>
+      <button type="button" onclick="runMoreRoute('trade')">매수·매도</button>
+      <button type="button" onclick="runMoreRoute('schedule-calendar')">스터디 일정</button>
+      <button type="button" onclick="runMoreRoute('schedule-order')">발표 순서</button>
+      <button type="button" onclick="runMoreRoute('fees')">스터디 회비</button>
+      <button type="button" onclick="runMoreRoute('settle')">결산 관리</button>
+      <button type="button" onclick="runMoreRoute('members')">참여자 현황</button>
+      <button type="button" id="mobileAdminMenu" onclick="runMoreRoute('admin')" hidden>사용자 관리</button>
+      <button type="button" class="more-menu-logout" onclick="doLogout()">로그아웃</button>
+    </div>
+  </section>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260529"></script>
+<script src="js/config.js?v=20260711.2"></script>
+<script src="js/db.js?v=20260711.2"></script>
+<script src="js/pwa.js?v=20260711.2"></script>
 <script>
-let currentPage = 'index';
+const APP_PAGES = new Set([
+  'index', 'presentations', 'picks', 'trade', 'schedule-calendar',
+  'schedule-order', 'fees', 'settle', 'members', 'mypage', 'admin'
+]);
+let currentPage = '';
+let currentRoute = '';
 let currentUserIsAdmin = false;
+let searchTimer = null;
+let searchRequestId = 0;
+let sheetReturnFocus = null;
 
-function loadPage(pageName) {
-  if (pageName === 'admin' && !currentUserIsAdmin) {
+function normalizeRoute(input) {
+  const raw = String(input || 'index').replace(/^#/, '');
+  const queryIndex = raw.indexOf('?');
+  let page = (queryIndex >= 0 ? raw.slice(0, queryIndex) : raw).toLowerCase();
+  if (!APP_PAGES.has(page)) page = 'index';
+  const params = new URLSearchParams(queryIndex >= 0 ? raw.slice(queryIndex + 1) : '');
+  params.delete('v');
+  const query = params.toString();
+  return { page, route: page + (query ? '?' + query : ''), params };
+}
+
+function routeFrameSrc(route) {
+  const parsed = normalizeRoute(route);
+  const params = new URLSearchParams(parsed.params);
+  params.set('v', '20260722.1');
+  return parsed.page + '.html?' + params.toString();
+}
+
+function updateActiveNavigation(page) {
+  document.querySelectorAll('[data-page]').forEach(el => {
+    const active = el.dataset.page === page;
+    el.classList.toggle('active', active);
+    if (active) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
+  });
+  const moreActive = !['index', 'presentations', 'picks'].includes(page);
+  document.querySelector('[data-more-nav]')?.classList.toggle('active', moreActive);
+}
+
+function loadPage(route, options = {}) {
+  let parsed = normalizeRoute(route);
+  if (parsed.page === 'admin' && !currentUserIsAdmin) {
     toast('관리자만 접근할 수 있습니다.');
-    pageName = 'index';
+    parsed = normalizeRoute('index');
   }
 
   const frame = document.getElementById('page-frame');
-  const isSamePage = currentPage === pageName;
-
-  // 같은 페이지라도 iframe 내부가 다른 곳으로 이동했으면 reload 필요
-  // (예: 대시보드 → 탑픽 제출 → 사이드바 대시보드 클릭)
-  if (isSamePage) {
-    const currentSrc = frame.src || '';
-    const expectedSrc = pageName + '.html';
-    // iframe이 해당 페이지를 정확히 보여주고 있으면 아무것도 안 함
-    if (currentSrc.includes(expectedSrc)) return;
+  if (!options.force && currentRoute === parsed.route && frame.src.includes(parsed.page + '.html')) {
+    closeAllSheets();
+    return;
   }
 
-  currentPage = pageName;
+  currentPage = parsed.page;
+  currentRoute = parsed.route;
+  updateActiveNavigation(parsed.page);
+  closeAllSheets();
 
-  // active 메뉴 표시
-  document.querySelectorAll('.nav-item[data-page]').forEach(el => {
-    el.classList.toggle('active', el.dataset.page === pageName);
-  });
+  const historyMode = options.historyMode || 'push';
+  const state = { page: parsed.page, route: parsed.route };
+  if (historyMode === 'replace') history.replaceState(state, '', '#' + parsed.route);
+  else if (historyMode !== 'none') history.pushState(state, '', '#' + parsed.route);
 
-  // URL 해시 업데이트
-  history.pushState({ page: pageName }, '', '#' + pageName);
-
-  // iframe fade 전환
   frame.classList.add('switching');
-
-  setTimeout(() => {
-    frame.src = pageName + '.html?v=20260530';
-    frame.onload = () => {
-      frame.classList.remove('switching');
-      // 모바일: 햄버거 닫기
-      document.querySelector('.sidebar')?.classList.remove('nav-open');
-    };
-  }, 120);
+  frame.src = routeFrameSrc(parsed.route);
 }
 
-// 뒤로가기/앞으로가기
-window.addEventListener('popstate', (e) => {
-  const page = e.state?.page || 'index';
-  if (page !== currentPage) loadPage(page);
+// iframe 안의 상세 모달이 닫힐 때 현재 화면을 다시 로드하지 않고
+// 주소만 목록 상태로 정리한다. 필터와 스크롤 위치가 그대로 유지된다.
+function replaceRouteState(route) {
+  const parsed = normalizeRoute(route);
+  currentPage = parsed.page;
+  currentRoute = parsed.route;
+  updateActiveNavigation(parsed.page);
+  history.replaceState({ page: parsed.page, route: parsed.route }, '', '#' + parsed.route);
+}
+
+function syncRouteFromFrame() {
+  const frame = document.getElementById('page-frame');
+  frame.classList.remove('switching');
+  document.querySelector('.sidebar')?.classList.remove('nav-open');
+  try {
+    const url = new URL(frame.contentWindow.location.href);
+    const file = url.pathname.split('/').pop() || '';
+    const page = file.replace(/\.html$/i, '');
+    if (!APP_PAGES.has(page)) return;
+    url.searchParams.delete('v');
+    const query = url.searchParams.toString();
+    const actual = normalizeRoute(page + (query ? '?' + query : ''));
+    if (actual.route === currentRoute) return;
+    currentPage = actual.page;
+    currentRoute = actual.route;
+    updateActiveNavigation(actual.page);
+    history.pushState({ page: actual.page, route: actual.route }, '', '#' + actual.route);
+  } catch (error) {
+    // about:blank 또는 아직 로드 중인 iframe은 동기화 대상이 아니다.
+  }
+}
+
+document.getElementById('page-frame').addEventListener('load', syncRouteFromFrame);
+
+// 뒤로가기/앞으로가기에서는 새 히스토리를 추가하지 않는다.
+window.addEventListener('popstate', event => {
+  const route = event.state?.route || location.hash.replace(/^#/, '') || 'index';
+  loadPage(route, { historyMode: 'none', force: true });
 });
 
 // 로그아웃
@@ -189,7 +330,8 @@ async function doLogout() {
 // iframe에서 세션 만료 메시지 수신
 window.addEventListener('message', (e) => {
   try {
-    if (e.data === 'session_expired') {
+    const frame = document.getElementById('page-frame');
+    if (e.source === frame.contentWindow && e.data === 'session_expired') {
       doLogout();
     }
   } catch(err) {
@@ -199,21 +341,165 @@ window.addEventListener('message', (e) => {
 
 // 초기 실행
 async function initApp() {
-  await requireAuth();
+  const session = await requireAuth();
+  if (!session) return;
   currentUserIsAdmin = await isAdmin();
   initSidebarAuth();
+  document.getElementById('mobileAdminMenu').hidden = !currentUserIsAdmin;
 
   // 인증 완료 표시 (iframe에서 세션 공유 확인용)
   sessionStorage.setItem('app_authenticated', '1');
 
-  const hash = location.hash.replace('#', '');
-  if (hash && hash !== 'index') {
-    loadPage(hash);
+  const initialRoute = location.hash.replace(/^#/, '') || 'index';
+  loadPage(initialRoute, { historyMode: 'replace', force: true });
+}
+
+function setSheetOpen(id, open) {
+  const sheet = document.getElementById(id);
+  if (!sheet) return;
+  if (open) {
+    sheetReturnFocus = document.activeElement;
+    sheet.hidden = false;
+    requestAnimationFrame(() => sheet.classList.add('open'));
+    document.body.classList.add('sheet-open');
+    setTimeout(() => sheet.querySelector('input, button:not(.app-sheet-backdrop)')?.focus(), 0);
   } else {
-    document.querySelector('[data-page="index"]')?.classList.add('active');
-    history.replaceState({ page: 'index' }, '', '#index');
+    sheet.classList.remove('open');
+    sheet.hidden = true;
+    if (!document.querySelector('.app-sheet.open')) document.body.classList.remove('sheet-open');
   }
 }
+
+function closeAllSheets() {
+  ['globalSearch', 'quickAddSheet', 'moreMenuSheet'].forEach(id => setSheetOpen(id, false));
+}
+
+function openGlobalSearch() {
+  setSheetOpen('globalSearch', true);
+  document.querySelector('[data-search-nav]')?.classList.add('active');
+  const input = document.getElementById('globalSearchInput');
+  if (!input.value.trim()) renderRecentSearches();
+  setTimeout(() => input.focus(), 0);
+}
+
+function closeGlobalSearch() {
+  searchRequestId++;
+  setSheetOpen('globalSearch', false);
+  document.querySelector('[data-search-nav]')?.classList.remove('active');
+  sheetReturnFocus?.focus?.();
+}
+
+function openQuickAdd() { setSheetOpen('quickAddSheet', true); }
+function closeQuickAdd() { setSheetOpen('quickAddSheet', false); }
+function openMoreMenu() { setSheetOpen('moreMenuSheet', true); }
+function closeMoreMenu() { setSheetOpen('moreMenuSheet', false); }
+function runQuickRoute(route) { closeQuickAdd(); loadPage(route); }
+function runMoreRoute(route) { closeMoreMenu(); loadPage(route); }
+
+function recentSearches() {
+  try { return JSON.parse(localStorage.getItem('sss_recent_searches') || '[]'); }
+  catch (error) { return []; }
+}
+
+function rememberSearch(item) {
+  const next = [item, ...recentSearches().filter(saved => saved.route !== item.route)].slice(0, 5);
+  localStorage.setItem('sss_recent_searches', JSON.stringify(next));
+}
+
+function bindSearchResultButtons() {
+  document.querySelectorAll('#globalSearchResults [data-route]').forEach(button => {
+    button.addEventListener('click', () => {
+      const item = { route: button.dataset.route, label: button.dataset.label || button.textContent.trim() };
+      rememberSearch(item);
+      closeGlobalSearch();
+      loadPage(item.route);
+    });
+  });
+}
+
+function renderRecentSearches() {
+  const results = document.getElementById('globalSearchResults');
+  const saved = recentSearches();
+  if (!saved.length) {
+    results.innerHTML = '<div class="search-empty"><strong>종목을 빠르게 찾아보세요.</strong><span>발표종목과 투자종목을 한 번에 검색할 수 있습니다.</span></div>';
+    return;
+  }
+  results.innerHTML = '<div class="search-section-title">최근 본 종목</div>' + saved.map(item =>
+    `<button type="button" class="search-result-row" data-route="${escapeHtml(item.route)}" data-label="${escapeHtml(item.label)}"><span class="search-result-icon" aria-hidden="true">↻</span><span><strong>${escapeHtml(item.label)}</strong><small>최근 검색</small></span><span aria-hidden="true">›</span></button>`
+  ).join('');
+  bindSearchResultButtons();
+}
+
+function investmentStateLabel(pick) {
+  if (pick.status === 'sold') return '매도 완료';
+  if (Number(pick.buy_quantity) > 0 || Number(pick.buy_price) > 0) return '투자 진행';
+  return '매수 대기';
+}
+
+async function runGlobalSearch(rawQuery) {
+  const results = document.getElementById('globalSearchResults');
+  const query = rawQuery.trim();
+  if (query.length < 2) { renderRecentSearches(); return; }
+  const term = query.replace(/[%_,().]/g, ' ').trim();
+  if (term.length < 2) return;
+  results.innerHTML = '<div class="search-loading"><span class="loading-spinner"></span>검색 중…</div>';
+  const requestId = ++searchRequestId;
+
+  try {
+    const [stocks, presResult, pickResult] = await Promise.all([
+      searchStockPrices(term, 8),
+      sb.from('presentations')
+        .select('id,topic,stock_code,status,presented_at,category,members(name)')
+        .or(`topic.ilike.%${term}%,stock_code.ilike.%${term}%`)
+        .order('presented_at', { ascending: false }).limit(8),
+      sb.from('picks_with_trades')
+        .select('pick_id,stock_name,stock_code,status,member_name,month,buy_price,buy_quantity,realized_return')
+        .or(`stock_name.ilike.%${term}%,stock_code.ilike.%${term}%`)
+        .order('month', { ascending: false }).limit(8)
+    ]);
+    const presentations = presResult.data || [];
+    const picks = pickResult.data || [];
+    if (requestId !== searchRequestId) return;
+    if (presResult.error || pickResult.error) throw presResult.error || pickResult.error;
+    if (!presentations.length && !picks.length && !stocks.length) {
+      results.innerHTML = '<div class="search-empty"><strong>검색 결과가 없습니다.</strong><span>종목명이나 코드를 다시 확인해 보세요.</span></div>';
+      return;
+    }
+
+    let html = '';
+    if (presentations.length) {
+      html += '<div class="search-section-title">발표종목</div>' + presentations.map(item => {
+        const name = String(item.topic || '').split('>').pop().trim();
+        const meta = [item.members?.name, item.presented_at].filter(Boolean).join(' · ');
+        return `<button type="button" class="search-result-row" data-route="presentations?id=${encodeURIComponent(item.id)}" data-label="${escapeHtml(name)}"><span class="search-result-icon search-result-pres" aria-hidden="true">▤</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(meta || '발표종목')}</small></span><span class="search-result-state">${item.status === 'planned' ? '예정' : '발표 완료'}</span></button>`;
+      }).join('');
+    }
+    if (picks.length) {
+      html += '<div class="search-section-title">투자종목</div>' + picks.map(item =>
+        `<button type="button" class="search-result-row" data-route="picks?id=${encodeURIComponent(item.pick_id)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon search-result-pick" aria-hidden="true">◇</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml([item.member_name, item.stock_code].filter(Boolean).join(' · '))}</small></span><span class="search-result-state">${investmentStateLabel(item)}</span></button>`
+      ).join('');
+    }
+    if (stocks.length) {
+      html += '<div class="search-section-title">전체 종목</div>' + stocks.slice(0, 5).map(item =>
+        `<button type="button" class="search-result-row" data-route="picks?search=${encodeURIComponent(item.stock_name)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon" aria-hidden="true">⌕</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml(item.stock_code + ' · ' + (item.market || ''))}</small></span><span class="search-result-price">${item.price ? Number(item.price).toLocaleString('ko-KR') + '원' : '—'}</span></button>`
+      ).join('');
+    }
+    results.innerHTML = html;
+    bindSearchResultButtons();
+  } catch (error) {
+    if (requestId !== searchRequestId) return;
+    results.innerHTML = '<div class="search-empty search-error"><strong>검색하지 못했습니다.</strong><span>네트워크를 확인하고 다시 입력해 주세요.</span></div>';
+  }
+}
+
+document.getElementById('globalSearchInput').addEventListener('input', event => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runGlobalSearch(event.target.value), 280);
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeAllSheets();
+});
 
 initApp();
 </script>

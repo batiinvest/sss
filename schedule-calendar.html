@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260722.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -28,6 +28,18 @@
       <button class="btn btn-primary" onclick="openForm()">+ 일정 추가</button>
     </div>
   </div>
+
+  <section class="presentation-order-summary" aria-labelledby="presentationOrderTitle">
+    <div class="presentation-order-summary-head">
+      <div>
+        <div class="presentation-order-eyebrow">현재 발표 사이클</div>
+        <h2 id="presentationOrderTitle">발표 순서</h2>
+        <p id="presentationOrderStatus" aria-live="polite">발표 순서를 불러오는 중...</p>
+      </div>
+      <button type="button" class="btn presentation-order-link" onclick="goToSchedulePage('schedule-order')">전체 순서 보기 <span aria-hidden="true">→</span></button>
+    </div>
+    <ol id="presentationOrderList" class="presentation-order-list" aria-label="발표자 순서"></ol>
+  </section>
 
   <!-- 일정 추가/수정 폼 -->
   <div id="scheduleForm" class="card" style="display:none;margin-bottom:1.25rem;">
@@ -176,24 +188,27 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260619"></script>
+<script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260529"></script>
-<script src="js/schedule-shared.js?v=20260529"></script>
+<script src="js/db.js?v=20260711.2"></script>
+<script src="js/schedule-shared.js?v=20260711.2"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
+let presentationOrder = [];
 
 
 function getScheduleShareUrl(scheduleId) {
   if (window.APP_PUBLIC_URL) {
-    return `${window.APP_PUBLIC_URL.replace(/\/$/, '')}/schedule-calendar.html?schedule=${encodeURIComponent(scheduleId || '')}`;
+    const configured = window.APP_PUBLIC_URL.replace(/\/$/, '');
+    const appUrl = /\.html$/i.test(configured) ? configured : configured + '/app.html';
+    return `${appUrl}#schedule-calendar?schedule=${encodeURIComponent(scheduleId || '')}`;
   }
   const origin = window.parent && window.parent !== window ? window.parent.location.origin : window.location.origin;
   const rawPath = window.parent && window.parent !== window ? window.parent.location.pathname : window.location.pathname;
-  const path = rawPath.replace(/[^/]*$/, 'schedule-calendar.html');
+  const path = rawPath.replace(/[^/]*$/, 'app.html');
   const isLocalFile = !origin || origin === 'null' || window.location.protocol === 'file:';
   if (isLocalFile) return 'https://github.com/batiinvest/sss';
-  return `${origin}${path}?schedule=${encodeURIComponent(scheduleId || '')}`;
+  return `${origin}${path}#schedule-calendar?schedule=${encodeURIComponent(scheduleId || '')}`;
 }
 
 function getSchedulePresentations(scheduleId, date) {
@@ -260,15 +275,19 @@ async function init() {
 
   try {
     await loadSharedData();   // js/schedule-shared.js
+    const savedOrder = await getConfig('pres_order');
+    presentationOrder = Array.isArray(savedOrder) ? savedOrder : members.map(m => m.id);
   } catch(e) {
     console.error('일정 데이터 로드 오류:', e.message);
     schedules = []; members = []; presentations = [];
+    presentationOrder = [];
   }
 
   const sel = document.getElementById('s-member');
   if (sel) members.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
 
   renderCalendar();
+  renderPresentationOrderSummary();
   renderUpcoming();
   renderScheduleList();
 
@@ -276,6 +295,39 @@ async function init() {
   if (sharedScheduleId) {
     setTimeout(() => showDetail(sharedScheduleId), 0);
   }
+}
+
+function renderPresentationOrderSummary() {
+  const listEl = document.getElementById('presentationOrderList');
+  const statusEl = document.getElementById('presentationOrderStatus');
+  if (!listEl || !statusEl) return;
+
+  const knownIds = presentationOrder.filter(id => members.some(member => member.id === id));
+  const orderedIds = knownIds.concat(members.filter(member => !knownIds.includes(member.id)).map(member => member.id));
+  const orderedMembers = orderedIds.map(id => members.find(member => member.id === id)).filter(Boolean);
+  if (!orderedMembers.length) {
+    statusEl.textContent = '등록된 발표자가 없습니다.';
+    listEl.innerHTML = '';
+    return;
+  }
+
+  const turn = getPresentationTurnState(presentations, orderedMembers, { includePlanned: true });
+  const pendingIds = new Set(turn.pendingMembers.map(member => member.id));
+  const nextId = turn.nextMember?.id;
+  statusEl.innerHTML = turn.nextMember
+    ? `다음 발표자는 <strong>${escapeHtml(turn.nextMember.name)}</strong>님입니다 · ${escapeHtml(turn.label)} ${turn.completedCount}/${turn.total}`
+    : `${escapeHtml(turn.label)} 발표 순서입니다.`;
+
+  listEl.innerHTML = orderedMembers.map((member, index) => {
+    const isNext = member.id === nextId;
+    const isDone = !pendingIds.has(member.id);
+    const stateLabel = isNext ? '다음' : isDone ? '완료' : '대기';
+    return `<li class="presentation-order-person${isNext ? ' is-next' : ''}${isDone ? ' is-done' : ''}">
+      <span class="presentation-order-number">${index + 1}</span>
+      <span class="presentation-order-name">${escapeHtml(member.name)}</span>
+      <span class="presentation-order-state">${stateLabel}</span>
+    </li>`;
+  }).join('');
 }
 
 // ── 달력 렌더링
@@ -506,9 +558,14 @@ function openForm(prefill={}) {
         const mSel    = lastRow.querySelector('.pres-member');
         const sTxtEl  = lastRow.querySelector('.pres-stock-input');
         const sCodeEl = lastRow.querySelector('.pres-stock-code');
+        const sPriceEl = lastRow.querySelector('.pres-price-at');
+        const sCapEl = lastRow.querySelector('.pres-cap-at');
+        lastRow.dataset.presentationId = p.id;
         if (mSel && p.member_id)     mSel.value = p.member_id;
         if (sTxtEl && topicName)     sTxtEl.value = topicName;
         if (sCodeEl && p.stock_code) sCodeEl.value = p.stock_code;
+        if (sPriceEl && p.price_at) sPriceEl.value = p.price_at;
+        if (sCapEl && p.market_cap_at) sCapEl.value = p.market_cap_at;
       });
     } else if (prefill.description) {
       // 2순위: description 텍스트 파싱 (기존 데이터)
@@ -627,11 +684,9 @@ async function saveSchedule() {
         ? (document.getElementById('industryName')?.value?.trim() || '')
         : null;
 
-      // 수정 시 기존 presentations 삭제 후 재저장
-      if (editingScheduleId) {
-        await sb.from('presentations').delete().eq('schedule_id', editingScheduleId);
-      }
-
+      const presentationPayloads = [];
+      const presentationUpdates = [];
+      const retainedPresentationIds = new Set();
       for (const card of presCards) {
         const stockName = card.querySelector('.pres-stock-input')?.value?.trim() || '';
         const stockCode = card.querySelector('.pres-stock-code')?.value || null;
@@ -644,7 +699,7 @@ async function saveSchedule() {
 
         const topic = industryName ? industryName + ' > ' + stockName : stockName;
 
-        await sb.from('presentations').insert({
+        const basePayload = {
           schedule_id:   targetScheduleId,
           member_id:     memberId,
           category:      category,
@@ -653,8 +708,39 @@ async function saveSchedule() {
           price_at:      priceAt,
           market_cap_at: capAt,
           presented_at:  date,
-          status:        'planned',
-        });
+        };
+        const presentationId = card.dataset.presentationId;
+        if (presentationId) {
+          retainedPresentationIds.add(presentationId);
+          presentationUpdates.push(
+            sb.from('presentations').update(basePayload).eq('id', presentationId)
+          );
+        } else {
+          presentationPayloads.push({ ...basePayload, status: 'planned' });
+        }
+      }
+      if (presentationUpdates.length) {
+        const results = await Promise.all(presentationUpdates);
+        const failed = results.find(result => result.error);
+        if (failed?.error) throw failed.error;
+      }
+      if (presentationPayloads.length) {
+        const { error } = await sb.from('presentations').insert(presentationPayloads);
+        if (error) throw error;
+      }
+
+      // 폼에서 제외된 기존 발표는 삭제하지 않고 일정 연결만 해제한다.
+      // 작성해 둔 사유·리스크·목표값과 원본 ID를 안전하게 보존한다.
+      if (editingScheduleId) {
+        const removedIds = presentations
+          .filter(p => p.schedule_id === editingScheduleId && !retainedPresentationIds.has(String(p.id)))
+          .map(p => p.id);
+        if (removedIds.length) {
+          const { error } = await sb.from('presentations')
+            .update({ schedule_id: null, presented_at: null })
+            .in('id', removedIds);
+          if (error) throw error;
+        }
       }
 
       // presentations 전역 데이터 갱신
@@ -773,14 +859,18 @@ async function loadPlannedItems(scheduleId, s) {
       delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;';
       delBtn.textContent = '✕';
       delBtn.onclick = async () => {
-        await sb.from('presentations').delete().eq('id', item.id);
+        if (!confirm('이 발표종목을 일정에서 제외할까요?\n작성한 아이디어와 리스크는 삭제하지 않고 보관합니다.')) return;
+        const { error } = await sb.from('presentations')
+          .update({ schedule_id: null, presented_at: null })
+          .eq('id', item.id);
+        if (error) { toast('일정에서 제외하지 못했습니다: ' + error.message); return; }
         presentations = await sb.from('presentations')
           .select('*, members(name)').order('created_at').then(r => r.data || []);
         await loadPlannedItems(scheduleId, s);
         renderPresOrderCalendar();
         renderScheduleList();
         renderUpcoming();
-        toast('삭제되었습니다.');
+        toast('일정에서 제외했습니다. 발표 내용은 보관됩니다.');
       };
       statusSpan.appendChild(delBtn);
     }
@@ -848,7 +938,7 @@ async function savePlannedItems() {
   if (!s) return;
 
   const newRows = document.querySelectorAll('.planned-new-row');
-  let saved = 0;
+  const presentationPayloads = [];
   for (const row of newRows) {
     const stockName = row.querySelector('.pres-stock-input')?.value?.trim();
     const stockCode = row.querySelector('.pres-stock-code')?.value || null;
@@ -860,16 +950,18 @@ async function savePlannedItems() {
     const topic = s.category === 'industry' && s.title
       ? s.title + ' > ' + stockName : stockName;
 
-    await sb.from('presentations').insert({
+    presentationPayloads.push({
       schedule_id: scheduleId, member_id: memberId,
       category: s.category, topic,
       stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
       presented_at: s.event_date, status: 'planned',
     });
-    saved++;
   }
 
-  if (!saved) return;
+  if (!presentationPayloads.length) return;
+  const { error } = await sb.from('presentations').insert(presentationPayloads);
+  if (error) { toast('저장 오류: ' + error.message); return; }
+  const saved = presentationPayloads.length;
   toast('✅ ' + saved + '개 발표 종목 저장');
   presentations = await sb.from('presentations')
     .select('*, members(name)').order('created_at').then(r => r.data || []);

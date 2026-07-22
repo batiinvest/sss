@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 매수/매도</title>
-  <link rel="stylesheet" href="css/style.css?v=20260428">
+  <title>SSS · 매수·매도 등록</title>
+  <link rel="stylesheet" href="css/style.css?v=20260711.2">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -13,84 +13,102 @@
 
     <div class="topbar">
       <div>
-        <div class="page-title">매수 / 매도</div>
-        <div class="updated">규칙: 매도 요청 15:00 이후 → 익일 시가 처리</div>
+        <div class="page-title">매수·매도 등록</div>
+        <div class="updated">거래 정보를 입력하면 보유현황에 바로 반영됩니다.</div>
       </div>
     </div>
 
-    <div class="grid-2 mb-card">
+    <div class="mobile-only trade-mobile-toggle" role="tablist" aria-label="거래 유형">
+      <button type="button" role="tab" id="mobileBuyTab" aria-selected="true" onclick="showTradeForm('buy')">매수</button>
+      <button type="button" role="tab" id="mobileSellTab" aria-selected="false" onclick="showTradeForm('sell')">매도</button>
+    </div>
+
+    <div id="tradeAuthNotice" class="info-banner mb-card" hidden></div>
+
+    <div class="grid-2 mb-card trade-form-grid">
 
       <!-- 매수 입력 -->
-      <div class="card">
+      <div class="card trade-form-card active" id="buyFormCard">
         <div class="card-head">
           <div class="card-title" style="color:var(--up);">매수 입력</div>
           <span class="badge b-buy">BUY</span>
         </div>
         <div class="form-section">
           <div class="form-group">
-            <label>추천자</label>
+            <label for="buy-member">담당자</label>
             <select id="buy-member"><option value="">선택</option></select>
           </div>
           <div class="form-group">
-            <label>탑픽 종목 (이번 달)</label>
+            <label for="buy-pick">투자종목</label>
             <select id="buy-pick"><option value="">추천자 먼저 선택</option></select>
+          </div>
+          <div class="form-group">
+            <label for="buy-date">매수일</label>
+            <input type="date" id="buy-date" />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>체결가 (원)</label>
-              <input type="number" id="buy-price" placeholder="예: 72400" oninput="calcBuyAmount()" />
+              <label for="buy-price">매수가 (원)</label>
+              <input type="number" id="buy-price" min="1" inputmode="numeric" placeholder="예: 72,400" oninput="calcBuyAmount()" />
             </div>
             <div class="form-group">
-              <label>수량 (주)</label>
-              <input type="number" id="buy-qty" placeholder="예: 13" oninput="calcBuyAmount()" />
+              <label for="buy-qty">수량 (주)</label>
+              <input type="number" id="buy-qty" min="1" inputmode="numeric" placeholder="예: 13" oninput="calcBuyAmount()" />
             </div>
           </div>
           <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
             매수 금액: <strong id="buyAmount">—</strong>
           </div>
           <div class="form-group">
-            <label>메모 (선택)</label>
-            <input type="text" id="buy-note" placeholder="예: 09:03 시가 체결" />
+              <label for="buy-note">메모 (선택)</label>
+              <input type="text" id="buy-note" placeholder="예: 09:03 시가 체결" />
           </div>
-          <button class="btn btn-primary" onclick="submitBuy()">매수 등록</button>
+          <div id="buy-error" class="field-error" role="alert"></div>
+          <button class="btn btn-primary mobile-form-submit" id="buySubmitBtn" onclick="submitBuy()">매수 저장</button>
         </div>
       </div>
 
       <!-- 매도 입력 -->
-      <div class="card">
+      <div class="card trade-form-card" id="sellFormCard">
         <div class="card-head">
           <div class="card-title" style="color:var(--dn);">매도 입력</div>
           <span class="badge b-sell">SELL</span>
         </div>
         <div class="form-section">
           <div class="form-group">
-            <label>추천자</label>
+            <label for="sell-member">담당자</label>
             <select id="sell-member"><option value="">선택</option></select>
           </div>
           <div class="form-group">
-            <label>보유 종목</label>
+            <label for="sell-pick">보유 종목</label>
             <select id="sell-pick"><option value="">추천자 먼저 선택</option></select>
+          </div>
+          <div class="form-group">
+            <label for="sell-date">매도일</label>
+            <input type="date" id="sell-date" />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>체결가 (원)</label>
-              <input type="number" id="sell-price" placeholder="예: 81300" oninput="calcSellReturn()" />
+              <label for="sell-price">매도가 (원)</label>
+              <input type="number" id="sell-price" min="1" inputmode="numeric" placeholder="예: 81,300" oninput="calcSellReturn()" />
             </div>
             <div class="form-group">
-              <label>수량 (주)</label>
-              <input type="number" id="sell-qty" placeholder="예: 13" oninput="calcSellReturn()" />
+              <label for="sell-qty">매도 수량 (주)</label>
+              <input type="number" id="sell-qty" min="1" inputmode="numeric" placeholder="예: 5" oninput="calcSellReturn()" />
             </div>
           </div>
           <!-- 예상 수익률 미리보기 -->
           <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
             예상 수익률: <strong id="sellReturn">—</strong>
             &nbsp;|&nbsp; 예상 손익: <strong id="sellProfit">—</strong>
+            <div id="sellAvailable" style="margin-top:4px;color:var(--muted);font-size:12px;">매도 가능 수량: 종목을 선택하세요.</div>
           </div>
           <div class="form-group">
-            <label>메모 (선택)</label>
+              <label for="sell-note">메모 (선택)</label>
             <input type="text" id="sell-note" placeholder="예: 단톡 매도 의사 표시 확인" />
           </div>
-          <button class="btn btn-danger" onclick="submitSell()">매도 등록</button>
+          <div id="sell-error" class="field-error" role="alert"></div>
+          <button class="btn btn-danger mobile-form-submit" id="sellSubmitBtn" onclick="submitSell()">매도 저장</button>
         </div>
       </div>
 
@@ -100,19 +118,21 @@
     <div class="card">
       <div class="card-head">
         <div class="card-title">전체 매매 내역</div>
-        <div style="display:flex;gap:6px;">
-          <select id="tradeFilterMember" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
+        <div class="desktop-filter-controls" style="display:flex;gap:6px;">
+          <select id="tradeFilterMember" aria-label="매매 담당자 필터" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
             <option value="">전체 참여자</option>
           </select>
-          <select id="tradeFilterType" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
+          <select id="tradeFilterType" aria-label="매매 유형 필터" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
             <option value="">전체</option>
             <option value="buy">매수</option>
             <option value="sell">매도</option>
           </select>
         </div>
       </div>
-      <div class="table-wrap">
+      <div id="mobileTradeHistory" class="mobile-stock-list"></div>
+      <div class="table-wrap desktop-table-on-mobile">
         <table>
+          <caption class="sr-only">전체 매수 및 매도 거래내역</caption>
           <thead><tr>
             <th class="col-hide-mobile">일시</th><th class="col-hide-mobile">추천자</th><th>종목</th><th>구분</th>
             <th>체결가</th><th class="col-hide-mobile">수량</th><th>금액</th><th class="col-hide-mobile">메모</th>
@@ -130,17 +150,24 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260428"></script>
+<script src="js/config.js?v=20260711.2"></script>
+<script src="js/db.js?v=20260711.2"></script>
 <script>
 let members  = [];
 let allPicks = [];
 let allTrades = [];
 let me    = null;
 let admin = false;
+let availableSellQuantity = 0;
+const tradeParams = new URLSearchParams(location.search);
 
 async function init() {
-  await requireAuth();
+  const session = await requireAuth();
+  if (!session) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('buy-date').value = today;
+  document.getElementById('sell-date').value = today;
 
   // 멤버·탑픽·거래내역·본인정보 병렬 로드
   [members, allPicks, allTrades, me, admin] = await Promise.all([
@@ -155,16 +182,17 @@ async function init() {
   ['buy-member','sell-member'].forEach(id => {
     const el = document.getElementById(id);
     members.forEach(m => {
-      const disabled = (!admin && me && m.id !== me.id) ? ' disabled' : '';
-      el.innerHTML += `<option value="${m.id}"${disabled}>${m.name}</option>`;
+      const disabled = (!admin && (!me || m.id !== me.id)) ? ' disabled' : '';
+      el.innerHTML += `<option value="${escapeHtml(m.id)}"${disabled}>${escapeHtml(m.name)}</option>`;
     });
     if (me && el) el.value = me.id;
   });
   const fltEl = document.getElementById('tradeFilterMember');
-  members.forEach(m => fltEl.innerHTML += `<option value="${m.id}">${m.name}</option>`);
+  members.forEach(m => fltEl.innerHTML += `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`);
 
   document.getElementById('buy-member').addEventListener('change', () => updatePickSelect('buy'));
   document.getElementById('sell-member').addEventListener('change', () => updatePickSelect('sell'));
+  document.getElementById('sell-pick').addEventListener('change', loadAvailableSellQuantity);
 
   renderTrades(allTrades);
 
@@ -174,10 +202,37 @@ async function init() {
     updatePickSelect('sell');
   }
 
-  // URL 파라미터: ?type=sell → 매도 폼으로 스크롤
-  if (new URLSearchParams(location.search).get('type') === 'sell') {
-    document.getElementById('sell-member').focus();
+  if (!me && !admin) {
+    const notice = document.getElementById('tradeAuthNotice');
+    notice.hidden = false;
+    notice.textContent = '멤버 정보와 연결되지 않은 계정은 매매를 등록할 수 없습니다. 관리자에게 계정 연결을 요청해 주세요.';
+    document.querySelectorAll('.trade-form-card input, .trade-form-card select, .trade-form-card button').forEach(el => { el.disabled = true; });
   }
+
+  const requestedType = tradeParams.get('type') === 'sell' ? 'sell' : 'buy';
+  showTradeForm(requestedType);
+  await preselectRequestedPick(requestedType, tradeParams.get('pick'));
+}
+
+function showTradeForm(type) {
+  const isSell = type === 'sell';
+  document.getElementById('buyFormCard').classList.toggle('active', !isSell);
+  document.getElementById('sellFormCard').classList.toggle('active', isSell);
+  document.getElementById('mobileBuyTab').setAttribute('aria-selected', String(!isSell));
+  document.getElementById('mobileSellTab').setAttribute('aria-selected', String(isSell));
+}
+
+async function preselectRequestedPick(type, pickId) {
+  if (!pickId) return;
+  const pick = allPicks.find(item => String(item.pick_id || item.id) === String(pickId));
+  if (!pick) { toast('선택한 투자종목을 찾지 못했습니다.'); return; }
+  if (!admin && (!me || pick.member_id !== me.id)) { toast('본인의 투자종목만 등록할 수 있습니다.'); return; }
+  const memberSelect = document.getElementById(`${type}-member`);
+  memberSelect.value = pick.member_id;
+  updatePickSelect(type);
+  const pickSelect = document.getElementById(`${type}-pick`);
+  pickSelect.value = pick.pick_id || pick.id;
+  if (type === 'sell') await loadAvailableSellQuantity();
 }
 
 function updatePickSelect(type) {
@@ -190,27 +245,41 @@ function updatePickSelect(type) {
   const filtered = allPicks.filter(p => {
     if (p.member_id !== memberId) return false;
     if (type === 'buy') {
-      // 매수: 이번 달 탑픽 중 아직 매수 체결 없는 것만
-      return p.month === thisMonth && !p.buy_price && p.status !== 'sold';
+      // 최초·추가 매수 모두 허용하되 매도 완료 종목은 제외한다.
+      return p.status !== 'sold';
     } else {
-      // 매도: 매수 체결된 보유 중인 것만
-      return p.status === 'hold' && p.buy_price;
+      return p.status === 'hold' && p.buy_price && Number(p.buy_quantity) > 0;
     }
   });
 
   if (!filtered.length) {
     pickSel.innerHTML += type === 'buy'
-      ? '<option value="" disabled>이번 달 미체결 탑픽 없음</option>'
+      ? '<option value="" disabled>매수 가능한 투자종목 없음</option>'
       : '<option value="" disabled>보유 중인 종목 없음</option>';
     return;
   }
 
   filtered.forEach(p => {
     const label = type === 'buy'
-      ? p.stock_name
+      ? `${p.stock_name}${p.buy_price ? ' (추가 매수)' : ''}`
       : `${p.stock_name} (매수가 ${p.buy_price ? p.buy_price.toLocaleString() + '원' : '—'})`;
-    pickSel.innerHTML += `<option value="${p.pick_id}" data-buy="${p.buy_price||''}" data-qty="${p.buy_quantity||''}">${label}</option>`;
+    pickSel.innerHTML += `<option value="${escapeHtml(p.pick_id || p.id)}" data-buy="${p.buy_price||''}" data-qty="${p.buy_quantity||''}">${escapeHtml(label)}</option>`;
   });
+}
+
+async function loadAvailableSellQuantity() {
+  const pickId = document.getElementById('sell-pick').value;
+  const message = document.getElementById('sellAvailable');
+  availableSellQuantity = 0;
+  if (!pickId) { message.textContent = '매도 가능 수량: 종목을 선택하세요.'; return; }
+  message.textContent = '매도 가능 수량을 확인하는 중…';
+  const { data, error } = await sb.from('trades').select('trade_type,quantity').eq('pick_id', pickId);
+  if (error) { message.textContent = '매도 가능 수량을 확인하지 못했습니다.'; return; }
+  availableSellQuantity = (data || []).reduce((sum, trade) =>
+    sum + (trade.trade_type === 'buy' ? Number(trade.quantity || 0) : -Number(trade.quantity || 0)), 0);
+  availableSellQuantity = Math.max(0, availableSellQuantity);
+  document.getElementById('sell-qty').max = String(availableSellQuantity);
+  message.textContent = `매도 가능 수량: ${availableSellQuantity.toLocaleString('ko-KR')}주`;
 }
 
 function calcBuyAmount() {
@@ -238,57 +307,121 @@ function calcSellReturn() {
 
 async function submitBuy() {
   const memberId = document.getElementById('buy-member').value;
-  if (!admin && me && memberId !== me.id) {
-    toast('본인의 매수만 등록할 수 있습니다.');
-    return;
-  }
   const pickId    = document.getElementById('buy-pick').value;
   const price     = parseInt(document.getElementById('buy-price').value);
   const quantity  = parseInt(document.getElementById('buy-qty').value);
-  const note      = document.getElementById('buy-note').value;
-  const stockName = document.getElementById('buy-pick').selectedOptions[0]?.text?.split(' (')[0] || '';
+  const note      = document.getElementById('buy-note').value.trim();
+  const date      = document.getElementById('buy-date').value;
+  const pick      = allPicks.find(item => String(item.pick_id || item.id) === String(pickId));
 
-  if (!memberId || !pickId || !price || !quantity) { toast('모든 필드를 입력하세요.'); return; }
+  setTradeError('buy', '');
+  if (!admin && (!me || memberId !== me.id)) return setTradeError('buy', '본인의 매수만 등록할 수 있습니다.');
+  if (!memberId || !pickId || !date || !Number.isFinite(price) || price <= 0 || !Number.isFinite(quantity) || quantity <= 0) {
+    return setTradeError('buy', '투자종목, 매수일, 매수가와 수량을 모두 확인해 주세요.');
+  }
+  if (!pick || pick.member_id !== memberId) return setTradeError('buy', '담당자와 투자종목 정보가 일치하지 않습니다.');
+
+  const button = document.getElementById('buySubmitBtn');
+  button.disabled = true;
+  button.textContent = '저장 중…';
 
   try {
     await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'buy',
-      stock_name: stockName, price, quantity, note });
-    toast('매수 등록 완료!');
-    allTrades = await fetchTrades(50);
-    renderTrades(allTrades);
-  } catch(e) { toast('오류: ' + e.message); }
+      stock_name: pick.stock_name, price, quantity, note: note || null,
+      traded_at: tradeDateTime(date) });
+    await reloadTradeState('buy', memberId);
+    toast('매수를 저장했습니다. 투자종목에서 보유현황을 확인할 수 있습니다.');
+  } catch(e) {
+    setTradeError('buy', '매수를 저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도해 주세요.'));
+  } finally {
+    button.disabled = false;
+    button.textContent = '매수 저장';
+  }
 }
 
 async function submitSell() {
   const memberId = document.getElementById('sell-member').value;
-  if (!admin && me && memberId !== me.id) {
-    toast('본인의 매도만 등록할 수 있습니다.');
-    return;
-  }
   const pickId    = document.getElementById('sell-pick').value;
   const price     = parseInt(document.getElementById('sell-price').value);
   const quantity  = parseInt(document.getElementById('sell-qty').value);
-  const note      = document.getElementById('sell-note').value;
-  const stockName = document.getElementById('sell-pick').selectedOptions[0]?.text?.split(' (')[0] || '';
+  const note      = document.getElementById('sell-note').value.trim();
+  const date      = document.getElementById('sell-date').value;
+  const pick      = allPicks.find(item => String(item.pick_id || item.id) === String(pickId));
 
-  if (!memberId || !pickId || !price || !quantity) { toast('모든 필드를 입력하세요.'); return; }
+  setTradeError('sell', '');
+  if (!admin && (!me || memberId !== me.id)) return setTradeError('sell', '본인의 매도만 등록할 수 있습니다.');
+  if (!memberId || !pickId || !date || !Number.isFinite(price) || price <= 0 || !Number.isFinite(quantity) || quantity <= 0) {
+    return setTradeError('sell', '보유종목, 매도일, 매도가와 수량을 모두 확인해 주세요.');
+  }
+  if (!pick || pick.member_id !== memberId) return setTradeError('sell', '담당자와 보유종목 정보가 일치하지 않습니다.');
+  await loadAvailableSellQuantity();
+  if (quantity > availableSellQuantity) {
+    return setTradeError('sell', `보유수량 ${availableSellQuantity.toLocaleString('ko-KR')}주를 초과해 매도할 수 없습니다.`);
+  }
+
+  const button = document.getElementById('sellSubmitBtn');
+  button.disabled = true;
+  button.textContent = '저장 중…';
 
   try {
     await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'sell',
-      stock_name: stockName, price, quantity, note });
-    toast('매도 등록 완료!');
-    allTrades = await fetchTrades(50);
-    renderTrades(allTrades);
+      stock_name: pick.stock_name, price, quantity, note: note || null,
+      traded_at: tradeDateTime(date) });
+    await reloadTradeState('sell', memberId);
+    toast('매도를 저장했습니다. 남은 보유수량을 다시 계산했습니다.');
+  } catch(e) {
+    setTradeError('sell', '매도를 저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도해 주세요.'));
+  } finally {
+    button.disabled = false;
+    button.textContent = '매도 저장';
+  }
+}
+
+function tradeDateTime(date) {
+  return new Date(date + 'T12:00:00+09:00').toISOString();
+}
+
+function setTradeError(type, message) {
+  const element = document.getElementById(type + '-error');
+  element.textContent = message;
+  if (message) element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+async function reloadTradeState(type, memberId) {
+  [allPicks, allTrades] = await Promise.all([fetchAllPicks(), fetchTrades(50)]);
+  renderTrades(allTrades);
+  document.getElementById(type + '-member').value = memberId;
+  updatePickSelect(type);
+  ['price', 'qty', 'note'].forEach(suffix => { document.getElementById(type + '-' + suffix).value = ''; });
+  if (type === 'buy') calcBuyAmount();
+  else {
+    availableSellQuantity = 0;
+    document.getElementById('sellAvailable').textContent = '매도 가능 수량: 종목을 선택하세요.';
     calcSellReturn();
-  } catch(e) { toast('오류: ' + e.message); }
+  }
 }
 
 function renderTrades(trades) {
   const tbody = document.getElementById('tradesTbody');
+  const mobile = document.getElementById('mobileTradeHistory');
   if (!trades.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">매매 내역이 없습니다</td></tr>';
+    mobile.innerHTML = '<div class="mobile-empty-state"><strong>아직 매매내역이 없습니다.</strong><span>첫 매수 또는 매도를 등록해 보세요.</span></div>';
     return;
   }
+  mobile.innerHTML = trades.map(t => {
+    const typeLabel = t.trade_type === 'buy' ? '매수' : '매도';
+    return `<article class="mobile-stock-card">
+      <span class="mobile-stock-card-head"><strong>${escapeHtml(t.stock_name)}</strong><span class="badge ${t.trade_type === 'buy' ? 'b-buy' : 'b-sell'}">${typeLabel}</span></span>
+      <span class="mobile-stock-card-meta">${escapeHtml(t.members?.name || '담당자 미정')} · ${escapeHtml(fmtDateTime(t.traded_at))}</span>
+      <span class="mobile-stock-card-metrics">
+        <span>체결가<strong>${won(t.price)}</strong></span>
+        <span>수량<strong>${Number(t.quantity).toLocaleString('ko-KR')}주</strong></span>
+        <span>거래금액<strong>${won(t.price * t.quantity)}</strong></span>
+      </span>
+      <span class="mobile-stock-card-foot">${escapeHtml(t.note || '메모 없음')}</span>
+    </article>`;
+  }).join('');
   tbody.innerHTML = trades.map(t => {
     const ds = fmtDateTime(t.traded_at);
     const typeBadge = t.trade_type === 'buy'
@@ -296,13 +429,13 @@ function renderTrades(trades) {
       : '<span class="badge b-sell">매도</span>';
     return `<tr>
       <td class="muted" style="white-space:nowrap;">${ds}</td>
-      <td>${t.members?.name || '-'}</td>
-      <td style="font-weight:500;">${t.stock_name}</td>
+      <td>${escapeHtml(t.members?.name || '-')}</td>
+      <td style="font-weight:500;">${escapeHtml(t.stock_name)}</td>
       <td>${typeBadge}</td>
       <td>${won(t.price)}</td>
       <td>${t.quantity}주</td>
       <td>${won(t.price * t.quantity)}</td>
-      <td class="muted" style="font-size:12px;">${t.note || '-'}</td>
+      <td class="muted" style="font-size:12px;">${escapeHtml(t.note || '-')}</td>
     </tr>`;
   }).join('');
 }

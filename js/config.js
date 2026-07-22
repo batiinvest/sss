@@ -63,6 +63,10 @@ function statusBadge(status) {
     done:     ['b-sold',  '완료'],
     regular:  ['b-hold',  '정기'],
     extra:    ['b-dn',    '추가'],
+    review:   ['b-warn',  '검토 중'],
+    waiting:  ['b-warn',  '매수 대기'],
+    investing:['b-buy',   '투자 진행'],
+    archived: ['b-hold',  '추적 종료'],
   };
   const [cls, label] = map[status] || ['b-hold', status || '—'];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -76,6 +80,8 @@ function toast(msg, ms = 2500) {
     el.className = 'toast';
     document.body.appendChild(el);
   }
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), ms);
@@ -117,26 +123,38 @@ async function getSession() {
 
 async function requireAuth() {
   const session = await getSession();
-  if (!session) showAuthOverlay();
+  // app.html이 인증 UI를 한 번만 소유한다. iframe 내부 페이지가 같은
+  // 로그인 창을 중복 생성하면 모바일에서 두 겹으로 보이고 포커스도 꼬인다.
+  if (!session) {
+    if (window === window.parent) showAuthOverlay();
+    // 로그인 성공 시 페이지가 다시 로드된다. 그전까지 호출부를 대기시켜
+    // 오버레이 뒤에서 익명 데이터 요청이 이어지지 않게 한다.
+    return new Promise(() => {});
+  }
   return session;
 }
 
 function showAuthOverlay() {
+  if (document.getElementById('auth-overlay')) return;
   const overlay = document.createElement('div');
   overlay.className = 'auth-overlay';
   overlay.id = 'auth-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'auth-title');
   overlay.innerHTML =
     '<div class="auth-box">' +
-      '<div class="auth-title">투자 스터디 로그인</div>' +
+      '<div class="auth-title" id="auth-title">투자 스터디 로그인</div>' +
+      '<div class="auth-description">아이디와 비밀번호로 안전하게 접속하세요.</div>' +
       '<div class="form-section">' +
-        '<div class="form-group"><label>아이디</label>' +
-          '<input type="text" id="auth-id" placeholder="아이디 입력"' +
+        '<div class="form-group"><label for="auth-id">아이디</label>' +
+          '<input type="text" id="auth-id" placeholder="아이디 입력" autocomplete="username" autocapitalize="none"' +
           ' onkeydown="if(event.key===\'Enter\') document.getElementById(\'auth-pw\').focus()" /></div>' +
-        '<div class="form-group"><label>비밀번호</label>' +
-          '<input type="password" id="auth-pw" placeholder="비밀번호"' +
+        '<div class="form-group"><label for="auth-pw">비밀번호</label>' +
+          '<input type="password" id="auth-pw" placeholder="비밀번호" autocomplete="current-password"' +
           ' onkeydown="if(event.key===\'Enter\') doLogin()" /></div>' +
-        '<button class="btn btn-primary" style="width:100%;margin-top:4px;" onclick="doLogin()">로그인</button>' +
-        '<div id="auth-err" style="font-size:12px;color:#a32d2d;text-align:center;min-height:16px;margin-top:8px;"></div>' +
+        '<button class="btn btn-primary" id="auth-submit" style="width:100%;margin-top:4px;justify-content:center;" onclick="doLogin()">로그인</button>' +
+        '<div id="auth-err" role="alert" style="font-size:12px;color:#a32d2d;text-align:center;min-height:16px;margin-top:8px;"></div>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
@@ -147,23 +165,97 @@ async function doLogin() {
   const userId = (document.getElementById('auth-id')?.value || '').trim();
   const pw     = document.getElementById('auth-pw')?.value || '';
   const errEl  = document.getElementById('auth-err');
-  if (!userId || !pw) { errEl.textContent = '아이디와 비밀번호를 입력하세요.'; return; }
+  const submit = document.getElementById('auth-submit');
+  const idInput = document.getElementById('auth-id');
+  const pwInput = document.getElementById('auth-pw');
+  idInput?.removeAttribute('aria-invalid');
+  pwInput?.removeAttribute('aria-invalid');
+  if (!userId || !pw) {
+    errEl.textContent = '아이디와 비밀번호를 입력하세요.';
+    const invalid = !userId ? idInput : pwInput;
+    invalid?.setAttribute('aria-invalid', 'true');
+    invalid?.focus();
+    return;
+  }
   const email = userId.includes('@') ? userId : userId + '@study.local';
   errEl.textContent = '';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pw });
-  if (error) {
-    errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
-  } else {
-    document.getElementById('auth-overlay')?.remove();
-    const page = location.pathname.split('/').pop() || 'index.html';
-    if (window === window.parent && page !== 'app.html') {
-      const route = page.replace(/\.html$/i, '') || 'index';
-      location.href = 'app.html#' + route;
+  if (submit) { submit.disabled = true; submit.textContent = '로그인 중…'; }
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+    if (error) {
+      errEl.textContent = '아이디 또는 비밀번호가 올바르지 않습니다.';
+      pwInput?.setAttribute('aria-invalid', 'true');
+      pwInput?.focus();
     } else {
-      location.reload();
+      document.getElementById('auth-overlay')?.remove();
+      const page = location.pathname.split('/').pop() || 'index.html';
+      if (window === window.parent && page !== 'app.html') {
+        const route = (page.replace(/\.html$/i, '') || 'index') + location.search;
+        location.href = 'app.html#' + route;
+      } else {
+        // 현재 해시를 유지하므로 로그인 전 공유받은 상세 링크로 돌아간다.
+        location.reload();
+      }
+    }
+  } finally {
+    if (submit && document.body.contains(submit)) {
+      submit.disabled = false;
+      submit.textContent = '로그인';
     }
   }
 }
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  })[char]);
+}
+
+function navigateToAppRoute(route) {
+  const safeRoute = String(route || 'index').replace(/^#/, '');
+  if (window.parent !== window && typeof window.parent.loadPage === 'function') {
+    window.parent.loadPage(safeRoute);
+    return;
+  }
+  location.href = 'app.html#' + safeRoute;
+}
+
+async function copyShareLink(route) {
+  const configured = String(window.APP_PUBLIC_URL || '').replace(/\/$/, '');
+  const base = (configured
+    ? (/\.html$/i.test(configured) ? configured : configured + '/app.html')
+    : location.href.split('#')[0].replace(/[^/]+$/, 'app.html')
+  ).replace(/#.*$/, '');
+  const url = base + '#' + String(route || 'index').replace(/^#/, '');
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('공유 링크를 복사했습니다.');
+  } catch (error) {
+    window.prompt('아래 링크를 복사하세요.', url);
+  }
+  return url;
+}
+
+// 공통 모달/하단 시트 안에서 Tab 포커스가 화면 뒤로 빠져나가지 않게 한다.
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Tab') return;
+  const candidates = Array.from(document.querySelectorAll(
+    '.detail-overlay.open, .app-sheet.open, #pickModal, #presModal, #presEditModal'
+  ));
+  const modal = candidates.reverse().find(element => getComputedStyle(element).display !== 'none');
+  if (!modal) return;
+  const focusable = Array.from(modal.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter(element => getComputedStyle(element).display !== 'none');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault(); last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault(); first.focus();
+  }
+});
 
 async function doLogout() {
   await sb.auth.signOut();

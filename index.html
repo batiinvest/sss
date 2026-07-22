@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260711.2">
+  <link rel="stylesheet" href="css/style.css?v=20260722.2">
   <script>
     (function () {
       if (window === window.parent) {
@@ -41,6 +41,18 @@
       <button type="button" onclick="window.parent.openQuickAdd()"><span class="home-action-icon amber" aria-hidden="true">＋</span><strong>종목 등록</strong><small>발표·투자 시작</small></button>
     </div>
 
+    <section class="presentation-order-summary dashboard-presentation-order" aria-labelledby="mobilePresentationOrderTitle">
+      <div class="presentation-order-summary-head">
+        <div>
+          <div class="presentation-order-eyebrow">현재 발표 사이클</div>
+          <h2 id="mobilePresentationOrderTitle">발표 순서</h2>
+          <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
+        </div>
+        <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('schedule-order')" aria-label="전체 발표 순서 보기">전체 보기 <span aria-hidden="true">→</span></button>
+      </div>
+      <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
+    </section>
+
     <section class="mobile-home-section" aria-labelledby="recentPresentationsTitle">
       <div class="mobile-home-section-head"><h2 id="recentPresentationsTitle">최근 발표종목</h2><button type="button" onclick="navigateToAppRoute('presentations')">전체 보기</button></div>
       <div id="mobileRecentPresentations" class="mobile-stock-list"><div class="mobile-list-skeleton"></div><div class="mobile-list-skeleton"></div></div>
@@ -63,6 +75,18 @@
       <button class="btn btn-primary" onclick="openPickModal()">투자종목 등록</button>
     </div>
   </div>
+
+  <section class="presentation-order-summary dashboard-presentation-order desktop-home-dashboard" aria-labelledby="desktopPresentationOrderTitle">
+    <div class="presentation-order-summary-head">
+      <div>
+        <div class="presentation-order-eyebrow">현재 발표 사이클</div>
+        <h2 id="desktopPresentationOrderTitle">발표 순서</h2>
+        <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
+      </div>
+      <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('schedule-order')">전체 순서 보기 <span aria-hidden="true">→</span></button>
+    </div>
+    <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
+  </section>
 
   <!-- ── 내 탑픽 + 내 발표종목 ── -->
   <div id="mySection" class="dashboard-my-grid desktop-home-dashboard" style="display:none;">
@@ -234,6 +258,7 @@
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260711.2"></script>
+<script src="js/schedule-shared.js?v=20260722.2"></script>
 <script src="js/modal-pick.js?v=20260711.2"></script>
 <script src="js/modal-pres.js?v=20260711.2"></script>
 <script>
@@ -310,7 +335,7 @@ async function initMobileHome(now = new Date()) {
   dateEl.textContent = now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
 
   const month = currentMonth();
-  const [me, presentationResult, picks] = await Promise.all([
+  const [me, presentationResult, picks, activeMembers, turnData] = await Promise.all([
     getCurrentMember(),
     sb.from('presentations')
       .select('*, members(name)')
@@ -318,6 +343,8 @@ async function initMobileHome(now = new Date()) {
       .order('created_at', { ascending: false })
       .limit(6),
     fetchPicksByMonthWithCarryFallback(month),
+    fetchMembers(),
+    loadPresentationOrderData(),
   ]);
 
   if (me?.name) {
@@ -330,6 +357,7 @@ async function initMobileHome(now = new Date()) {
     ...picks.map(item => item.stock_code),
   ].filter(Boolean))];
   globalPriceMap = await fetchPriceMapByCodes(codes);
+  renderDashboardPresentationOrder(activeMembers, turnData);
   renderMobileRecentPresentations(presentations.slice(0, 4));
   renderMobileActiveInvestments(picks.filter(item => item.status !== 'sold').slice(0, 4));
 }
@@ -388,19 +416,68 @@ function renderMobileActiveInvestments(items) {
 
 async function loadDashboardData() {
   const month = currentMonth();
-  const [members, picks, allPicksRaw, trades, allTradesData, me] = await Promise.all([
+  const [members, picks, allPicksRaw, trades, allTradesData, me, turnData] = await Promise.all([
     fetchMemberStats(),
     loadDashboardPicks(month),
     fetchAllPicks({ status: 'hold' }),
     fetchTrades(8),
     fetchAllTrades(),
     getCurrentMember(),
+    loadPresentationOrderData(),
   ]);
   const allPicks = [
     ...allPicksRaw,
     ...picks.filter(p => p._isCarryFallback),
   ];
-  return { members, picks, allPicks, trades, allTradesData, me };
+  return { members, picks, allPicks, trades, allTradesData, me, turnData };
+}
+
+async function loadPresentationOrderData() {
+  const [presentationResult, savedOrder] = await Promise.all([
+    sb.from('presentations')
+      .select('member_id, category, status, schedule_id, presented_at, created_at')
+      .order('presented_at', { ascending: true })
+      .order('created_at', { ascending: true }),
+    getConfig('pres_order'),
+  ]);
+  if (presentationResult.error) console.error('발표 순서 데이터 로드 오류:', presentationResult.error);
+  return {
+    presentations: presentationResult.data || [],
+    order: Array.isArray(savedOrder) ? savedOrder : [],
+  };
+}
+
+function renderDashboardPresentationOrder(memberRows, turnData) {
+  const roots = document.querySelectorAll('.dashboard-presentation-order');
+  const safeMembers = (memberRows || []).filter(Boolean);
+  const savedIds = (turnData?.order || []).filter(id => safeMembers.some(member => member.id === id));
+  const orderedIds = savedIds.concat(safeMembers.filter(member => !savedIds.includes(member.id)).map(member => member.id));
+  const orderedMembers = orderedIds.map(id => safeMembers.find(member => member.id === id)).filter(Boolean);
+
+  roots.forEach(root => {
+    const statusEl = root.querySelector('.presentation-order-status');
+    const listEl = root.querySelector('.presentation-order-list');
+    if (!orderedMembers.length) {
+      statusEl.textContent = '등록된 발표자가 없습니다.';
+      listEl.innerHTML = '';
+      return;
+    }
+
+    const turn = getPresentationTurnState(turnData?.presentations || [], orderedMembers, { includePlanned: true });
+    const nextId = turn.nextMember?.id;
+    statusEl.innerHTML = turn.nextMember
+      ? `다음 발표자는 <strong>${escapeHtml(turn.nextMember.name)}</strong>님입니다 · ${escapeHtml(turn.label)} 순서`
+      : `${escapeHtml(turn.label)} 발표 순서입니다.`;
+
+    listEl.innerHTML = orderedMembers.map((member, index) => {
+      const isNext = member.id === nextId;
+      return `<li class="presentation-order-person${isNext ? ' is-next' : ''}"${isNext ? ' aria-current="step"' : ''}>
+        <span class="presentation-order-number">${index + 1}</span>
+        <span class="presentation-order-name">${escapeHtml(member.name)}</span>
+        <span class="presentation-order-state">${isNext ? '다음' : ''}</span>
+      </li>`;
+    }).join('');
+  });
 }
 
 async function loadDashboardPicks(month) {
@@ -418,7 +495,8 @@ async function loadMyDashboardData(memberId) {
   };
 }
 
-function renderDashboard({ members, picks, trades, allTradesData }) {
+function renderDashboard({ members, picks, trades, allTradesData, turnData }) {
+  renderDashboardPresentationOrder(members, turnData);
   renderMetrics(members, picks, allTradesData);
   renderPicksTable(picks, {});
   renderMemberBars(members);

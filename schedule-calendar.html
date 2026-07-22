@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260722.1">
+  <link rel="stylesheet" href="css/style.css?v=20260722.2">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -28,18 +28,6 @@
       <button class="btn btn-primary" onclick="openForm()">+ 일정 추가</button>
     </div>
   </div>
-
-  <section class="presentation-order-summary" aria-labelledby="presentationOrderTitle">
-    <div class="presentation-order-summary-head">
-      <div>
-        <div class="presentation-order-eyebrow">현재 발표 사이클</div>
-        <h2 id="presentationOrderTitle">발표 순서</h2>
-        <p id="presentationOrderStatus" aria-live="polite">발표 순서를 불러오는 중...</p>
-      </div>
-      <button type="button" class="btn presentation-order-link" onclick="goToSchedulePage('schedule-order')">전체 순서 보기 <span aria-hidden="true">→</span></button>
-    </div>
-    <ol id="presentationOrderList" class="presentation-order-list" aria-label="발표자 순서"></ol>
-  </section>
 
   <!-- 일정 추가/수정 폼 -->
   <div id="scheduleForm" class="card" style="display:none;margin-bottom:1.25rem;">
@@ -194,7 +182,6 @@
 <script src="js/schedule-shared.js?v=20260711.2"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
-let presentationOrder = [];
 
 
 function getScheduleShareUrl(scheduleId) {
@@ -275,19 +262,15 @@ async function init() {
 
   try {
     await loadSharedData();   // js/schedule-shared.js
-    const savedOrder = await getConfig('pres_order');
-    presentationOrder = Array.isArray(savedOrder) ? savedOrder : members.map(m => m.id);
   } catch(e) {
     console.error('일정 데이터 로드 오류:', e.message);
     schedules = []; members = []; presentations = [];
-    presentationOrder = [];
   }
 
   const sel = document.getElementById('s-member');
   if (sel) members.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.name}</option>`);
 
   renderCalendar();
-  renderPresentationOrderSummary();
   renderUpcoming();
   renderScheduleList();
 
@@ -295,39 +278,6 @@ async function init() {
   if (sharedScheduleId) {
     setTimeout(() => showDetail(sharedScheduleId), 0);
   }
-}
-
-function renderPresentationOrderSummary() {
-  const listEl = document.getElementById('presentationOrderList');
-  const statusEl = document.getElementById('presentationOrderStatus');
-  if (!listEl || !statusEl) return;
-
-  const knownIds = presentationOrder.filter(id => members.some(member => member.id === id));
-  const orderedIds = knownIds.concat(members.filter(member => !knownIds.includes(member.id)).map(member => member.id));
-  const orderedMembers = orderedIds.map(id => members.find(member => member.id === id)).filter(Boolean);
-  if (!orderedMembers.length) {
-    statusEl.textContent = '등록된 발표자가 없습니다.';
-    listEl.innerHTML = '';
-    return;
-  }
-
-  const turn = getPresentationTurnState(presentations, orderedMembers, { includePlanned: true });
-  const pendingIds = new Set(turn.pendingMembers.map(member => member.id));
-  const nextId = turn.nextMember?.id;
-  statusEl.innerHTML = turn.nextMember
-    ? `다음 발표자는 <strong>${escapeHtml(turn.nextMember.name)}</strong>님입니다 · ${escapeHtml(turn.label)} ${turn.completedCount}/${turn.total}`
-    : `${escapeHtml(turn.label)} 발표 순서입니다.`;
-
-  listEl.innerHTML = orderedMembers.map((member, index) => {
-    const isNext = member.id === nextId;
-    const isDone = !pendingIds.has(member.id);
-    const stateLabel = isNext ? '다음' : isDone ? '완료' : '대기';
-    return `<li class="presentation-order-person${isNext ? ' is-next' : ''}${isDone ? ' is-done' : ''}">
-      <span class="presentation-order-number">${index + 1}</span>
-      <span class="presentation-order-name">${escapeHtml(member.name)}</span>
-      <span class="presentation-order-state">${stateLabel}</span>
-    </li>`;
-  }).join('');
 }
 
 // ── 달력 렌더링

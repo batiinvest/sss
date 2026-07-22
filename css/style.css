@@ -1031,7 +1031,7 @@ html.in-iframe .main {
 .upcoming-month { font-size: 11px; color: var(--muted); }
 .upcoming-day   { font-size: 20px; font-weight: 500; line-height: 1.2; }
 
-/* ── 일정 화면 발표 순서 요약 */
+/* ── 대시보드 발표 순서 요약 */
 .presentation-order-summary {
   margin-bottom: 1.25rem; padding: 18px 20px;
   border: 1px solid #b5d4f4; border-radius: var(--r-lg);
@@ -1056,10 +1056,10 @@ html.in-iframe .main {
 }
 .presentation-order-name { grid-area: name; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .presentation-order-state { grid-area: state; color: var(--muted); font-size: 10px; }
+.presentation-order-state:empty { display: none; }
 .presentation-order-person.is-next { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(24, 95, 165, 0.1); }
 .presentation-order-person.is-next .presentation-order-number { background: var(--accent); color: #fff; }
 .presentation-order-person.is-next .presentation-order-state { color: var(--accent); font-weight: 700; }
-.presentation-order-person.is-done:not(.is-next) { opacity: 0.58; }
 
 /* ── 발표순서 멤버 패널 */
 .pres-member-row {

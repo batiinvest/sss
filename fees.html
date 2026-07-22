@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 회비</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
-  <link rel="stylesheet" href="css/style.css?v=20260424">
+  <link rel="stylesheet" href="css/style.css?v=20260722">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -17,10 +17,10 @@
   <div class="topbar">
     <div>
       <div class="page-title">스터디 회비</div>
-      <div class="updated" id="updatedAt">월 20,000원 정기 · 회식 추가 수시</div>
+      <div class="updated" id="updatedAt">활성 회원 월 회비 자동 반영 · 스터디룸 고정비 자동 반복</div>
     </div>
     <div class="btn-row" id="adminBtns" style="display:none;">
-      <button class="btn" onclick="openFeeModal()">+ 납부 등록</button>
+      <button class="btn" onclick="openFeeModal()">+ 추가 회비</button>
       <button class="btn" onclick="openExpenseModal()">+ 지출 등록</button>
     </div>
   </div>
@@ -31,7 +31,7 @@
     <div class="value" id="totalBalance">계산 중...</div>
     <div class="balance-sub">
       <div class="balance-sub-item">
-        <div class="sub-label">총 납부액</div>
+        <div class="sub-label">누적 회비</div>
         <div class="sub-value" id="totalFees">—</div>
       </div>
       <div class="balance-sub-item">
@@ -39,7 +39,7 @@
         <div class="sub-value" id="totalExpenses">—</div>
       </div>
       <div class="balance-sub-item">
-        <div class="sub-label">이번 달 납부</div>
+        <div class="sub-label">선택 월 회비</div>
         <div class="sub-value" id="thisMonthPaid">—</div>
       </div>
     </div>
@@ -47,10 +47,10 @@
 
   <div class="grid-2">
 
-    <!-- 월별 납부 현황 -->
+    <!-- 월별 회비 현황 -->
     <div class="card">
       <div class="card-head">
-        <div class="card-title">납부 현황</div>
+        <div class="card-title">월 회비</div>
         <div class="month-nav">
           <button onclick="changeMonth(-1)">‹</button>
           <span id="currentMonthLabel" style="font-size:13px;font-weight:500;min-width:70px;text-align:center;"></span>
@@ -84,7 +84,7 @@
 
   <!-- 월별 요약 -->
   <div class="card" style="margin-top:1.25rem;">
-    <div class="card-head"><div class="card-title">월별 납부 요약</div></div>
+    <div class="card-head"><div class="card-title">월별 회비·지출 요약</div></div>
     <div style="padding:0 1rem 1rem;overflow-x:auto;">
       <div id="monthlySummary" style="display:flex;gap:12px;min-width:600px;padding-top:8px;"></div>
     </div>
@@ -93,11 +93,11 @@
 </main>
 </div>
 
-<!-- 납부 등록 모달 -->
+<!-- 추가 회비 등록 모달 -->
 <div id="feeModal" class="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">
-      <div class="modal-title">납부 등록</div>
+      <div class="modal-title">추가 회비 등록</div>
       <button class="btn" onclick="closeFeeModal()">닫기</button>
     </div>
     <div class="form-section">
@@ -107,26 +107,23 @@
           <select id="fee-member" style="font-size:13px;"></select>
         </div>
         <div class="form-group">
-          <label>납부 월</label>
+          <label>반영 월</label>
           <input type="month" id="fee-month" style="font-size:13px;" />
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>금액</label>
-          <input type="number" id="fee-amount" value="20000" step="1000" style="font-size:13px;" />
+          <label>추가 금액</label>
+          <input type="number" id="fee-amount" placeholder="0" step="1000" style="font-size:13px;" />
         </div>
         <div class="form-group">
-          <label>유형</label>
-          <select id="fee-type" style="font-size:13px;">
-            <option value="regular">정기 (20,000원)</option>
-            <option value="extra">추가 (회식 등)</option>
-          </select>
+          <label>안내</label>
+          <div style="font-size:12px;color:var(--muted);padding:9px 0;line-height:1.5;">정기 회비는 회원 수에 맞춰 자동 반영됩니다.</div>
         </div>
       </div>
       <div class="form-group">
         <label>메모</label>
-        <input type="text" id="fee-note" placeholder="예: 4월 정기 회비" style="font-size:13px;" />
+        <input type="text" id="fee-note" placeholder="예: 회식 추가 회비" style="font-size:13px;" />
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
         <button class="btn" onclick="closeFeeModal()">취소</button>
@@ -161,12 +158,13 @@
       </div>
       <div class="form-group">
         <label>금액</label>
-        <input type="number" id="exp-amount" placeholder="0" step="100" style="font-size:13px;" />
+        <input type="number" id="exp-amount" placeholder="0" min="0" step="100" style="font-size:13px;" />
       </div>
       <div class="form-group">
         <label>메모</label>
         <input type="text" id="exp-note" placeholder="예: 스터디룸 4월 이용료" style="font-size:13px;" />
       </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;">스터디룸 비용은 직전 실제 월의 금액이 자동 반복됩니다. 금액이 바뀐 달에만 새 금액을 등록하고, 반복을 멈추려면 0원을 등록하세요.</div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
         <button class="btn" onclick="closeExpenseModal()">취소</button>
         <button class="btn btn-primary" onclick="saveExpense()">저장</button>
@@ -180,14 +178,29 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
 <script src="js/db.js?v=20260424"></script>
+<script src="js/fees-auto.js"></script>
 <script>
 const REGULAR_FEE = 20000;
+const AUTO_LEDGER_START_MONTH = '2026-04';
+const {
+  buildEffectiveFees,
+  buildEffectiveExpenses,
+  getMembersForMonth,
+} = window.SSSFeeAutomation;
+
 function feeWon(n) { return Math.abs(Math.round(n)).toLocaleString() + '원'; }
+function signedFeeWon(n) { return (n < 0 ? '-' : n > 0 ? '+' : '') + feeWon(n); }
+function localDateKey(date = new Date()) {
+  return date.getFullYear() + '-' +
+    String(date.getMonth() + 1).padStart(2, '0') + '-' +
+    String(date.getDate()).padStart(2, '0');
+}
 const CAT_LABEL = { room:'스터디룸', drink:'음료', dinner:'회식', other:'기타' };
 const CAT_CLASS  = { room:'cat-room', drink:'cat-drink', dinner:'cat-dinner', other:'cat-other' };
 
-let members = [], fees = [], expenses = [], currentMember = null, isAdminUser = false;
-let feeCurrentMonth = new Date().toISOString().slice(0,7); // 'YYYY-MM'
+let members = [], storedFees = [], storedExpenses = [], fees = [], expenses = [];
+let currentMember = null, isAdminUser = false;
+let feeCurrentMonth = localDateKey().slice(0,7); // 'YYYY-MM'
 
 // ── 월 이동
 function changeMonth(delta) {
@@ -195,7 +208,9 @@ function changeMonth(delta) {
   const d = new Date(y, m - 1 + delta, 1);
   feeCurrentMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
   document.getElementById('currentMonthLabel').textContent = feeCurrentMonth.replace('-','년 ') + '월';
+  renderSummary();
   renderFees();
+  renderMonthlySummary();
 }
 
 // ── 데이터 렌더
@@ -215,27 +230,48 @@ function renderSummary() {
 
 function renderFees() {
   document.getElementById('currentMonthLabel').textContent = feeCurrentMonth.replace('-', '년 ') + '월';
+  const todayMonth = localDateKey().slice(0,7);
+  const beforeAutoStart = feeCurrentMonth < AUTO_LEDGER_START_MONTH;
+  const isFutureMonth = feeCurrentMonth > todayMonth;
+  const monthMembers = getMembersForMonth(members, feeCurrentMonth);
   const monthFees = fees.filter(f => f.month === feeCurrentMonth);
-  const totalPaid = monthFees.reduce((s,f) => s + f.amount, 0);
-  const target    = members.length * REGULAR_FEE;
-  const pct       = target > 0 ? Math.min(100, Math.round(totalPaid / target * 100)) : 0;
+  const regularFees = monthFees.filter(f => f.fee_type === 'regular');
+  const regularTotal = regularFees.reduce((sum, fee) => sum + fee.amount, 0);
+  const extraTotal = monthFees
+    .filter(f => f.fee_type === 'extra')
+    .reduce((sum, fee) => sum + fee.amount, 0);
+  const target = beforeAutoStart ? 0 : monthMembers.length * REGULAR_FEE;
+  const pct = target > 0 ? Math.min(100, Math.round(regularTotal / target * 100)) : 0;
 
   // 진행률 바
   const prog = document.getElementById('feeProgress');
-  prog.innerHTML =
-    '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">' +
-    '<span>정기 납부 현황</span><span>' + feeWon(totalPaid) + ' / ' + feeWon(target) + '</span></div>' +
-    '<div class="total-bar"><div class="total-bar-fill" style="width:' + pct + '%"></div></div>';
+  if (beforeAutoStart) {
+    prog.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">월 회비 자동 반영은 2026년 4월부터 시작됩니다.</div>';
+  } else {
+    prog.innerHTML =
+      '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">' +
+      '<span>월 회비 자동 반영</span><span>' + feeWon(regularTotal) + ' / ' + feeWon(target) + '</span></div>' +
+      '<div class="total-bar"><div class="total-bar-fill" style="width:' + pct + '%"></div></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px;">' +
+      '<span>활성 회원 ' + monthMembers.length + '명 × ' + feeWon(REGULAR_FEE) + '</span>' +
+      (extraTotal ? '<span>추가 회비 +' + feeWon(extraTotal) + '</span>' : '<span>' + (isFutureMonth ? '반영 예정' : '자동 계산됨') + '</span>') +
+      '</div>';
+  }
 
-  // 멤버별 납부 상태
+  // 멤버별 회비 상태
   const list = document.getElementById('memberFeeList');
   list.innerHTML = '';
-  members.forEach(m => {
+  if (beforeAutoStart) return;
+
+  monthMembers.forEach(m => {
     const mFees   = monthFees.filter(f => f.member_id === m.id);
     const regular = mFees.filter(f => f.fee_type === 'regular');
     const extra   = mFees.filter(f => f.fee_type === 'extra');
-    const paid    = mFees.reduce((s,f) => s + f.amount, 0);
+    const storedRegular = storedFees.filter(f =>
+      f.member_id === m.id && f.month === feeCurrentMonth && f.fee_type === 'regular'
+    );
     const hasPaid = regular.length > 0;
+    const isAutomatic = regular.some(f => f.is_auto);
 
     const row = document.createElement('div');
     row.className = 'member-fee-row';
@@ -255,12 +291,13 @@ function renderFees() {
     if (hasPaid) {
       const b = document.createElement('span');
       b.className = 'fee-badge fee-paid';
-      b.textContent = '✅ ' + feeWon(regular.reduce((s,f)=>s+f.amount,0));
+      b.textContent = (isAutomatic ? '자동 · ' : '기록 · ') + feeWon(regular.reduce((s,f)=>s+f.amount,0)) +
+        (storedRegular.length > 1 ? ' · 중복 ' + (storedRegular.length - 1) + '건 제외' : '');
       badgeWrap.appendChild(b);
     } else {
       const b = document.createElement('span');
-      b.className = 'fee-badge fee-unpaid';
-      b.textContent = '❌ 미납';
+      b.className = 'fee-badge fee-auto';
+      b.textContent = isFutureMonth ? '자동 반영 예정' : '자동 반영 대기';
       badgeWrap.appendChild(b);
     }
     if (extra.length > 0) {
@@ -270,17 +307,33 @@ function renderFees() {
       badgeWrap.appendChild(b);
     }
 
-    // 관리자: 납부 삭제 버튼
-    if (isAdminUser && mFees.length > 0) {
+    // 관리자: 기존 정기 회비 기록을 지우고 자동 계산으로 전환 가능
+    if (isAdminUser && storedRegular.length > 0) {
+      const convertBtn = document.createElement('button');
+      convertBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#6b21a8;font-size:11px;padding:0 2px;';
+      convertBtn.textContent = '자동 전환';
+      convertBtn.title = '저장된 정기 회비 기록을 삭제하고 자동 계산으로 전환';
+      convertBtn.onclick = async () => {
+        const countText = storedRegular.length > 1 ? ' ' + storedRegular.length + '건을' : '을';
+        if (!confirm(m.name + '님의 ' + feeCurrentMonth + ' 정기 회비 기록' + countText + ' 삭제하고 자동 계산으로 전환할까요?')) return;
+        const { error } = await sb.from('study_fees').delete().in('id', storedRegular.map(f => f.id));
+        if (error) { toast('정기 회비 기록 삭제 오류: ' + error.message); return; }
+        await loadData();
+      };
+      badgeWrap.appendChild(convertBtn);
+    }
+
+    // 관리자: 수동으로 등록한 추가 회비만 삭제 가능
+    const removableExtra = extra.filter(f => !f.is_auto && f.id);
+    if (isAdminUser && removableExtra.length > 0) {
       const delBtn = document.createElement('button');
       delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;';
       delBtn.textContent = '✕';
-      delBtn.title = '이번 달 납부 삭제';
+      delBtn.title = '이번 달 추가 회비 삭제';
       delBtn.onclick = async () => {
-        if (!confirm(m.name + '님의 ' + feeCurrentMonth + ' 납부 내역을 삭제할까요?')) return;
-        for (const f of mFees) {
-          await sb.from('study_fees').delete().eq('id', f.id);
-        }
+        if (!confirm(m.name + '님의 ' + feeCurrentMonth + ' 추가 회비 내역을 삭제할까요?')) return;
+        const { error } = await sb.from('study_fees').delete().in('id', removableExtra.map(f => f.id));
+        if (error) { toast('추가 회비 삭제 오류: ' + error.message); return; }
         await loadData();
       };
       badgeWrap.appendChild(delBtn);
@@ -311,25 +364,34 @@ function renderExpenses() {
     row.className = 'expense-row';
 
     const catBadge = document.createElement('span');
-    catBadge.className = 'fee-badge ' + (CAT_CLASS[e.category]||'cat-other');
-    catBadge.textContent = CAT_LABEL[e.category]||e.category;
+    catBadge.className = 'fee-badge ' + (e.is_auto ? 'fee-auto' : (CAT_CLASS[e.category]||'cat-other'));
+    catBadge.textContent = (CAT_LABEL[e.category]||e.category) + (e.is_auto ? ' · 자동' : '');
 
     const noteDiv = document.createElement('div');
     noteDiv.style.cssText = 'font-size:13px;min-width:0;';
-    noteDiv.innerHTML = '<div style="font-weight:500;">' + (e.note||'—') + '</div>' +
-      '<div style="font-size:11px;color:var(--muted);">' + e.spent_at + '</div>';
+    const noteTitle = document.createElement('div');
+    noteTitle.style.fontWeight = '500';
+    noteTitle.textContent = e.note || '—';
+    const noteDate = document.createElement('div');
+    noteDate.style.cssText = 'font-size:11px;color:var(--muted);';
+    noteDate.textContent = e.spent_at + (e.is_auto && e.source_month ? ' · ' + e.source_month + ' 실제 금액 기준' : '');
+    noteDiv.appendChild(noteTitle);
+    noteDiv.appendChild(noteDate);
 
     const amtDiv = document.createElement('div');
     amtDiv.style.cssText = 'font-size:13px;font-weight:500;color:#a32d2d;white-space:nowrap;';
-    amtDiv.textContent = '-' + feeWon(e.amount);
+    amtDiv.textContent = e.category === 'room' && Number(e.amount) === 0 ? '반복 중지' : '-' + feeWon(e.amount);
 
     const actDiv = document.createElement('div');
-    if (isAdminUser) {
+    if (isAdminUser && !e.is_auto) {
       const delBtn = document.createElement('button');
       delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;';
       delBtn.textContent = '✕';
       delBtn.onclick = async () => {
-        if (!confirm('지출 내역을 삭제할까요?')) return;
+        const message = e.category === 'room'
+          ? '이 스터디룸 실제 금액을 삭제하면 이후 월의 자동 반복 금액도 바뀔 수 있습니다. 삭제할까요?'
+          : '지출 내역을 삭제할까요?';
+        if (!confirm(message)) return;
         await sb.from('study_expenses').delete().eq('id', e.id);
         await loadData();
       };
@@ -347,9 +409,9 @@ function renderExpenses() {
 function renderMonthlySummary() {
   // 최근 6개월 요약
   const months = [];
+  const now = new Date();
   for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
   }
 
@@ -362,21 +424,30 @@ function renderMonthlySummary() {
     const mExps = expenses.filter(e => e.spent_at.slice(0,7) === month);
     const paid  = mFees.reduce((s,f)=>s+f.amount,0);
     const spent = mExps.reduce((s,e)=>s+e.amount,0);
+    const net = paid - spent;
     const paidCount = new Set(mFees.filter(f=>f.fee_type==='regular').map(f=>f.member_id)).size;
+    const memberCount = month >= AUTO_LEDGER_START_MONTH ? getMembersForMonth(members, month).length : 0;
 
     const col = document.createElement('div');
     col.style.cssText = 'flex:1;min-width:80px;cursor:pointer;';
-    col.onclick = () => { feeCurrentMonth = month; renderFees(); };
+    col.onclick = () => {
+      feeCurrentMonth = month;
+      renderSummary();
+      renderFees();
+      renderMonthlySummary();
+    };
 
     const barH = Math.max(4, Math.round(paid / maxPaid * 80));
     col.innerHTML =
       '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
-        '<div style="font-size:11px;color:var(--muted);">' + feeWon(paid) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">회비 ' + feeWon(paid) + '</div>' +
         '<div style="width:32px;height:80px;background:var(--border);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden;">' +
           '<div style="width:100%;height:' + barH + 'px;background:' + (month===feeCurrentMonth?'#185fa5':'#93c5fd') + ';border-radius:4px;transition:.3s;"></div>' +
         '</div>' +
         '<div style="font-size:10px;color:var(--muted);">' + month.slice(5) + '월</div>' +
-        '<div style="font-size:10px;color:#0f6e56;">' + paidCount + '/' + members.length + '명</div>' +
+        '<div style="font-size:10px;color:#0f6e56;">' + paidCount + '/' + memberCount + '명</div>' +
+        '<div style="font-size:10px;color:#a32d2d;">지출 -' + feeWon(spent) + '</div>' +
+        '<div style="font-size:10px;color:' + (net >= 0 ? '#0f6e56' : '#a32d2d') + ';">월 잔액 ' + signedFeeWon(net) + '</div>' +
       '</div>';
 
     el.appendChild(col);
@@ -401,9 +472,21 @@ async function loadData() {
       }
       return;
     }
+    if (expRes.error) throw expRes.error;
 
-    fees     = feesRes.data || [];
-    expenses = expRes.data  || [];
+    storedFees = feesRes.data || [];
+    storedExpenses = expRes.data || [];
+
+    const throughMonth = localDateKey().slice(0,7);
+    fees = buildEffectiveFees(storedFees, members, {
+      monthlyFee: REGULAR_FEE,
+      startMonth: AUTO_LEDGER_START_MONTH,
+      throughMonth,
+    });
+    expenses = buildEffectiveExpenses(storedExpenses, {
+      startMonth: AUTO_LEDGER_START_MONTH,
+      throughMonth,
+    });
 
     renderSummary();
     renderFees();
@@ -415,13 +498,12 @@ async function loadData() {
   }
 }
 
-// ── 납부 등록 모달
+// ── 추가 회비 등록 모달
 function openFeeModal() {
   const sel = document.getElementById('fee-member');
   sel.innerHTML = members.map(m => '<option value="'+m.id+'">'+m.name+'</option>').join('');
   document.getElementById('fee-month').value  = feeCurrentMonth;
-  document.getElementById('fee-amount').value = REGULAR_FEE;
-  document.getElementById('fee-type').value   = 'regular';
+  document.getElementById('fee-amount').value = '';
   document.getElementById('fee-note').value   = '';
   document.getElementById('feeModal').style.display = 'flex';
 }
@@ -431,7 +513,6 @@ async function saveFee() {
   const memberId = document.getElementById('fee-member').value;
   const month    = document.getElementById('fee-month').value;
   const amount   = parseInt(document.getElementById('fee-amount').value);
-  const feeType  = document.getElementById('fee-type').value;
   const note     = document.getElementById('fee-note').value.trim() || null;
 
   if (!memberId || !month || !amount) { toast('모든 필드를 입력하세요.'); return; }
@@ -441,10 +522,10 @@ async function saveFee() {
 
   try {
     const { error } = await sb.from('study_fees').insert({
-      member_id: memberId, month, amount, fee_type: feeType, note,
+      member_id: memberId, month, amount, fee_type: 'extra', note,
     });
     if (error) throw error;
-    toast('✅ 납부 등록 완료');
+    toast('✅ 추가 회비 등록 완료');
     closeFeeModal();
     await loadData();
   } catch(e) {
@@ -456,7 +537,7 @@ async function saveFee() {
 
 // ── 지출 등록 모달
 function openExpenseModal() {
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateKey();
   document.getElementById('exp-date').value     = today;
   document.getElementById('exp-amount').value   = '';
   document.getElementById('exp-note').value     = '';
@@ -469,9 +550,11 @@ async function saveExpense() {
   const category = document.getElementById('exp-category').value;
   const amount   = parseInt(document.getElementById('exp-amount').value);
   const spentAt  = document.getElementById('exp-date').value;
-  const note     = document.getElementById('exp-note').value.trim() || null;
+  let note       = document.getElementById('exp-note').value.trim() || null;
 
-  if (!amount || !spentAt) { toast('금액과 날짜를 입력하세요.'); return; }
+  const validAmount = Number.isFinite(amount) && amount >= 0 && (category === 'room' || amount > 0);
+  if (!validAmount || !spentAt) { toast('금액과 날짜를 입력하세요.'); return; }
+  if (category === 'room' && amount === 0 && !note) note = '스터디룸 자동 반복 중지';
 
   const btn = document.querySelector('#expenseModal .btn-primary');
   if (btn) { btn.textContent = '저장 중...'; btn.disabled = true; }
@@ -482,7 +565,9 @@ async function saveExpense() {
       created_by: currentMember?.id || null,
     });
     if (error) throw error;
-    toast('✅ 지출 등록 완료');
+    toast(category === 'room'
+      ? (amount === 0 ? '✅ 스터디룸 자동 반복을 중지했습니다.' : '✅ 스터디룸 실제 금액 등록 완료 · 이후 월에 자동 반복됩니다.')
+      : '✅ 지출 등록 완료');
     closeExpenseModal();
     await loadData();
   } catch(e) {

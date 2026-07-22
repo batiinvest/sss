@@ -843,6 +843,7 @@ html.in-iframe .main {
 .fee-paid   { background: #e6f7f1; color: #0f6e56; }
 .fee-unpaid { background: #fef2f2; color: #a32d2d; }
 .fee-extra  { background: #eff6ff; color: #1e40af; }
+.fee-auto   { background: #f3e8ff; color: #6b21a8; }
 .cat-room   { background: #f0fdf4; color: #166534; }
 .cat-drink  { background: #fef9c3; color: #854d0e; }
 .cat-dinner { background: #fdf2f8; color: #86198f; }

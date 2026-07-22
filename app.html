@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260722.2">
+  <link rel="stylesheet" href="css/style.css?v=20260722.3">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -64,10 +64,12 @@
 <div class="layout">
 
   <header class="mobile-appbar" aria-label="모바일 앱 헤더">
-    <button class="mobile-brand" type="button" onclick="loadPage('index')" aria-label="SSS 홈으로 이동">
-      <span class="mobile-brand-mark" aria-hidden="true">S</span>
-      <span>SSS</span>
-    </button>
+    <div class="mobile-brand-wrap">
+      <button class="mobile-brand mobile-brand-home" type="button" onclick="loadPage('index')" aria-label="SSS 홈으로 이동">
+        <span class="mobile-brand-mark" aria-hidden="true">S</span>
+      </button>
+      <span class="mobile-page-title" id="mobilePageTitle" aria-live="polite">홈</span>
+    </div>
     <div class="mobile-appbar-actions">
       <button type="button" class="mobile-icon-btn" onclick="openGlobalSearch()" aria-label="전체 종목 검색">
         <span aria-hidden="true">⌕</span>
@@ -145,7 +147,7 @@
   <nav class="mobile-bottom-nav" aria-label="주요 메뉴">
     <button type="button" data-page="index" onclick="loadPage('index')"><span aria-hidden="true">⌂</span><span>홈</span></button>
     <button type="button" data-page="presentations" onclick="loadPage('presentations')"><span aria-hidden="true">▤</span><span>발표종목</span></button>
-    <button type="button" data-search-nav onclick="openGlobalSearch()"><span aria-hidden="true">⌕</span><span>검색</span></button>
+    <button type="button" data-page="schedule-calendar" onclick="loadPage('schedule-calendar')"><span aria-hidden="true">▦</span><span>일정</span></button>
     <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>투자종목</span></button>
     <button type="button" data-more-nav onclick="openMoreMenu()"><span aria-hidden="true">☰</span><span>내 메뉴</span></button>
   </nav>
@@ -178,6 +180,7 @@
     <div class="app-sheet-handle" aria-hidden="true"></div>
     <div class="app-sheet-head"><div><h2 id="quickAddTitle">빠른 등록</h2><p>하려는 작업을 선택하세요.</p></div><button type="button" class="app-sheet-close" onclick="closeQuickAdd()" aria-label="등록 메뉴 닫기">×</button></div>
     <div class="sheet-action-list">
+      <button type="button" onclick="runQuickRoute('schedule-calendar?action=new')"><strong>스터디 일정 등록</strong><span>날짜와 발표자·종목을 함께 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('index?action=presentation')"><strong>발표종목 등록</strong><span>발표할 종목을 먼저 저장합니다.</span></button>
       <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>투자종목 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=buy')"><strong>매수 등록</strong><span>보유를 시작하거나 추가 매수합니다.</span></button>
@@ -216,6 +219,19 @@ const APP_PAGES = new Set([
   'index', 'presentations', 'picks', 'trade', 'schedule-calendar',
   'schedule-order', 'fees', 'settle', 'members', 'mypage', 'admin'
 ]);
+const PAGE_LABELS = {
+  index: '홈',
+  presentations: '발표종목',
+  picks: '투자종목',
+  trade: '매수·매도',
+  'schedule-calendar': '스터디 일정',
+  'schedule-order': '발표 순서',
+  fees: '스터디 회비',
+  settle: '결산 관리',
+  members: '참여자 현황',
+  mypage: '내 정보',
+  admin: '사용자 관리',
+};
 let currentPage = '';
 let currentRoute = '';
 let currentUserIsAdmin = false;
@@ -237,7 +253,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260722.2');
+  params.set('v', '20260722.3');
   return parsed.page + '.html?' + params.toString();
 }
 
@@ -248,8 +264,17 @@ function updateActiveNavigation(page) {
     if (active) el.setAttribute('aria-current', 'page');
     else el.removeAttribute('aria-current');
   });
-  const moreActive = !['index', 'presentations', 'picks'].includes(page);
+  const mobileScheduleNav = document.querySelector('.mobile-bottom-nav [data-page="schedule-calendar"]');
+  if (page === 'schedule-order' && mobileScheduleNav) {
+    mobileScheduleNav.classList.add('active');
+    mobileScheduleNav.setAttribute('aria-current', 'page');
+  }
+  const moreActive = !['index', 'presentations', 'schedule-calendar', 'schedule-order', 'picks'].includes(page);
   document.querySelector('[data-more-nav]')?.classList.toggle('active', moreActive);
+  const pageLabel = PAGE_LABELS[page] || 'SSS';
+  document.getElementById('mobilePageTitle').textContent = pageLabel;
+  document.getElementById('page-frame').title = pageLabel + ' 화면';
+  document.title = 'SSS · ' + pageLabel;
 }
 
 function loadPage(route, options = {}) {

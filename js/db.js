@@ -112,7 +112,10 @@ async function fetchCarryForwardSourcePicks(month, fields = '*') {
 
 function buildCarryForwardPicks(month, currentPicks = [], priorPicks = [], opts = {}) {
   const activeMemberIds = opts.activeMemberIds || null;
-  const currentMemberIds = new Set((currentPicks || []).map(p => p.member_id));
+  const visibleCurrentPicks = (currentPicks || []).filter(p =>
+    !activeMemberIds || activeMemberIds.has(p.member_id)
+  );
+  const currentMemberIds = new Set(visibleCurrentPicks.map(p => p.member_id));
   const latestPriorByMember = new Map();
 
   [...(priorPicks || [])]
@@ -139,7 +142,7 @@ function buildCarryForwardPicks(month, currentPicks = [], priorPicks = [], opts 
       _isCarryFallback: true,
     }));
 
-  return [...(currentPicks || []), ...fallbackPicks];
+  return [...visibleCurrentPicks, ...fallbackPicks];
 }
 
 async function fetchPicksByMonthWithCarryFallback(month, opts = {}) {

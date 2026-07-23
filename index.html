@@ -257,9 +257,9 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260711.2"></script>
+<script src="js/db.js?v=20260723.1"></script>
 <script src="js/schedule-shared.js?v=20260722.2"></script>
-<script src="js/modal-pick.js?v=20260711.2"></script>
+<script src="js/modal-pick.js?v=20260723.1"></script>
 <script src="js/modal-pres.js?v=20260711.2"></script>
 <script>
 let currentPicks   = [];
@@ -391,6 +391,12 @@ function renderMobileRecentPresentations(items) {
   }).join('');
 }
 
+function automaticPickLabel(pick) {
+  if (!pick?._isCarryFallback) return '';
+  const sourceMonth = String(pick.carried_from || '').replace('-', '년 ');
+  return sourceMonth ? `자동 연장 · ${sourceMonth}월부터` : '자동 연장';
+}
+
 function renderMobileActiveInvestments(items) {
   const container = document.getElementById('mobileActiveInvestments');
   if (!items.length) {
@@ -402,9 +408,10 @@ function renderMobileActiveInvestments(items) {
     const buyPrice = Number(item.buy_price || item.price_at || 0) || null;
     const rate = buyPrice && current ? (current - buyPrice) / buyPrice * 100 : null;
     const state = Number(item.buy_quantity) > 0 || Number(item.buy_price) > 0 ? '투자 진행' : '매수 대기';
-    return `<button type="button" class="mobile-stock-card" onclick="navigateToAppRoute('picks?id=${encodeURIComponent(item.pick_id || item.id)}')">
+    const detailRoute = `picks?id=${encodeURIComponent(item.pick_id || item.id)}${item._isCarryFallback ? `&month=${encodeURIComponent(item.month)}` : ''}`;
+    return `<button type="button" class="mobile-stock-card" onclick="navigateToAppRoute('${detailRoute}')">
       <span class="mobile-stock-card-head"><strong>${escapeHtml(item.stock_name || '종목 미입력')}</strong><span class="badge ${state === '투자 진행' ? 'b-buy' : 'b-warn'}">${state}</span></span>
-      <span class="mobile-stock-card-meta">${escapeHtml(item.member_name || '담당자 미정')} · ${escapeHtml(item.stock_code || '')}</span>
+      <span class="mobile-stock-card-meta">${escapeHtml(item.member_name || '담당자 미정')} · ${escapeHtml(item.stock_code || '')}${item._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(item))}` : ''}</span>
       <span class="mobile-stock-card-metrics">
         <span>평균 매수가<strong>${buyPrice ? buyPrice.toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>현재가<strong>${current ? Number(current).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
@@ -556,13 +563,25 @@ async function renderMySection() {
 function renderMyPicksData(me, picks) {
   const thisMonth = currentMonth();
   const submitted = picks.find(p => p.month === thisMonth);
+  const effectivePick = buildCarryForwardPicks(
+    thisMonth,
+    picks.filter(p => p.month === thisMonth),
+    picks,
+    { activeMemberIds: me.is_active === false ? new Set() : new Set([me.id]) }
+  ).find(p => p.member_id === me.id);
   const bannerEl  = document.getElementById('myPickBanner');
 
   bannerEl.style.display = 'block';
   if (submitted) {
     bannerEl.innerHTML =
       `<div style="background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--green);">
-        ✅ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 제출 완료 — ${submitted.stock_name}
+        ✅ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 직접 제출 — ${escapeHtml(submitted.stock_name)}
+       </div>`;
+  } else if (effectivePick?._isCarryFallback) {
+    bannerEl.innerHTML =
+      `<div style="background:#e8f2fb;border:0.5px solid #b5d4f4;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:#185fa5;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span>↻ <strong>${thisMonth.replace('-','년 ')}월</strong> ${escapeHtml(effectivePick.stock_name)} 자동 연장</span>
+        <a href="picks.html?action=new" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;white-space:nowrap;">변경하기 →</a>
        </div>`;
   } else {
     bannerEl.innerHTML =
@@ -595,6 +614,8 @@ function renderMyPicksData(me, picks) {
 
     // 실제 보유 수익률 — 이월인 경우 원본 월 탑픽의 buy_price로 계산
     const isCarried = !!p.carried_from;
+    const isAutoSource = effectivePick?._isCarryFallback &&
+      String(effectivePick.pick_id || effectivePick.id) === String(p.pick_id || p.id);
     let realBuy  = p.buy_price; // trades 체결가 (이월 픽엔 없음)
     if (isCarried && !realBuy && p.carried_from) {
       // 같은 종목의 이전 픽 중 buy_price 있는 것 찾기
@@ -617,7 +638,9 @@ function renderMyPicksData(me, picks) {
         <div>
           <span style="font-size:14px;font-weight:500;">${p.stock_name}</span>
           <span style="font-size:11px;color:var(--muted);margin-left:6px;">${p.stock_code||''} · ${(p.month||'').replace('-','년 ')}월</span>
-          ${isCarried ? '<span style="font-size:10px;background:var(--amberbg);color:var(--amber);padding:1px 5px;border-radius:3px;margin-left:4px;">이월</span>' : ''}
+          ${isAutoSource
+            ? `<span style="font-size:10px;background:#e8f2fb;color:#185fa5;padding:1px 5px;border-radius:3px;margin-left:4px;">${thisMonth.replace('-','년 ')}월 자동 연장</span>`
+            : isCarried ? '<span style="font-size:10px;background:var(--amberbg);color:var(--amber);padding:1px 5px;border-radius:3px;margin-left:4px;">이월</span>' : ''}
         </div>
         <span class="badge b-hold">보유중</span>
       </div>
@@ -917,10 +940,14 @@ function renderMetrics(members, picks, allTrades = []) {
 
   const submitted = picks.length;
   const missing   = members.filter(m => !picks.find(p => p.member_id === m.id));
+  const automatic = picks.filter(p => p._isCarryFallback);
+  const directCount = submitted - automatic.length;
   document.getElementById('pickStatus').textContent = `${submitted} / ${members.length}`;
   document.getElementById('pickMissing').innerHTML  = missing.length
-    ? `<span class="badge b-warn">${missing.map(m=>m.name).join(', ')} 미제출</span>`
-    : '<span class="badge b-sold">전원 제출 완료</span>';
+    ? `<span class="badge b-warn">${missing.map(m=>m.name).join(', ')} 미제출${automatic.length ? ` · 자동 연장 ${automatic.length}명` : ''}</span>`
+    : automatic.length
+      ? `<span class="badge b-hold">직접 ${directCount}명 · 자동 연장 ${automatic.length}명</span>`
+      : '<span class="badge b-sold">전원 직접 제출</span>';
 }
 
 function renderPicksTable(picks, prices) {
@@ -1002,7 +1029,7 @@ function renderPicksTable(picks, prices) {
 
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
-      <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}</span></td>
+      <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}${p._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(p))}` : ''}</span></td>
       <td>${refPrice ? won(refPrice) : '<span class="muted">-</span>'}</td>
       <td>${curPrice ? won(curPrice) : '<span class="muted">-</span>'}</td>
       <td>${dayChangeEl}</td>
@@ -1061,7 +1088,11 @@ function renderMemberBars(members) {
 function renderNotices(members, picks) {
   const items = [];
   const missing = members.filter(m => !picks.find(p => p.member_id === m.id));
+  const automaticMembers = members.filter(m =>
+    picks.some(p => p.member_id === m.id && p._isCarryFallback)
+  );
   if (missing.length) items.push(`<div class="notice"><div class="nd nd-warn"></div>${missing.map(m=>m.name).join(', ')}님 탑픽 미제출</div>`);
+  if (automaticMembers.length) items.push(`<div class="notice"><div class="nd nd-info"></div>${automaticMembers.map(m=>m.name).join(', ')}님 탑픽 자동 연장 중</div>`);
   members.filter(m => m.return_rate < 0).forEach(m =>
     items.push(`<div class="notice"><div class="nd nd-info"></div>${m.name}님 누적 ${pct(m.return_rate)} · 손실 중</div>`)
   );

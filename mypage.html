@@ -184,7 +184,7 @@
 <script src="js/config.js?v=20260522"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260529"></script>
+<script src="js/db.js?v=20260723.1"></script>
 <script>
 let myMember    = null;
 let myPriceMap  = {};
@@ -288,8 +288,16 @@ async function renderMyPicks() {
 
     document.getElementById('myPickCount').textContent = (picks||[]).length + '건';
     const holds = (picks||[]).filter(p => p.status === 'hold');
-    document.getElementById('myPickSub').textContent =
-      `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
+    const thisMonth = currentMonth();
+    const effectiveCurrentPick = buildCarryForwardPicks(
+      thisMonth,
+      (picks || []).filter(p => p.month === thisMonth),
+      picks || [],
+      { activeMemberIds: myMember.is_active === false ? new Set() : new Set([myMember.id]) }
+    ).find(p => p.member_id === myMember.id);
+    document.getElementById('myPickSub').textContent = effectiveCurrentPick?._isCarryFallback
+      ? `현재 ${effectiveCurrentPick.stock_name} 자동 연장 · 보유 ${holds.length}건`
+      : `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
 
     if (!picks || !picks.length) {
       tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">탑픽 없음</td></tr>';
@@ -303,6 +311,8 @@ async function renderMyPicks() {
     }
 
     tbody.innerHTML = picks.map(p => {
+      const isAutoSource = effectiveCurrentPick?._isCarryFallback &&
+        String(effectiveCurrentPick.pick_id || effectiveCurrentPick.id) === String(p.pick_id || p.id);
       const cur      = p.stock_code ? myPriceMap[p.stock_code] : null;
       const curPrice = cur?.price;
       const pnl      = (p.buy_price && p.buy_quantity && curPrice)
@@ -315,7 +325,7 @@ async function renderMyPicks() {
       const upside = p.target_price && curPrice
         ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
       return `<tr>
-        <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
+        <td class="muted">${(p.month||'').replace('-','년 ')}월${isAutoSource ? `<br><span class="badge b-hold">${thisMonth.replace('-','년 ')}월 자동 연장</span>` : ''}</td>
         <td style="font-weight:500;">${p.stock_name}</td>
         <td>${p.buy_price ? won(p.buy_price) : '—'}</td>
         <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>

@@ -49,19 +49,22 @@ const ModalPick = (() => {
       return;
     }
 
-    // 전월 탑픽 조회
+    // 대상 월의 직접 제출 여부와 가장 최근 탑픽 조회
     const thisMonth = opts.month || currentMonth();
-    const [y, m]    = thisMonth.split('-').map(Number);
-    const prevMonth = m === 1
-      ? `${y-1}-12`
-      : `${y}-${String(m-1).padStart(2,'0')}`;
-
-    const { data: prevPicks } = await sb.from('picks_with_trades')
-      .select('stock_name,stock_code,market,target_price,current_cap,target_cap,reason,buy_price,buy_quantity,month')
-      .eq('member_id', me.id)
-      .eq('month', prevMonth)
-      .limit(1);
-    const prevPick = prevPicks?.[0] || null;
+    const [{ data: currentPicks }, carrySources] = await Promise.all([
+      sb.from('picks_with_trades')
+        .select('pick_id')
+        .eq('member_id', me.id)
+        .eq('month', thisMonth)
+        .limit(1),
+      fetchCarryForwardSourcePicks(
+        thisMonth,
+        'member_id,stock_name,stock_code,market,target_price,current_cap,target_cap,reason,buy_price,buy_price_ref,buy_quantity,month,carried_from,status'
+      ),
+    ]);
+    const prevPick = me.is_active === false || currentPicks?.length
+      ? null
+      : carrySources.find(p => p.member_id === me.id) || null;
 
     renderPanel(me, { ...opts, prevPick, thisMonth });
   }
@@ -80,16 +83,16 @@ const ModalPick = (() => {
     const prevPick = opts.prevPick || null;
     const panel    = document.getElementById('pick-panel');
 
-    // 전월 탑픽 유지 배너
+    // 별도 변경이 없을 때 적용되는 자동 연장 안내
     const prevBanner = prevPick
       ? `<div id="prev-pick-banner"
             data-tgt-price="${prevPick.target_price||''}"
             data-tgt-cap="${prevPick.target_cap||''}"
             data-buy-price="${prevPick.buy_price||prevPick.buy_price_ref||''}"
-            data-from-month="${prevPick.month||''}"
+            data-from-month="${prevPick.carried_from||prevPick.month||''}"
             data-reason="${escapeHtml(prevPick.reason||'')}"
-            style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--r-md);padding:10px 14px;margin-bottom:12px;">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">전월 탑픽 — 동일 종목 유지?</div>
+            style="background:#e8f2fb;border:0.5px solid #b5d4f4;border-radius:var(--r-md);padding:10px 14px;margin-bottom:12px;">
+          <div style="font-size:12px;color:#185fa5;margin-bottom:6px;"><strong>${escapeHtml(mon.replace('-','년 '))}월 자동 연장</strong> · 별도 변경이 없으면 아래 종목이 유지됩니다.</div>
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
             <div>
               <span style="font-size:14px;font-weight:500;">${escapeHtml(prevPick.stock_name)}</span>
@@ -97,7 +100,7 @@ const ModalPick = (() => {
               ${prevPick.buy_price ? `<span style="font-size:12px;color:var(--muted);margin-left:6px;">· 매수가 ${prevPick.buy_price.toLocaleString()}원</span>` : ''}
             </div>
             <button class="btn btn-primary" style="font-size:12px;white-space:nowrap;"
-              onclick="ModalPick.carryOver()">↩ 이 종목으로 유지</button>
+              onclick="ModalPick.carryOver()">이번 달 내용 수정</button>
           </div>
           ${prevPick.reason ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5;">${escapeHtml(prevPick.reason.slice(0,80))}${prevPick.reason.length>80?'…':''}</div>` : ''}
         </div>`
@@ -107,8 +110,8 @@ const ModalPick = (() => {
       prevBanner +
       // 대상 월
       '<div style="margin-bottom:10px;">' +
-        '<label for="pick-month" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">대상 월</label>' +
-        '<input type="month" id="pick-month" value="' + mon + '" aria-label="대상 월" style="font-size:13px;padding:7px 10px;width:100%;" />' +
+        '<label for="pick-month" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">대상 월 <span style="font-weight:400;">· 월 탭에서 변경</span></label>' +
+        '<input type="month" id="pick-month" value="' + mon + '" aria-label="대상 월" disabled style="font-size:13px;padding:7px 10px;width:100%;" />' +
       '</div>' +
       // 종목 검색
       '<div style="margin-bottom:10px;">' +
@@ -293,7 +296,7 @@ const ModalPick = (() => {
 
     // 배너 숨기기 (이미 선택됨)
     banner.style.display = 'none';
-    toast('전월 탑픽 ' + stockName + ' 이 입력됐습니다. 내용 확인 후 제출하세요.');
+    toast('자동 연장 종목 정보를 불러왔습니다. 변경 내용을 확인해 주세요.');
   }
 
   // ── 종목 초기화

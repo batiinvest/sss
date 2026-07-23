@@ -117,8 +117,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
-<script src="js/db.js?v=20260711.2"></script>
-<script src="js/modal-pick.js?v=20260711.2"></script>
+<script src="js/db.js?v=20260723.1"></script>
+<script src="js/modal-pick.js?v=20260723.1"></script>
 <script>
 let allPicks = [];
 let members  = [];
@@ -182,7 +182,7 @@ async function init() {
   ModalPick._onSubmit = async () => { await reloadPicksData(); buildMonthTabs(); renderMonthPicks(selMonth); applyFilter(); };
 
   const detailId = params.get('id');
-  if (detailId) openInvestmentDetail(detailId);
+  if (detailId) openInvestmentDetail(detailId, params.get('month') || '');
 
   if (params.get('action') === 'new') {
     const presentationId = params.get('presentation');
@@ -238,6 +238,12 @@ function investmentReturn(pick) {
   return current && buy ? (current - buy) / buy * 100 : null;
 }
 
+function automaticPickLabel(pick) {
+  if (!pick?._isCarryFallback) return '';
+  const sourceMonth = String(pick.carried_from || '').replace('-', '년 ');
+  return sourceMonth ? `자동 연장 · ${sourceMonth}월부터` : '자동 연장';
+}
+
 function renderInvestmentCards(picks, containerId, emptyMessage) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -253,9 +259,10 @@ function renderInvestmentCards(picks, containerId, emptyMessage) {
     const quantity = Number(pick.buy_quantity || 0);
     const profit = buy && current && quantity ? (current - buy) * quantity : null;
     const id = pick.pick_id || pick.id;
-    return `<button type="button" class="mobile-stock-card" onclick="openInvestmentDetail('${escapeHtml(id)}')">
+    const displayMonth = pick._isCarryFallback ? (pick.month || '') : '';
+    return `<button type="button" class="mobile-stock-card" onclick="openInvestmentDetail('${escapeHtml(id)}','${escapeHtml(displayMonth)}')">
       <span class="mobile-stock-card-head"><strong>${escapeHtml(pick.stock_name || '종목 미입력')}</strong><span class="badge ${state.cls}">${state.label}</span></span>
-      <span class="mobile-stock-card-meta">${escapeHtml(pick.member_name || '담당자 미정')} · ${escapeHtml(pick.stock_code || '')}</span>
+      <span class="mobile-stock-card-meta">${escapeHtml(pick.member_name || '담당자 미정')} · ${escapeHtml(pick.stock_code || '')}${pick._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(pick))}` : ''}</span>
       <span class="mobile-stock-card-metrics">
         <span>평균 매수가<strong>${buy ? buy.toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>현재가<strong>${current ? Number(current).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
@@ -287,7 +294,7 @@ function renderMonthPicks(month) {
       ? statusBadge('sold') : statusBadge('hold');
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${escapeHtml((p.member_name||'').slice(0,2))}</div>${escapeHtml(p.member_name)}</div></td>
-      <td style="font-weight:500;">${escapeHtml(p.stock_name)}<br><span style="font-size:11px;color:var(--muted);">${escapeHtml(p.stock_code||'')}${p.carried_from ? ` · ${escapeHtml(p.carried_from.replace('-','년 '))}월 이월` : ''}</span></td>
+      <td style="font-weight:500;">${escapeHtml(p.stock_name)}<br><span style="font-size:11px;color:var(--muted);">${escapeHtml(p.stock_code||'')}${p._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(p))}` : p.carried_from ? ` · ${escapeHtml(p.carried_from.replace('-','년 '))}월 이월` : ''}</span></td>
       <td><span class="badge b-hold">${p.market||'KOSPI'}</span></td>
       <td>${won(p.buy_price)}</td>
       <td>${won(p.sell_price)}</td>
@@ -302,6 +309,7 @@ function renderMonthPicks(month) {
     <div style="background:var(--bg);border-radius:var(--r-md);padding:12px 14px;">
       <div style="font-size:13px;font-weight:500;margin-bottom:4px;">${escapeHtml(p.member_name)} · ${escapeHtml(p.stock_name)}
         ${p.stock_code ? `<span style="font-size:11px;color:var(--muted);font-weight:400;">(${escapeHtml(p.stock_code)})</span>` : ''}
+        ${p._isCarryFallback ? `<span class="badge b-hold" style="margin-left:4px;">${escapeHtml(automaticPickLabel(p))}</span>` : ''}
       </div>
       <div style="font-size:12px;color:var(--muted);line-height:1.7;">${escapeHtml(p.reason||'사유 미입력')}</div>
     </div>`).join('');
@@ -418,14 +426,34 @@ function resetInvestmentFilters() {
   applyFilter();
 }
 
-async function openInvestmentDetail(id) {
-  const pick = allPicks.find(item => String(item.pick_id || item.id) === String(id));
+async function openInvestmentDetail(id, displayMonth = '') {
+  const activeMemberIds = new Set((members || []).map(member => member.id));
+  const effectivePicks = displayMonth
+    ? buildCarryForwardPicks(
+        displayMonth,
+        allPicks.filter(item => item.month === displayMonth),
+        allPicks,
+        { activeMemberIds }
+      )
+    : [];
+  let pick = effectivePicks.find(item => String(item.pick_id || item.id) === String(id));
+  if (!pick && displayMonth) {
+    toast('해당 월의 자동 연장 상태가 변경되었습니다. 최신 목록을 확인해 주세요.');
+    return;
+  }
+  pick = pick || allPicks.find(item => String(item.pick_id || item.id) === String(id));
   if (!pick) { toast('투자종목을 찾을 수 없습니다.'); return; }
-  investmentDetailId = id;
+  const detailToken = String(id) + '|' + String(displayMonth || pick.month || '');
+  investmentDetailId = detailToken;
   investmentDetailReturnFocus = document.activeElement;
   const modal = document.getElementById('investmentDetailModal');
   document.getElementById('investmentDetailTitle').textContent = pick.stock_name || '투자종목';
-  document.getElementById('investmentDetailSubtitle').textContent = [pick.stock_code, pick.member_name, pick.month].filter(Boolean).join(' · ');
+  document.getElementById('investmentDetailSubtitle').textContent = [
+    pick.stock_code,
+    pick.member_name,
+    pick.month,
+    pick._isCarryFallback ? automaticPickLabel(pick) : '',
+  ].filter(Boolean).join(' · ');
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
   modal.querySelector('.detail-close').focus();
@@ -446,7 +474,7 @@ async function openInvestmentDetail(id) {
     .eq('pick_id', pick.pick_id || pick.id)
     .order('traded_at', { ascending: false })
     .limit(8);
-  if (String(investmentDetailId) !== String(id)) return;
+  if (investmentDetailId !== detailToken) return;
 
   const tradeHtml = (trades || []).length
     ? `<div class="detail-trade-list">${trades.map(trade => `<div><span>${trade.trade_type === 'buy' ? '매수' : '매도'} · ${escapeHtml(fmtDateTime(trade.traded_at))}</span><strong>${Number(trade.price).toLocaleString('ko-KR')}원 · ${Number(trade.quantity).toLocaleString('ko-KR')}주</strong></div>`).join('')}</div>`
@@ -460,12 +488,15 @@ async function openInvestmentDetail(id) {
       <div><span>보유수량</span><strong>${quantity ? quantity.toLocaleString('ko-KR') + '주' : '0주'}</strong></div>
       <div><span>상태</span><strong>${state.label}</strong></div>
     </div>
+    ${pick._isCarryFallback ? `<section class="detail-section"><h3>자동 연장</h3><p>${escapeHtml(pick.month)}에는 별도 변경이 없어 ${escapeHtml(pick.carried_from || '이전')} 탑픽을 그대로 유지하고 있습니다.</p></section>` : ''}
     <section class="detail-section"><h3>목표주가</h3><p>${pick.target_price ? Number(pick.target_price).toLocaleString('ko-KR') + '원' : '아직 목표주가가 등록되지 않았습니다.'}</p></section>
     <section class="detail-section"><h3>현재 상태와 다음 단계</h3><p>${stateHelp}</p></section>
     <section class="detail-section"><h3>핵심 투자 의견</h3><p class="${pick.reason ? '' : 'muted-copy'}">${escapeHtml(pick.reason || '아직 등록된 투자 의견이 없습니다.')}</p></section>
     <section class="detail-section"><h3>매매내역</h3>${tradeHtml}</section>`;
 
-  document.getElementById('investmentShareBtn').onclick = () => copyShareLink(`picks?id=${encodeURIComponent(pick.pick_id || pick.id)}`);
+  document.getElementById('investmentShareBtn').onclick = () => copyShareLink(
+    `picks?id=${encodeURIComponent(pick.pick_id || pick.id)}${pick._isCarryFallback ? `&month=${encodeURIComponent(pick.month)}` : ''}`
+  );
   document.getElementById('investmentBuyBtn').onclick = () => navigateToAppRoute(`trade?type=buy&pick=${encodeURIComponent(pick.pick_id || pick.id)}`);
   const sellButton = document.getElementById('investmentSellBtn');
   sellButton.disabled = quantity <= 0 || pick.status === 'sold';
@@ -479,7 +510,7 @@ function closeInvestmentDetail() {
   document.body.style.overflow = '';
   if (window.parent !== window && typeof window.parent.replaceRouteState === 'function') {
     const params = new URLSearchParams(location.search);
-    params.delete('id'); params.delete('v');
+    params.delete('id'); params.delete('month'); params.delete('v');
     window.parent.replaceRouteState('picks' + (params.toString() ? '?' + params.toString() : ''));
   }
   investmentDetailReturnFocus?.focus?.();

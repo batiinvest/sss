@@ -257,10 +257,10 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260723.1"></script>
-<script src="js/schedule-shared.js?v=20260722.2"></script>
+<script src="js/db.js?v=20260723.2"></script>
+<script src="js/schedule-shared.js?v=20260723.2"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260711.2"></script>
+<script src="js/modal-pres.js?v=20260723.2"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -440,16 +440,21 @@ async function loadDashboardData() {
 }
 
 async function loadPresentationOrderData() {
-  const [presentationResult, savedOrder] = await Promise.all([
+  const [presentationResult, scheduleResult, savedOrder] = await Promise.all([
     sb.from('presentations')
       .select('member_id, category, status, schedule_id, presented_at, created_at')
       .order('presented_at', { ascending: true })
       .order('created_at', { ascending: true }),
+    sb.from('schedules')
+      .select('id, title, category, event_date, event_time')
+      .order('event_date', { ascending: true }),
     getConfig('pres_order'),
   ]);
   if (presentationResult.error) console.error('발표 순서 데이터 로드 오류:', presentationResult.error);
+  if (scheduleResult.error) console.error('스터디 일정 데이터 로드 오류:', scheduleResult.error);
   return {
     presentations: presentationResult.data || [],
+    schedules: scheduleResult.data || [],
     order: Array.isArray(savedOrder) ? savedOrder : [],
   };
 }
@@ -457,9 +462,14 @@ async function loadPresentationOrderData() {
 function renderDashboardPresentationOrder(memberRows, turnData) {
   const roots = document.querySelectorAll('.dashboard-presentation-order');
   const safeMembers = (memberRows || []).filter(Boolean);
-  const savedIds = (turnData?.order || []).filter(id => safeMembers.some(member => member.id === id));
-  const orderedIds = savedIds.concat(safeMembers.filter(member => !savedIds.includes(member.id)).map(member => member.id));
-  const orderedMembers = orderedIds.map(id => safeMembers.find(member => member.id === id)).filter(Boolean);
+  const orderedMembers = normalizePresentationOrder(safeMembers, turnData?.order || []);
+  const plan = buildPresentationSchedulePlan(
+    turnData?.schedules || [],
+    turnData?.presentations || [],
+    orderedMembers,
+    { fromDate: toDateStr(new Date()) }
+  );
+  const nextIds = new Set(plan.nextMemberIds.map(String));
 
   roots.forEach(root => {
     const statusEl = root.querySelector('.presentation-order-status');
@@ -470,18 +480,19 @@ function renderDashboardPresentationOrder(memberRows, turnData) {
       return;
     }
 
-    const turn = getPresentationTurnState(turnData?.presentations || [], orderedMembers, { includePlanned: true });
-    const nextId = turn.nextMember?.id;
-    statusEl.innerHTML = turn.nextMember
-      ? `다음 발표자는 <strong>${escapeHtml(turn.nextMember.name)}</strong>님입니다 · ${escapeHtml(turn.label)} 순서`
-      : `${escapeHtml(turn.label)} 발표 순서입니다.`;
+    const nextNames = plan.nextMembers.map(member => member.name);
+    statusEl.innerHTML = nextNames.length
+      ? plan.nextSchedule
+        ? `<strong>${escapeHtml(plan.nextSchedule.event_date)}</strong> · ${nextNames.map(escapeHtml).join(', ')}`
+        : `다음 스터디 등록 시 <strong>${nextNames.map(escapeHtml).join(', ')}</strong>`
+      : '등록된 발표자가 없습니다.';
 
     listEl.innerHTML = orderedMembers.map((member, index) => {
-      const isNext = member.id === nextId;
-      return `<li class="presentation-order-person${isNext ? ' is-next' : ''}"${isNext ? ' aria-current="step"' : ''}>
+      const isNext = nextIds.has(String(member.id));
+      return `<li class="presentation-order-person${isNext ? ' is-next' : ''}">
         <span class="presentation-order-number">${index + 1}</span>
         <span class="presentation-order-name">${escapeHtml(member.name)}</span>
-        <span class="presentation-order-state">${isNext ? '다음' : ''}</span>
+        <span class="presentation-order-state">${isNext ? '이번' : ''}</span>
       </li>`;
     }).join('');
   });

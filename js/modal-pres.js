@@ -12,6 +12,7 @@ const ModalPres = (() => {
   let _lastSavedDraftKey = null;
   let _lastQueuedDraftKey = null;
   let _returnFocus = null;
+  let _autoAssignment = null;
   const DRAFT_SAVE_DELAY = 500;
 
   function getModalTurnState(allPresentations, orderedMembers) {
@@ -61,7 +62,7 @@ const ModalPres = (() => {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
       <div>
         <div style="font-size:15px;font-weight:500;">📋 발표종목 입력</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">내 발표종목 입력 · 스터디 일정 탭에서 날짜 배정</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">발표 순서와 스터디 일정에 맞춰 날짜가 자동 배정됩니다.</div>
       </div>
       <button class="btn" onclick="ModalPres.close()" style="font-size:12px;">닫기</button>
     </div>
@@ -81,7 +82,7 @@ const ModalPres = (() => {
     <div id="pm-memberPanel"></div>
     <!-- 하단 -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border);">
-      <div><span id="pm-save-status" role="status" aria-live="polite" style="display:block;font-size:12px;color:var(--green);">변경 내용은 자동 저장됩니다.</span><span style="font-size:11px;color:var(--muted);">저장 후 스터디 일정에서 날짜를 배정하세요.</span></div>
+      <div><span id="pm-save-status" role="status" aria-live="polite" style="display:block;font-size:12px;color:var(--green);">변경 내용은 자동 저장됩니다.</span><span style="font-size:11px;color:var(--muted);">내 차례의 스터디 일정에 자동 연결됩니다.</span></div>
       <button class="btn btn-primary" style="font-size:13px;" onclick="ModalPres.close()">입력 완료</button>
     </div>
   </div>
@@ -107,26 +108,48 @@ const ModalPres = (() => {
       return;
     }
 
-    // 내 draft 로드 (미배정 우선, 없으면 배정된 것도 포함)
-    const [myUnassigned, myAssigned, allRes, membersRes, orderRes, turnRes] = await Promise.all([
+    // 내 예정 발표를 모두 불러온 뒤 자동 회차와 정확히 일치하는 draft만 편집한다.
+    const today = toDateStr(new Date());
+    const [myPlanned, allRes, membersRes, savedOrder, turnRes, schedulesRes] = await Promise.all([
       sb.from('presentations')
-        .select('*').eq('status','planned').is('schedule_id',null).eq('member_id',_me.id),
-      sb.from('presentations')
-        .select('*').eq('status','planned').not('schedule_id','is',null).eq('member_id',_me.id)
-        .order('created_at', { ascending: false }).limit(1),
+        .select('*').eq('status','planned').eq('member_id',_me.id)
+        .order('created_at', { ascending: true }),
       sb.from('presentations')
         .select('category,topic').eq('status','planned').is('schedule_id',null)
         .order('created_at', { ascending: false }).limit(10),
       sb.from('members').select('*').eq('is_active', true).order('joined_at'),
-      sb.from('app_settings').select('value').eq('key', 'pres_order').maybeSingle(),
+      getConfig('pres_order'),
       sb.from('presentations')
-        .select('member_id,category,status,schedule_id,presented_at,created_at')
+        .select('id,member_id,category,status,schedule_id,presented_at,created_at'),
+      sb.from('schedules')
+        .select('id,title,category,event_date,event_time')
+        .order('event_date', { ascending: true }),
     ]);
 
-    // 미배정 draft 우선, 없으면 배정된 것
-    const unassigned = myUnassigned.data || [];
-    const assigned   = myAssigned.data   || [];
-    _drafts = unassigned.length ? unassigned : assigned;
+    const allMembers = membersRes.data || [];
+    const orderedMembers = normalizePresentationOrder(allMembers, savedOrder);
+    const presentationPlan = buildPresentationSchedulePlan(
+      schedulesRes.data || [],
+      turnRes.data || [],
+      orderedMembers,
+      { fromDate: today }
+    );
+    _autoAssignment = getNextPresentationInputPlanItem(
+      presentationPlan,
+      _me.id,
+      schedulesRes.data || [],
+      turnRes.data || []
+    );
+    const plannedRows = myPlanned.data || [];
+    const assignedDraft = _autoAssignment
+      ? plannedRows.find(row =>
+          String(row.schedule_id || '') === String(_autoAssignment.schedule.id)
+        )
+      : null;
+    const unassignedDraft = plannedRows.find(row => !row.schedule_id);
+    _drafts = assignedDraft
+      ? [assignedDraft]
+      : (unassignedDraft ? [unassignedDraft] : []);
 
     // 이번 세션의 카테고리 + 산업명 추론
     // 1순위: 전체 draft에서 가장 최근 category/industry
@@ -145,11 +168,11 @@ const ModalPres = (() => {
 
     // 카테고리 추천: 산업/종목 한 사이클이 끝날 때만 다음 구분으로 전환
     if (!sharedCat) {
-      const allMembers = membersRes.data || [];
-      const savedOrder = orderRes.data?.value;
-      const order = Array.isArray(savedOrder) ? savedOrder : allMembers.map(m => m.id);
-      const orderedMembers = order.map(id => allMembers.find(m => m.id === id)).filter(Boolean);
       sharedCat = getModalTurnState(turnRes.data || [], orderedMembers).category;
+    }
+    const myDraft = _drafts.find(p => p.member_id === _me.id);
+    if (_autoAssignment?.schedule.category && !myDraft) {
+      sharedCat = _autoAssignment.schedule.category;
     }
 
     if (sharedCat) {
@@ -204,6 +227,11 @@ const ModalPres = (() => {
     const draft = _drafts.find(p => p.member_id === _me.id);
     const stockName = draft?.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft?.topic || '');
     const isAssigned = draft && !!draft.schedule_id;
+    const autoNotice = _autoAssignment
+      ? '<div style="padding:8px 12px;background:#e8f2fb;border:0.5px solid #b5d4f4;border-radius:var(--r-md);font-size:12px;color:#185fa5;margin-bottom:10px;">↻ <strong>' +
+        escapeHtml(_autoAssignment.schedule.event_date) +
+        '</strong> 스터디에 발표 순서가 자동 배정됩니다.</div>'
+      : '<div style="padding:8px 12px;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--r-md);font-size:12px;color:var(--muted);margin-bottom:10px;">다음 스터디 일정이 등록되면 발표 순서에 따라 자동 배정됩니다.</div>';
 
     // draft 카테고리·산업명 복원
     if (draft?.category) {
@@ -217,7 +245,7 @@ const ModalPres = (() => {
 
     panel.innerHTML =
       // 배정 완료 안내
-      (isAssigned ? '<div style="padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:12px;color:var(--green);margin-bottom:10px;">📅 <strong>' + escapeHtml(draft.presented_at||'날짜 미정') + '</strong> 발표 배정 완료 · 종목 변경 시 아래에서 수정</div>' : '') +
+      (isAssigned ? '<div style="padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:12px;color:var(--green);margin-bottom:10px;">📅 <strong>' + escapeHtml(draft.presented_at||'날짜 미정') + '</strong> 발표 자동 배정 완료 · 종목 변경 시 아래에서 수정</div>' : autoNotice) +
       // 종목 검색 + 직접 입력
       '<div style="position:relative;margin-bottom:10px;">' +
         '<div style="display:flex;gap:4px;">' +
@@ -373,6 +401,10 @@ const ModalPres = (() => {
       risk:          document.getElementById('pm-risk')?.value?.trim()        || null,
       status: 'planned',
     };
+    if (_autoAssignment) {
+      payload.schedule_id = _autoAssignment.schedule.id;
+      payload.presented_at = _autoAssignment.schedule.event_date;
+    }
     return { payload, key: JSON.stringify(payload) };
   }
 

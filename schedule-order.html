@@ -17,7 +17,7 @@
   <div class="topbar">
     <div>
       <h1 class="page-title">발표 순서</h1>
-      <div class="updated">종목 입력 후 달력에 드래그하거나 배정 버튼으로 날짜 지정</div>
+      <div class="updated">스터디 일정마다 3명씩 자동 편성 · 회식 일정은 자동 건너뜀</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
       <!-- 탭 버튼 -->
@@ -73,7 +73,7 @@
           <div style="padding:8px 1rem;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
             <div>
               <span style="font-size:13px;font-weight:500;">발표자 · 종목</span>
-              <div id="panelGuide" style="font-size:11px;color:var(--muted);margin-top:2px;">종목 입력 → 달력 일정으로 드래그</div>
+              <div id="panelGuide" style="font-size:11px;color:var(--muted);margin-top:2px;">종목을 입력하면 내 발표 일정에 자동 연결됩니다.</div>
             </div>
             <button class="btn" style="font-size:11px;padding:3px 8px;color:var(--up);border-color:var(--up);" onclick="resetPresOrder()">🗑 초기화</button>
           </div>
@@ -145,35 +145,12 @@
   </div>
 </div>
 
-<!-- ── 모바일 날짜 배정 모달 -->
-<div id="assignDateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:600;align-items:flex-end;justify-content:center;">
-  <div style="background:var(--surface);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:1.25rem;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-      <div>
-        <div style="font-size:15px;font-weight:500;" id="assignModalTitle">날짜 배정</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="assignModalSub"></div>
-      </div>
-      <button class="btn" onclick="closeAssignModal()" style="font-size:12px;">닫기</button>
-    </div>
-    <!-- 날짜 목록: 다가오는 일정 + 빈 날짜 입력 -->
-    <div id="assignDateList" style="display:flex;flex-direction:column;gap:8px;"></div>
-    <!-- 직접 날짜 입력 -->
-    <div style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border);">
-      <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px;">직접 날짜 입력</label>
-      <div style="display:flex;gap:8px;">
-        <input type="date" id="assignCustomDate" style="flex:1;font-size:13px;padding:7px 10px;" />
-        <button class="btn btn-primary" onclick="assignToCustomDate()" style="font-size:13px;white-space:nowrap;">배정</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260529"></script>
-<script src="js/schedule-shared.js?v=20260529"></script>
+<script src="js/db.js?v=20260723.2"></script>
+<script src="js/schedule-shared.js?v=20260723.2"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -360,118 +337,18 @@ function renderPresOrderCalendar() {
       cell.appendChild(evDiv);
 
       // 이 일정 발표자+종목 표시
-      const pres = presentations.filter(p =>
-        p.schedule_id === s.id || (!p.schedule_id && p.presented_at === dateStr)
-      );
+      const pres = getOrderScheduleRoster(s);
       pres.forEach(p => {
         const pDiv = document.createElement('div');
         pDiv.draggable = false;
         pDiv.style.cssText = 'font-size:9px;color:var(--muted);padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;';
         const name  = p.members?.name?.slice(0,2) || '';
-        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '');
+        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '종목 미입력');
         pDiv.textContent = name + ' · ' + topic;
         cell.appendChild(pDiv);
       });
     });
 
-    // 드랍 타겟: 과거가 아닌 모든 날 (빈 날 = 일정 자동 생성)
-    if (!isPast) {
-      cell.addEventListener('dragover', e => {
-        e.preventDefault();
-        cell.style.outline = '2px dashed var(--accent)';
-        cell.style.background = '#eff6ff';
-      });
-      cell.addEventListener('dragleave', () => {
-        cell.style.outline = '';
-        cell.style.background = '';
-      });
-      cell.addEventListener('drop', async e => {
-        e.preventDefault();
-        cell.style.outline = '';
-        cell.style.background = '';
-
-        const memberId   = e.dataTransfer.getData('memberId');
-        const memberName = e.dataTransfer.getData('memberName');
-        const stockName  = e.dataTransfer.getData('stockName');
-        const stockCode  = e.dataTransfer.getData('stockCode') || null;
-        const priceAt    = parseInt(e.dataTransfer.getData('priceAt'))    || null;
-        const capAt      = parseInt(e.dataTransfer.getData('capAt'))      || null;
-        const targetCap  = parseInt(e.dataTransfer.getData('targetCap'))  || null;
-        const reason     = e.dataTransfer.getData('reason')               || null;
-        const risk       = e.dataTransfer.getData('risk')                 || null;
-
-        if (!memberId || !stockName) { toast('종목을 먼저 입력하세요.'); return; }
-
-        const cat      = document.getElementById('thisTurnCategory').value;
-        const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
-        const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
-        const catLabel = cat === 'industry' ? (industry || '산업 분석') : '기업 분석';
-
-        let sched = dayScheds[0] || null;
-
-        // ── 일정이 없으면 자동 생성
-        if (!sched) {
-          const schedTitle = industry || (cat === 'industry' ? '산업 분석' : '기업 분석');
-          const { data: newSched, error: schedErr } = await sb.from('schedules').insert({
-            title:      schedTitle,
-            category:   cat,
-            event_date: dateStr,
-            event_time: '20:00:00',
-          }).select().single();
-
-          if (schedErr) { toast('일정 생성 오류: ' + schedErr.message); return; }
-          sched = newSched;
-          schedules.push(sched);
-          toast('📅 ' + dateStr + ' ' + schedTitle + ' 일정 자동 생성');
-        }
-
-        // ── draft(임시저장) 항목이 있으면 schedule_id 연결
-        const draft = presentations.find(p =>
-          !p.schedule_id && p.member_id === memberId && p.status === 'planned'
-        );
-        const alreadyAssigned = presentations.find(p =>
-          p.schedule_id === sched.id && p.member_id === memberId
-        );
-
-        const updatePayload = {
-          schedule_id:   sched.id,
-          presented_at:  dateStr,
-          status:        'planned',
-          topic,
-          stock_code:    stockCode || (draft?.stock_code ?? null),
-          price_at:      priceAt   || (draft?.price_at   ?? null),
-          market_cap_at: capAt     || (draft?.market_cap_at ?? null),
-          target_cap:    targetCap || (draft?.target_cap  ?? null),
-          reason:        reason    || (draft?.reason      ?? null),
-          risk:          risk      || (draft?.risk        ?? null),
-        };
-
-        if (draft) {
-          await sb.from('presentations').update(updatePayload).eq('id', draft.id);
-          toast('✅ ' + memberName + ' → ' + stockName + ' 배정!');
-        } else if (alreadyAssigned) {
-          await sb.from('presentations').update({
-            topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
-            target_cap: targetCap, reason, risk,
-          }).eq('id', alreadyAssigned.id);
-          toast(memberName + ' 발표 종목 변경: ' + stockName);
-        } else {
-          await sb.from('presentations').insert({
-            schedule_id: sched.id, member_id: memberId, category: cat,
-            topic, stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
-            target_cap: targetCap, reason, risk,
-            presented_at: dateStr, status: 'planned',
-          });
-          toast('✅ ' + memberName + ' → ' + stockName + ' 등록!');
-        }
-
-        await reloadPresentations();
-        schedules = await fetchSchedules();
-        refreshPresentationScheduleViews();
-        renderUpcoming();
-        renderScheduleList();
-      });
-    }
     grid.appendChild(cell);
   }
 
@@ -507,10 +384,9 @@ function renderMemberPresPanel() {
 
   // 전역 순서 배열 사용 (init에서 DB로부터 불러옴)
   // 삭제된 멤버 제거, 신규 멤버 추가
-  presOrder = presOrder.filter(id => members.find(m => m.id === id));
-  members.forEach(m => { if (!presOrder.includes(m.id)) presOrder.push(m.id); });
-
-  const orderedMembers = presOrder.map(id => members.find(m => m.id === id)).filter(Boolean);
+  const orderedMembers = normalizePresentationOrder(members, presOrder);
+  presOrder = orderedMembers.map(member => member.id);
+  const automaticPlan = getAutomaticPresentationPlan();
   const avColors = ['av1','av2','av3','av4','av1','av2'];
 
   panel.innerHTML = '';
@@ -527,19 +403,41 @@ function renderMemberPresPanel() {
     upBtn.className = 'order-btn'; upBtn.textContent = '▲'; upBtn.title = '위로';
     upBtn.disabled = idx === 0;
     upBtn.onclick = async () => {
+      const previousOrder = [...presOrder];
       [presOrder[idx-1], presOrder[idx]] = [presOrder[idx], presOrder[idx-1]];
-      await setConfig('pres_order', presOrder);
-      renderMemberPresPanel();
-      guessNextTurn();
+      try {
+        await setConfig('pres_order', presOrder);
+      } catch (error) {
+        presOrder = previousOrder;
+        renderMemberPresPanel();
+        guessNextTurn();
+        return;
+      }
+      try {
+        await reconcileAutomaticPresentationPlan();
+      } catch (error) {
+        toast('순서는 저장됐지만 기존 발표 연결을 조정하지 못했습니다. 다시 시도해 주세요.');
+      }
     };
     const dnBtn = document.createElement('button');
     dnBtn.className = 'order-btn'; dnBtn.textContent = '▼'; dnBtn.title = '아래로';
     dnBtn.disabled = idx === orderedMembers.length - 1;
     dnBtn.onclick = async () => {
+      const previousOrder = [...presOrder];
       [presOrder[idx], presOrder[idx+1]] = [presOrder[idx+1], presOrder[idx]];
-      await setConfig('pres_order', presOrder);
-      renderMemberPresPanel();
-      guessNextTurn();
+      try {
+        await setConfig('pres_order', presOrder);
+      } catch (error) {
+        presOrder = previousOrder;
+        renderMemberPresPanel();
+        guessNextTurn();
+        return;
+      }
+      try {
+        await reconcileAutomaticPresentationPlan();
+      } catch (error) {
+        toast('순서는 저장됐지만 기존 발표 연결을 조정하지 못했습니다. 다시 시도해 주세요.');
+      }
     };
     orderBtns.appendChild(upBtn);
     orderBtns.appendChild(dnBtn);
@@ -555,12 +453,24 @@ function renderMemberPresPanel() {
     nameDiv.style.cssText = 'font-size:13px;font-weight:500;width:48px;flex-shrink:0;';
     nameDiv.textContent = m.name;
 
-    // ── Draft 확인 (배정된 것 우선, 없으면 미배정 draft)
-    const draft = presentations.find(p =>
-      p.member_id === m.id && p.status === 'planned' && !!p.schedule_id
-    ) || presentations.find(p =>
-      p.member_id === m.id && p.status === 'planned' && !p.schedule_id
+    // ── 현재 자동 회차와 정확히 일치하는 draft만 편집한다.
+    const autoItem = getNextPresentationInputPlanItem(
+      automaticPlan,
+      m.id,
+      schedules,
+      presentations
     );
+    const draft = (autoItem
+      ? presentations.find(p =>
+          String(p.member_id) === String(m.id) &&
+          p.status === 'planned' &&
+          String(p.schedule_id || '') === String(autoItem.schedule.id)
+        )
+      : null) || presentations.find(p =>
+        String(p.member_id) === String(m.id) &&
+        p.status === 'planned' &&
+        !p.schedule_id
+      );
 
     const isAssigned   = draft && !!draft.schedule_id;
     const assignedDate = isAssigned
@@ -570,8 +480,14 @@ function renderMemberPresPanel() {
     // ── 우측 영역: 종목 입력 or 선택 칩
     const rightArea = document.createElement('div');
     rightArea.style.cssText = 'flex:1;min-width:0;display:flex;align-items:center;gap:6px;';
+    if (autoItem && !isAssigned) {
+      const autoBadge = document.createElement('span');
+      autoBadge.style.cssText = 'font-size:10px;color:#185fa5;background:#e8f2fb;border-radius:4px;padding:2px 5px;white-space:nowrap;flex-shrink:0;';
+      autoBadge.textContent = '자동 ' + autoItem.schedule.event_date;
+      rightArea.appendChild(autoBadge);
+    }
 
-    if (draft?.stock_code) {
+    if (draft?.topic) {
       // 종목 선택됨 → 칩으로 표시
       const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
       const upside    = draft.target_cap && draft.market_cap_at
@@ -602,58 +518,6 @@ function renderMemberPresPanel() {
       }
 
       rightArea.appendChild(chip);
-
-      if (isAssigned) {
-        // 배정 완료 → 관리자만 배정 취소 버튼 표시
-        if (adminUser) {
-          const unassignBtn = document.createElement('button');
-          unassignBtn.className = 'btn';
-          unassignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;color:var(--muted);';
-          unassignBtn.textContent = '배정 취소';
-          unassignBtn.onclick = async () => {
-            await sb.from('presentations').update({ schedule_id: null, presented_at: null }).eq('id', draft.id);
-            await reloadPresentations();
-            refreshPresentationScheduleViews();
-          };
-          rightArea.appendChild(unassignBtn);
-        }
-      } else {
-        // 미배정 → 관리자만 드래그 핸들 + 배정 버튼 표시
-        if (adminUser) {
-          const handle = document.createElement('div');
-          handle.draggable = true;
-          handle.title = '달력으로 드래그';
-          handle.className = 'drag-handle';
-          handle.textContent = '⠿';
-          handle.addEventListener('dragstart', e => {
-            e.dataTransfer.effectAllowed = 'copy';
-            e.dataTransfer.setData('memberId',   m.id);
-            e.dataTransfer.setData('memberName', m.name);
-            e.dataTransfer.setData('stockName',  topicName);
-            e.dataTransfer.setData('stockCode',  draft.stock_code || '');
-            e.dataTransfer.setData('priceAt',    draft.price_at   || '');
-            e.dataTransfer.setData('capAt',      draft.market_cap_at || '');
-            e.dataTransfer.setData('targetCap',  draft.target_cap || '');
-            e.dataTransfer.setData('reason',     draft.reason     || '');
-            e.dataTransfer.setData('risk',       draft.risk       || '');
-            handle.classList.add('dragging');
-          });
-          handle.addEventListener('dragend', () => handle.classList.remove('dragging'));
-
-          const assignBtn = document.createElement('button');
-          assignBtn.className = 'btn assign-btn-mobile';
-          assignBtn.style.cssText = 'font-size:11px;padding:3px 8px;white-space:nowrap;flex-shrink:0;';
-          assignBtn.textContent = '📅';
-          assignBtn.onclick = () => openAssignModal({
-            memberId: m.id, memberName: m.name, stockName: topicName,
-            stockCode: draft.stock_code, priceAt: draft.price_at,
-            capAt: draft.market_cap_at, targetCap: draft.target_cap,
-            reason: draft.reason, risk: draft.risk,
-          });
-          rightArea.appendChild(handle);
-          rightArea.appendChild(assignBtn);
-        }
-      }
 
     } else {
       // 종목 미입력 → 검색 입력창 + 직접 입력 버튼
@@ -701,8 +565,11 @@ function renderMemberPresPanel() {
         const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
         const payload  = {
           member_id: m.id, status: 'planned',
-          topic, category: cat,
+          topic,
+          category: autoItem?.schedule.category || cat,
           stock_code: null, price_at: null, market_cap_at: null,
+          schedule_id: autoItem?.schedule.id || null,
+          presented_at: autoItem?.schedule.event_date || null,
         };
         const { error } = await sb.from('presentations').insert(payload);
         if (error) { toast('저장 오류: ' + error.message); return; }
@@ -721,10 +588,13 @@ function renderMemberPresPanel() {
         const topic    = (cat === 'industry' && industry) ? industry + ' > ' + s.stock_name : s.stock_name;
         const payload  = {
           member_id: m.id, status: 'planned',
-          topic, category: cat,
+          topic,
+          category: autoItem?.schedule.category || cat,
           stock_code:    s.stock_code   || null,
           price_at:      s.price        || null,
           market_cap_at: s.market_cap   || null,
+          schedule_id: autoItem?.schedule.id || null,
+          presented_at: autoItem?.schedule.event_date || null,
         };
         const { error } = await sb.from('presentations').insert(payload);
         if (error) { toast('저장 오류: ' + error.message); return; }
@@ -751,11 +621,17 @@ function renderMemberPresPanel() {
   });
 }
 
-// 종목 선택 시 임시저장 (schedule_id 없이 - 드래그로 일정 배정)
+// 종목 선택 시 저장하고 자동 발표 차례가 있으면 해당 일정에 바로 연결
 async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt, targetCap, reason, risk) {
   const cat      = document.getElementById('thisTurnCategory').value;
   const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
   const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
+  const autoItem = getNextPresentationInputPlanItem(
+    getAutomaticPresentationPlan(),
+    memberId,
+    schedules,
+    presentations
+  );
 
   const payload = {
     topic,
@@ -765,7 +641,9 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt, targe
     target_cap:    parseInt(targetCap)  || null,
     reason:        reason               || null,
     risk:          risk                 || null,
-    category:      cat,
+    category:      autoItem?.schedule.category || cat,
+    schedule_id:   autoItem?.schedule.id || null,
+    presented_at:  autoItem?.schedule.event_date || null,
   };
 
   // 이미 schedule_id 없이 저장된 항목이 있으면 update
@@ -783,7 +661,9 @@ async function saveOnePres(memberId, stockName, stockCode, priceAt, capAt, targe
     if (error) { toast('❌ 저장 오류: ' + error.message); console.error(error); return; }
   }
 
-  toast('✅ 저장됨 · 달력 일정으로 드래그하여 배정하세요', 2500);
+  toast(autoItem
+    ? '✅ 저장됨 · ' + autoItem.schedule.event_date + ' 일정에 자동 배정'
+    : '✅ 저장됨 · 다음 스터디 일정이 생기면 자동 배정', 2500);
 
   await reloadPresentations();
 }
@@ -856,9 +736,7 @@ async function renderPresScheduleList() {
   tbody.innerHTML = '';
   list.forEach(s => {
     const past = s.event_date < today;
-    const pres = presentations
-      .filter(p => p.schedule_id === s.id || (!p.schedule_id && p.presented_at === s.event_date))
-      .sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+    const pres = getOrderScheduleRoster(s);
 
     const tr   = document.createElement('tr');
     tr.style.opacity = past ? '0.55' : '1';
@@ -880,7 +758,7 @@ async function renderPresScheduleList() {
     const tdPres = document.createElement('td');
     if (pres.length) {
       pres.forEach((p, i) => {
-        const topicName  = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        const topicName  = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '종목 미입력');
         const memberName = p.members?.name || '—';
         const div = document.createElement('div');
         div.style.cssText = 'font-size:12px;padding:1px 0;';
@@ -897,12 +775,9 @@ async function renderPresScheduleList() {
 
     const tdAct = document.createElement('td');
     if (!past && adminUser) {
-      const autoBtn = document.createElement('button');
-      autoBtn.className = 'btn';
-      autoBtn.style.cssText = 'font-size:11px;padding:3px 8px;margin-right:4px;';
-      autoBtn.textContent = '🔄 자동';
-      autoBtn.title = '사이클 순서로 다음 발표자 자동 배정';
-      autoBtn.onclick = () => autoAssignNextCycle(s.id);
+      const autoLabel = document.createElement('span');
+      autoLabel.style.cssText = 'font-size:10px;color:#185fa5;background:#e8f2fb;border-radius:4px;padding:3px 6px;margin-right:4px;white-space:nowrap;';
+      autoLabel.textContent = '자동 편성';
 
       const delBtn = document.createElement('button');
       delBtn.className = 'btn';
@@ -910,14 +785,21 @@ async function renderPresScheduleList() {
       delBtn.textContent = '초기화';
       delBtn.onclick = async () => {
         if (!confirm(s.event_date + ' 발표 배정을 초기화할까요?')) return;
-        await sb.from('presentations').delete().eq('schedule_id', s.id);
+        const plannedIds = presentations
+          .filter(p => String(p.schedule_id) === String(s.id) && p.status === 'planned')
+          .map(p => p.id);
+        if (plannedIds.length) {
+          await sb.from('presentations')
+            .update({ schedule_id: null, presented_at: null })
+            .in('id', plannedIds);
+        }
         await reloadPresentations();
         refreshPresentationScheduleViews();
         renderUpcoming();
         renderScheduleList();
-        toast('초기화 완료');
+        toast('발표 내용은 보관하고 일정 배정만 초기화했습니다.');
       };
-      tdAct.appendChild(autoBtn);
+      tdAct.appendChild(autoLabel);
       tdAct.appendChild(delBtn);
     } else {
       tdAct.innerHTML = '<span style="font-size:11px;color:var(--muted);">완료</span>';
@@ -938,173 +820,80 @@ document.addEventListener('click', e => {
   }
 });
 
-// ════════════════════════════════════════
-// 모바일 날짜 배정 모달
-// ════════════════════════════════════════
-let _assignPayload = null;
-
-function openAssignModal(payload) {
-  _assignPayload = payload;
-  document.getElementById('assignModalTitle').textContent =
-    payload.memberName + ' — ' + payload.stockName;
-  document.getElementById('assignModalSub').textContent = '발표 날짜를 선택하세요';
-  document.getElementById('assignCustomDate').value = toDateStr(new Date());
-
-  const today    = toDateStr(new Date());
-  const cat      = document.getElementById('thisTurnCategory').value;
-  const upcoming = schedules
-    .filter(s => s.event_date >= today && (s.category === 'stock' || s.category === 'industry'))
-    .sort((a, b) => a.event_date.localeCompare(b.event_date))
-    .slice(0, 6);
-
-  const list = document.getElementById('assignDateList');
-  list.innerHTML = '';
-
-  if (upcoming.length) {
-    const label = document.createElement('div');
-    label.style.cssText = 'font-size:12px;color:var(--muted);font-weight:500;margin-bottom:4px;';
-    label.textContent = '예정된 스터디 일정';
-    list.appendChild(label);
-    upcoming.forEach(s => {
-      const pres     = presentations.filter(p => p.schedule_id === s.id);
-      const alreadyMe = pres.find(p => p.member_id === payload.memberId);
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.style.cssText = 'width:100%;justify-content:space-between;padding:10px 14px;text-align:left;' +
-        (alreadyMe ? 'opacity:0.5;' : '');
-      btn.innerHTML =
-        '<span style="font-weight:500;">' + s.event_date +
-        ' <span style="color:var(--muted);font-size:12px;">' + s.title + '</span></span>' +
-        '<span style="font-size:11px;color:var(--muted);">' + pres.length + '명 배정' +
-        (alreadyMe ? ' · 이미 배정됨' : '') + '</span>';
-      btn.onclick = () => assignToSchedule(s.id, s.event_date);
-      list.appendChild(btn);
-    });
-  } else {
-    list.innerHTML = '<div style="font-size:13px;color:var(--muted);text-align:center;padding:1rem;">예정된 스터디 일정이 없습니다.<br>아래에서 직접 날짜를 입력하세요.</div>';
-  }
-  document.getElementById('assignDateModal').style.display = 'flex';
-}
-
-function closeAssignModal() {
-  document.getElementById('assignDateModal').style.display = 'none';
-  _assignPayload = null;
-}
-
-async function assignToSchedule(scheduleId, dateStr) {
-  if (!_assignPayload) return;
-  await doAssign(scheduleId, dateStr, _assignPayload);
-  closeAssignModal();
-}
-
-async function assignToCustomDate() {
-  const dateStr = document.getElementById('assignCustomDate').value;
-  if (!dateStr) { toast('날짜를 선택하세요.'); return; }
-  if (!_assignPayload) return;
-
-  const cat = document.getElementById('thisTurnCategory').value;
-  let sched = schedules.find(s =>
-    s.event_date === dateStr && (s.category === 'stock' || s.category === 'industry')
-  );
-  if (!sched) {
-    const industry   = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
-    const schedTitle = industry || (cat === 'industry' ? '산업 분석' : '기업 분석');
-    const { data: newSched, error } = await sb.from('schedules').insert({
-      title: schedTitle, category: cat, event_date: dateStr, event_time: '20:00:00',
-    }).select().single();
-    if (error) { toast('일정 생성 오류: ' + error.message); return; }
-    sched = newSched;
-    schedules.push(sched);
-    toast('📅 ' + dateStr + ' 일정 자동 생성');
-  }
-  await doAssign(sched.id, dateStr, _assignPayload);
-  closeAssignModal();
-}
-
-async function doAssign(scheduleId, dateStr, payload) {
-  const { memberId, memberName, stockName, stockCode, priceAt, capAt, targetCap, reason, risk } = payload;
-  const cat      = document.getElementById('thisTurnCategory').value;
-  const industry = document.getElementById('thisTurnIndustry')?.value?.trim() || '';
-  const topic    = (cat === 'industry' && industry) ? industry + ' > ' + stockName : stockName;
-
-  const draft = presentations.find(p =>
-    !p.schedule_id && p.member_id === memberId && p.status === 'planned'
-  );
-  const alreadyAssigned = presentations.find(p =>
-    p.schedule_id === scheduleId && p.member_id === memberId
-  );
-  const updatePayload = {
-    schedule_id: scheduleId, presented_at: dateStr, status: 'planned', topic,
-    stock_code:    stockCode     || null,
-    price_at:      parseInt(priceAt)   || null,
-    market_cap_at: parseInt(capAt)     || null,
-    target_cap:    parseInt(targetCap) || null,
-    reason: reason || null, risk: risk || null,
-  };
-
-  if (draft) {
-    await sb.from('presentations').update(updatePayload).eq('id', draft.id);
-    toast('✅ ' + memberName + ' → ' + stockName + ' 배정!');
-  } else if (alreadyAssigned) {
-    await sb.from('presentations').update({ topic, stock_code: stockCode, price_at: parseInt(priceAt)||null }).eq('id', alreadyAssigned.id);
-    toast(memberName + ' 발표 종목 변경: ' + stockName);
-  } else {
-    await sb.from('presentations').insert({ member_id: memberId, category: cat, ...updatePayload });
-    toast('✅ ' + memberName + ' → ' + stockName + ' 등록!');
-  }
-
-  await reloadPresentations();
-  schedules = await fetchSchedules();
-  refreshPresentationScheduleViews();
-  renderUpcoming(); renderScheduleList();
-}
-
-document.getElementById('assignDateModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('assignDateModal')) closeAssignModal();
-});
-
-// 안내 문구 + CSS (드래그 핸들 모바일 숨김, 배정 버튼 데스크톱 숨김)
+// 발표 일정은 순서와 등록된 스터디 날짜를 기준으로 자동 연결된다.
 function updatePanelGuide() {
   const guide = document.getElementById('panelGuide');
-  if (guide) guide.textContent = window.innerWidth <= 768
-    ? '종목 입력 → 📅 배정 버튼으로 날짜 선택'
-    : '종목 입력 → 달력 일정으로 드래그';
+  if (guide) guide.textContent = '종목을 입력하면 발표 순서에 맞는 스터디 일정에 자동 연결됩니다.';
 }
 window.addEventListener('resize', updatePanelGuide);
 document.addEventListener('DOMContentLoaded', updatePanelGuide);
 setTimeout(updatePanelGuide, 100);
 
-const _mobileAssignStyle = document.createElement('style');
-_mobileAssignStyle.textContent =
-  '.assign-btn-mobile { display: none; }' +
-  '@media (max-width: 768px) {' +
-  '  .assign-btn-mobile { display: inline-flex !important; }' +
-  '  [title="달력의 일정 셀로 드래그하세요"] { display: none !important; }' +
-  '}';
-document.head.appendChild(_mobileAssignStyle);
-
 function getOrderedCycleMembers() {
-  return presOrder
-    .map(id => members.find(m => m.id === id))
-    .filter(Boolean);
+  return normalizePresentationOrder(members, presOrder);
+}
+
+function getAutomaticPresentationPlan(fromDate = toDateStr(new Date())) {
+  return buildPresentationSchedulePlan(
+    schedules,
+    presentations,
+    getOrderedCycleMembers(),
+    { fromDate }
+  );
+}
+
+function getOrderScheduleRoster(schedule) {
+  const orderedMembers = getOrderedCycleMembers();
+  return getEffectiveScheduleRoster(
+    schedule,
+    schedules,
+    presentations,
+    orderedMembers,
+    buildPresentationSchedulePlan(
+      schedules,
+      presentations,
+      orderedMembers,
+      { fromDate: toDateStr(new Date()) }
+    )
+  );
+}
+
+async function reconcileAutomaticPresentationPlan(fromDate = toDateStr(new Date())) {
+  const result = await syncPlannedPresentationsToSchedulePlan(
+    sb,
+    schedules,
+    presentations,
+    getOrderedCycleMembers(),
+    { fromDate }
+  );
+  if (result.patches.length) await reloadPresentations();
+  refreshPresentationScheduleViews();
+  renderUpcoming();
+  renderScheduleList();
+  guessNextTurn();
+  if (result.patches.length) {
+    toast('발표 순서에 맞춰 ' + result.patches.length + '건의 일정 배정을 자동 조정했습니다.');
+  }
+  return result;
 }
 
 function guessNextTurn() {
   const guide = document.getElementById('turnGuide');
-  const turn = getPresentationTurnState(presentations, getOrderedCycleMembers(), {
-    includePlanned: true,
-  });
-
-  document.getElementById('thisTurnCategory').value = turn.category;
+  const plan = getAutomaticPresentationPlan();
+  const category = plan.nextSchedule?.category ||
+    getPresentationTurnState(presentations, getOrderedCycleMembers()).category;
+  document.getElementById('thisTurnCategory').value = category;
   onTurnCategoryChange();
 
-  let guideHtml = '이번 발표: <strong style="color:var(--accent);">' + turn.label + '</strong>';
-  if (turn.total) guideHtml += ' &nbsp;|&nbsp; 사이클: ' + turn.completedCount + '/' + turn.total;
-  if (turn.nextMember) {
-    const cycle = turn.pendingMembers.map(m => m.name);
-    guideHtml += ' &nbsp;|&nbsp; 다음 순서: <strong>' + cycle.slice(0, 3).join(' → ') + '</strong>';
-    if (cycle.length > 3) guideHtml += ' …';
-  }
+  const nextNames = plan.nextMembers.map(member => member.name);
+  const when = plan.nextSchedule
+    ? plan.nextSchedule.event_date + ' 스터디'
+    : '다음 스터디 일정 등록 시';
+  const guideHtml = nextNames.length
+    ? '<strong style="color:var(--accent);">' + when + '</strong>' +
+      ' &nbsp;|&nbsp; 발표자: <strong>' + nextNames.join(' → ') + '</strong>' +
+      (nextNames.length < PRESENTATION_GROUP_SIZE ? ' · 이번 사이클 마지막' : '')
+    : '활성 발표자가 없습니다.';
   guide.innerHTML = guideHtml;
 }
 
@@ -1112,34 +901,7 @@ async function autoAssignNextCycle(scheduleId) {
   if (!adminUser) return;
   const sched = schedules.find(s => s.id === scheduleId);
   if (!sched) return;
-
-  const alreadyAssigned = presentations
-    .filter(p => p.schedule_id === scheduleId)
-    .map(p => p.member_id);
-  const turn = getPresentationTurnState(presentations, getOrderedCycleMembers(), {
-    includePlanned: true,
-    untilDate: sched.event_date,
-  });
-  const nextMember = turn.pendingMembers.find(m => !alreadyAssigned.includes(m.id));
-  if (!nextMember) return;
-
-  const draft = presentations.find(p =>
-    p.member_id === nextMember.id && p.status === 'planned' && !p.schedule_id
-  );
-  if (!draft) {
-    toast(nextMember.name + '의 발표종목을 먼저 입력해주세요.');
-    return;
-  }
-
-  await sb.from('presentations').update({
-    schedule_id: sched.id,
-    presented_at: sched.event_date,
-    category: sched.category,
-  }).eq('id', draft.id);
-
-  await reloadPresentations();
-  refreshPresentationScheduleViews();
-  toast('📌 ' + nextMember.name + ' → ' + sched.event_date + ' 자동 배정');
+  await reconcileAutomaticPresentationPlan();
 }
 
 async function init() {
@@ -1152,7 +914,7 @@ async function init() {
     await loadSharedData();   // js/schedule-shared.js
     // 발표자 순서 DB에서 불러오기
     const savedOrder = await getConfig('pres_order');
-    presOrder = Array.isArray(savedOrder) ? savedOrder : members.map(m => m.id);
+    presOrder = normalizePresentationOrder(members, savedOrder).map(member => member.id);
   } catch(e) {
     console.error('데이터 로드 오류:', e.message);
     schedules = []; members = []; presentations = [];

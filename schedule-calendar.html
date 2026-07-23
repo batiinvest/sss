@@ -16,7 +16,7 @@
   <div class="topbar schedule-topbar">
     <div>
       <h1 class="page-title">스터디 일정</h1>
-      <div class="updated">산업 분석 · 종목 분석 · 회식 관리</div>
+      <div class="updated">발표 일정마다 3명 자동 편성 · 회식으로 바꾸면 다음 스터디로 순연</div>
     </div>
     <div class="schedule-topbar-actions">
       <nav class="schedule-view-tabs" aria-label="일정 화면 전환">
@@ -35,7 +35,7 @@
         <div>
           <div class="presentation-order-eyebrow">스터디 운영</div>
           <h2 class="detail-title" id="formTitle">일정 추가</h2>
-          <p class="detail-subtitle">기본 시간은 오후 8시입니다. 발표 일정은 발표자와 종목까지 한 번에 등록할 수 있습니다.</p>
+          <p class="detail-subtitle">기본 시간은 오후 8시입니다. 발표자는 저장된 순서에 따라 자동 편성되며 종목은 나중에 입력할 수 있습니다.</p>
         </div>
         <button type="button" class="detail-close" onclick="closeForm()" aria-label="일정 입력 닫기">×</button>
       </div>
@@ -201,8 +201,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260711.2"></script>
-<script src="js/schedule-shared.js?v=20260722.3"></script>
+<script src="js/db.js?v=20260723.2"></script>
+<script src="js/schedule-shared.js?v=20260723.2"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -210,6 +210,7 @@ let selectedCalendarDate = null;
 let formReturnFocus = null;
 let detailReturnFocus = null;
 let formInitialState = '';
+let presOrder = [];
 
 function presentationBelongsToSchedule(presentation, scheduleId, date) {
   if (presentation.schedule_id) return presentation.schedule_id === scheduleId;
@@ -248,12 +249,37 @@ function getScheduleShareUrl(scheduleId) {
 }
 
 function getSchedulePresentations(scheduleId, date) {
-  return (presentations || [])
-    .filter(p =>
-      presentationBelongsToSchedule(p, scheduleId, date) &&
-      (p.status === 'planned' || p.status === 'done')
-    )
-    .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+  const schedule = schedules.find(item => String(item.id) === String(scheduleId));
+  if (!schedule) return [];
+  const orderedMembers = normalizePresentationOrder(members, presOrder);
+  const plan = buildPresentationSchedulePlan(
+    schedules,
+    presentations,
+    orderedMembers,
+    { fromDate: toDateStr(new Date()) }
+  );
+  return getEffectiveScheduleRoster(
+    schedule,
+    schedules,
+    presentations,
+    orderedMembers,
+    plan
+  ).filter(p => p.status === 'planned' || p.status === 'done');
+}
+
+async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(new Date())) {
+  const orderedMembers = normalizePresentationOrder(members, presOrder);
+  const result = await syncPlannedPresentationsToSchedulePlan(
+    sb,
+    schedules,
+    presentations,
+    orderedMembers,
+    { fromDate }
+  );
+  if (result.patches.length) {
+    presentations = await reloadPresentations();
+  }
+  return result.patches.length;
 }
 
 function buildScheduleShareText(s) {
@@ -266,7 +292,7 @@ function buildScheduleShareText(s) {
   const presText = pres.length
     ? '\n\n발표 순서\n' + pres.map((p, i) => {
         const name = p.members?.name || '발표자';
-        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '발표종목');
+        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '종목 미입력');
         return `${i + 1}. ${name} - ${topic}`;
       }).join('\n')
     : '';
@@ -311,6 +337,8 @@ async function init() {
 
   try {
     await loadSharedData();   // js/schedule-shared.js
+    const savedOrder = await getConfig('pres_order');
+    presOrder = normalizePresentationOrder(members, savedOrder).map(member => member.id);
   } catch(e) {
     console.error('일정 데이터 로드 오류:', e.message);
     schedules = []; members = []; presentations = [];
@@ -412,14 +440,12 @@ function makeDay(date, otherMonth, isToday=false) {
 
     // 발표자+종목 표시 (산업/기업 분석 일정만)
     if (ev.category === 'stock' || ev.category === 'industry') {
-      const pres = presentations.filter(p =>
-        presentationBelongsToSchedule(p, ev.id, dateStr) && p.status === 'planned'
-      );
+      const pres = getSchedulePresentations(ev.id, dateStr);
       pres.forEach(p => {
         const pDiv = document.createElement('div');
         pDiv.className = 'cal-presenter-line';
         const name  = p.members?.name?.slice(0,2) || '';
-        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
+        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '종목 미입력');
         pDiv.textContent = name + ' · ' + topic;
         cell.appendChild(pDiv);
       });
@@ -957,8 +983,12 @@ async function saveSchedule(event) {
     presentations = await sb.from('presentations')
       .select('*, members(name)').order('created_at').then(r => r.data || []);
     schedules = await fetchSchedules();
+    const today = toDateStr(new Date());
+    await reconcileAutomaticPresentationAssignments(today);
     refreshSchedulePageViews();
-    toast(wasEditing ? '일정이 수정되었습니다.' : '일정이 추가되었습니다!');
+    toast(wasEditing
+      ? '일정과 발표 순서가 자동으로 조정되었습니다.'
+      : '일정이 추가되고 발표 순서가 자동 반영되었습니다!');
     closeForm(true);
   } catch(e) {
     showScheduleFormError('저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도하세요.'));
@@ -970,12 +1000,87 @@ async function saveSchedule(event) {
 async function confirmDelete(id) {
   const s = schedules.find(s => s.id === id);
   if (!s || !confirm(`"${s.title}" 일정을 삭제할까요?`)) return;
+  const { data: linkedRowsData, error: linkedRowsError } = await sb
+    .from('presentations')
+    .select('id,status,presented_at')
+    .eq('schedule_id', id);
+  if (linkedRowsError) {
+    toast('연결된 발표를 확인하지 못해 일정을 삭제하지 않았습니다: ' + linkedRowsError.message);
+    return;
+  }
+  const linkedRows = linkedRowsData || [];
+  const plannedIds = linkedRows
+    .filter(p => p.status === 'planned')
+    .map(p => p.id);
+  const historyIds = linkedRows
+    .filter(p => p.status !== 'planned')
+    .map(p => p.id);
+  let plannedDetached = false;
+  let historyDetached = false;
+  let scheduleDeleted = false;
+  let rollbackFailed = false;
   try {
+    if (plannedIds.length) {
+      const { error } = await sb.from('presentations')
+        .update({ schedule_id: null, presented_at: null })
+        .in('id', plannedIds);
+      if (error) throw error;
+      plannedDetached = true;
+    }
+    if (historyIds.length) {
+      const { error } = await sb.from('presentations')
+        .update({ schedule_id: null })
+        .in('id', historyIds);
+      if (error) throw error;
+      historyDetached = true;
+    }
     await deleteSchedule(id);
-    toast('삭제되었습니다.');
+    scheduleDeleted = true;
     schedules = await fetchSchedules();
+    presentations = await reloadPresentations();
+    const today = toDateStr(new Date());
+    await reconcileAutomaticPresentationAssignments(today);
     refreshSchedulePageViews();
-  } catch(e) { toast('오류: ' + e.message); }
+    toast('일정이 삭제되고 이후 발표 순서가 자동으로 조정되었습니다.');
+  } catch(e) {
+    if (!scheduleDeleted && (plannedDetached || historyDetached)) {
+      const rollbackTasks = [];
+      if (plannedDetached) {
+        linkedRows
+          .filter(row => row.status === 'planned')
+          .forEach(row => {
+            rollbackTasks.push(
+              sb.from('presentations')
+                .update({ schedule_id: id, presented_at: row.presented_at })
+                .eq('id', row.id)
+            );
+          });
+      }
+      if (historyDetached) {
+        rollbackTasks.push(
+          sb.from('presentations')
+            .update({ schedule_id: id })
+            .in('id', historyIds)
+        );
+      }
+      const rollbackResults = await Promise.allSettled(rollbackTasks);
+      rollbackFailed = rollbackResults.some(result =>
+        result.status === 'rejected' || result.value?.error
+      );
+      if (rollbackFailed) {
+        console.error('일정 삭제 롤백 오류:', rollbackResults);
+      }
+      presentations = await reloadPresentations();
+    }
+    if (scheduleDeleted) {
+      refreshSchedulePageViews();
+      toast('일정은 삭제됐지만 이후 발표 순서를 조정하지 못했습니다. 화면을 다시 열어 주세요.');
+      return;
+    }
+    toast(rollbackFailed
+      ? '일정 삭제와 발표 연결 복구에 실패했습니다. 화면을 다시 열고 연결 상태를 확인해 주세요.'
+      : '일정을 삭제하지 못했습니다. 기존 발표 연결을 복구했습니다: ' + e.message);
+  }
 }
 
 // ── 상세 모달
@@ -1027,11 +1132,8 @@ async function loadPlannedItems(scheduleId, s) {
   if (section) section.style.display = isTalk ? 'block' : 'none';
   if (!isTalk) return;
 
-  // 전역 발표 목록은 직접 연결된 발표를 날짜와 무관하게 포함한다.
-  // 과거 데이터만 schedule_id가 없을 때 같은 날의 유일한 발표 일정으로 보완한다.
-  const filteredItems = (presentations || [])
-    .filter(p => presentationBelongsToSchedule(p, scheduleId, s.event_date))
-    .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+  // 실제 발표 내용과 자동 편성된 발표자 슬롯을 함께 표시한다.
+  const filteredItems = getSchedulePresentations(scheduleId, s.event_date);
 
   listEl.innerHTML = '';
   if (!filteredItems || !filteredItems.length) {
@@ -1040,7 +1142,7 @@ async function loadPlannedItems(scheduleId, s) {
   }
 
   filteredItems.forEach(item => {
-    const topicName  = item.topic?.includes('>') ? item.topic.split('>')[1].trim() : (item.topic || '');
+    const topicName  = item.topic?.includes('>') ? item.topic.split('>')[1].trim() : (item.topic || '종목 미입력');
     const memberName = item.members?.name || '—';
     const isDone     = item.status === 'done';
 
@@ -1065,6 +1167,9 @@ async function loadPlannedItems(scheduleId, s) {
     if (isDone) {
       statusSpan.style.cssText = 'font-size:11px;color:#0f6e56;padding:1px 6px;background:#e6f7f1;border-radius:4px;';
       statusSpan.textContent = '완료';
+    } else if (item._isAutoSlot) {
+      statusSpan.style.cssText = 'font-size:10px;color:#185fa5;padding:1px 6px;background:#e8f2fb;border-radius:4px;white-space:nowrap;';
+      statusSpan.textContent = '자동 순서';
     } else {
       const delBtn = document.createElement('button');
       delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;';

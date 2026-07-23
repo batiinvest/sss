@@ -15,7 +15,7 @@ function inlineScripts(html) {
 }
 
 test('changed app pages keep valid inline JavaScript', () => {
-  for (const file of ['app.html', 'schedule-calendar.html', 'schedule-order.html']) {
+  for (const file of ['app.html', 'index.html', 'schedule-calendar.html', 'schedule-order.html']) {
     inlineScripts(read(file)).forEach((code, index) => {
       assert.doesNotThrow(() => new vm.Script(code, { filename: `${file}#${index}` }));
     });
@@ -75,7 +75,8 @@ test('mobile shell exposes schedule directly and through quick add', () => {
 
 test('schedule details reuse the complete in-memory presentation list', () => {
   const source = read('schedule-calendar.html');
-  assert.match(source, /const filteredItems = \(presentations \|\| \[\]\)/);
+  assert.match(source, /const filteredItems = getSchedulePresentations\(scheduleId, s\.event_date\)/);
+  assert.match(source, /getEffectiveScheduleRoster\(/);
   assert.doesNotMatch(source, /\.or\('schedule_id\.eq\.' \+ scheduleId/);
 });
 
@@ -83,7 +84,30 @@ test('changing a talk to a non-talk schedule only detaches planned rows', () => 
   const source = read('schedule-calendar.html');
   assert.match(source, /else if \(editingScheduleId\)[\s\S]*p\.status === 'planned'/);
   assert.match(source, /update\(\{ schedule_id: null, presented_at: null \}\)/);
-  assert.match(source, /toast\(wasEditing \? '일정이 수정되었습니다\.'/);
+  assert.match(source, /reconcileAutomaticPresentationAssignments\(today\)/);
+  assert.match(source, /일정과 발표 순서가 자동으로 조정되었습니다/);
+});
+
+test('schedule deletion preserves presentation history and recovers failed deletes', () => {
+  const source = read('schedule-calendar.html');
+  assert.match(source, /select\('id,status,presented_at'\)[\s\S]*eq\('schedule_id', id\)/);
+  assert.match(source, /연결된 발표를 확인하지 못해 일정을 삭제하지 않았습니다/);
+  assert.match(source, /filter\(p => p\.status !== 'planned'\)/);
+  assert.match(source, /update\(\{ schedule_id: null \}\)/);
+  assert.match(source, /let scheduleDeleted = false/);
+  assert.match(source, /let rollbackFailed = false/);
+  assert.match(source, /if \(!scheduleDeleted && \(plannedDetached \|\| historyDetached\)\)/);
+  assert.match(source, /Promise\.allSettled\(rollbackTasks\)/);
+  assert.match(source, /presented_at: row\.presented_at/);
+  assert.match(source, /기존 발표 연결을 복구했습니다/);
+});
+
+test('presentation order changes reconcile only after the order is saved', () => {
+  const order = read('schedule-order.html');
+  const db = read('js/db.js');
+  assert.match(db, /setConfig[\s\S]*if \(error\)[\s\S]*throw error/);
+  assert.match(order, /await setConfig\('pres_order', presOrder\)[\s\S]*await reconcileAutomaticPresentationPlan\(\)/);
+  assert.match(order, /presOrder = previousOrder/);
 });
 
 test('mobile calendar compaction stays scoped to the schedule calendar', () => {

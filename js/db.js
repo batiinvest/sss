@@ -456,5 +456,10 @@ async function getConfig(key) {
 }
 async function setConfig(key, value) {
   const { error } = await sb.from('app_config').upsert({ key, value }, { onConflict: 'key' });
-  if (error) { console.error('setConfig 오류:', error.message); toast('설정 저장 오류: ' + error.message); }
+  if (error) {
+    console.error('setConfig 오류:', error.message);
+    toast('설정 저장 오류: ' + error.message);
+    throw error;
+  }
+  return true;
 }

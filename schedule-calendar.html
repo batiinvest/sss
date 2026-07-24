@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260724.1">
+  <link rel="stylesheet" href="css/style.css?v=20260724.3">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -21,7 +21,7 @@
     <div class="schedule-topbar-actions">
       <nav class="schedule-view-tabs" aria-label="스터디 운영 화면 전환">
         <button type="button" class="active" aria-current="page">일정</button>
-        <button type="button" onclick="goToSchedulePage('schedule-order')">발표 준비</button>
+        <button type="button" onclick="goToSchedulePage('presentations?view=prepare')">발표 관리</button>
       </nav>
       <button type="button" class="btn btn-primary schedule-add-button" onclick="openForm()">+ 일정 추가</button>
     </div>
@@ -948,7 +948,7 @@ async function showDetail(id, e) {
   document.getElementById('detailDeleteBtn').onclick = () => { closeDetail(); confirmDelete(id); };
   document.getElementById('detailKakaoShareBtn').onclick = (event) => shareScheduleToKakao(id, event);
   document.getElementById('detailPresentationBtn').onclick = () =>
-    goToSchedulePage('schedule-order?schedule=' + encodeURIComponent(id));
+    goToSchedulePage('presentations?view=prepare&schedule=' + encodeURIComponent(id));
   const modal = document.getElementById('detailModal');
   modal.hidden = false;
   requestAnimationFrame(() => modal.classList.add('open'));

@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260724.1">
+  <link rel="stylesheet" href="css/style.css?v=20260724.3">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -122,8 +122,7 @@
 
     <div class="nav-section-label">스터디</div>
     <a href="#" onclick="loadPage('schedule-calendar');return false;" class="nav-item" data-page="schedule-calendar"><div class="nav-dot g"></div>스터디 일정</a>
-    <a href="#" onclick="loadPage('schedule-order');return false;" class="nav-item" data-page="schedule-order"><div class="nav-dot g"></div>발표 준비</a>
-    <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표종목</a>
+    <a href="#" onclick="loadPage('presentations?view=prepare');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표 관리</a>
     <a href="#" onclick="loadPage('fees');return false;"          class="nav-item" data-page="fees"><div class="nav-dot a"></div>스터디 회비</a>
 
     <div class="nav-section-label">투자</div>
@@ -146,7 +145,7 @@
 
   <nav class="mobile-bottom-nav" aria-label="주요 메뉴">
     <button type="button" data-page="index" onclick="loadPage('index')"><span aria-hidden="true">⌂</span><span>홈</span></button>
-    <button type="button" data-page="presentations" onclick="loadPage('presentations')"><span aria-hidden="true">▤</span><span>발표종목</span></button>
+    <button type="button" data-page="presentations" onclick="loadPage('presentations?view=prepare')"><span aria-hidden="true">▤</span><span>발표</span></button>
     <button type="button" data-page="schedule-calendar" onclick="loadPage('schedule-calendar')"><span aria-hidden="true">▦</span><span>일정</span></button>
     <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>투자종목</span></button>
     <button type="button" data-more-nav onclick="openMoreMenu()"><span aria-hidden="true">☰</span><span>내 메뉴</span></button>
@@ -181,7 +180,7 @@
     <div class="app-sheet-head"><div><h2 id="quickAddTitle">빠른 등록</h2><p>하려는 작업을 선택하세요.</p></div><button type="button" class="app-sheet-close" onclick="closeQuickAdd()" aria-label="등록 메뉴 닫기">×</button></div>
     <div class="sheet-action-list">
       <button type="button" onclick="runQuickRoute('schedule-calendar?action=new')"><strong>스터디 일정 등록</strong><span>날짜·시간·장소를 등록합니다.</span></button>
-      <button type="button" onclick="runQuickRoute('index?action=presentation')"><strong>발표종목 등록</strong><span>발표할 종목을 먼저 저장합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('presentations?view=prepare')"><strong>발표 준비</strong><span>자동 배정된 순서와 발표종목을 확인합니다.</span></button>
       <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>투자종목 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=buy')"><strong>매수 등록</strong><span>보유를 시작하거나 추가 매수합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=sell')"><strong>매도 등록</strong><span>일부 또는 전량 매도를 기록합니다.</span></button>
@@ -198,7 +197,7 @@
       <button type="button" onclick="runMoreRoute('mypage')">내 정보</button>
       <button type="button" onclick="runMoreRoute('trade')">매수·매도</button>
       <button type="button" onclick="runMoreRoute('schedule-calendar')">스터디 일정</button>
-      <button type="button" onclick="runMoreRoute('schedule-order')">발표 준비</button>
+      <button type="button" onclick="runMoreRoute('presentations?view=prepare')">발표 관리</button>
       <button type="button" onclick="runMoreRoute('fees')">스터디 회비</button>
       <button type="button" onclick="runMoreRoute('settle')">결산 관리</button>
       <button type="button" onclick="runMoreRoute('members')">참여자 현황</button>
@@ -217,15 +216,14 @@
 <script>
 const APP_PAGES = new Set([
   'index', 'presentations', 'picks', 'trade', 'schedule-calendar',
-  'schedule-order', 'fees', 'settle', 'members', 'mypage', 'admin'
+  'fees', 'settle', 'members', 'mypage', 'admin'
 ]);
 const PAGE_LABELS = {
   index: '홈',
-  presentations: '발표종목',
+  presentations: '발표 관리',
   picks: '투자종목',
   trade: '매수·매도',
   'schedule-calendar': '스터디 일정',
-  'schedule-order': '발표 준비',
   fees: '스터디 회비',
   settle: '결산 관리',
   members: '참여자 현황',
@@ -243,9 +241,33 @@ function normalizeRoute(input) {
   const raw = String(input || 'index').replace(/^#/, '');
   const queryIndex = raw.indexOf('?');
   let page = (queryIndex >= 0 ? raw.slice(0, queryIndex) : raw).toLowerCase();
-  if (!APP_PAGES.has(page)) page = 'index';
   const params = new URLSearchParams(queryIndex >= 0 ? raw.slice(queryIndex + 1) : '');
   params.delete('v');
+
+  // 기존 발표 순서 주소는 통합된 발표 관리의 준비 화면으로 연결한다.
+  if (page === 'schedule-order') {
+    page = 'presentations';
+    params.set('view', 'prepare');
+  }
+  if (!APP_PAGES.has(page)) {
+    page = 'index';
+    return { page, route: page, params: new URLSearchParams() };
+  }
+
+  if (page === 'presentations') {
+    const requestedView = params.get('view');
+    const view = ['prepare', 'history'].includes(requestedView)
+      ? requestedView
+      : (params.has('schedule') ? 'prepare' : 'history');
+    const orderedParams = new URLSearchParams([['view', view]]);
+    [...params.entries()]
+      .filter(([key]) => key !== 'view')
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([key, value]) => orderedParams.append(key, value));
+    const query = orderedParams.toString();
+    return { page, route: page + '?' + query, params: orderedParams };
+  }
+
   const query = params.toString();
   return { page, route: page + (query ? '?' + query : ''), params };
 }
@@ -253,8 +275,11 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260724.1');
-  return parsed.page + '.html?' + params.toString();
+  params.set('v', '20260724.3');
+  const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
+    ? 'schedule-order'
+    : parsed.page;
+  return framePage + '.html?' + params.toString();
 }
 
 function updateActiveNavigation(page) {
@@ -264,12 +289,7 @@ function updateActiveNavigation(page) {
     if (active) el.setAttribute('aria-current', 'page');
     else el.removeAttribute('aria-current');
   });
-  const mobileScheduleNav = document.querySelector('.mobile-bottom-nav [data-page="schedule-calendar"]');
-  if (page === 'schedule-order' && mobileScheduleNav) {
-    mobileScheduleNav.classList.add('active');
-    mobileScheduleNav.setAttribute('aria-current', 'page');
-  }
-  const moreActive = !['index', 'presentations', 'schedule-calendar', 'schedule-order', 'picks'].includes(page);
+  const moreActive = !['index', 'presentations', 'schedule-calendar', 'picks'].includes(page);
   document.querySelector('[data-more-nav]')?.classList.toggle('active', moreActive);
   const pageLabel = PAGE_LABELS[page] || 'SSS';
   document.getElementById('mobilePageTitle').textContent = pageLabel;
@@ -285,7 +305,9 @@ function loadPage(route, options = {}) {
   }
 
   const frame = document.getElementById('page-frame');
-  if (!options.force && currentRoute === parsed.route && frame.src.includes(parsed.page + '.html')) {
+  const nextFrameSrc = routeFrameSrc(parsed.route);
+  const nextFrameUrl = new URL(nextFrameSrc, location.href).href;
+  if (!options.force && currentRoute === parsed.route && frame.src === nextFrameUrl) {
     closeAllSheets();
     return;
   }
@@ -301,7 +323,7 @@ function loadPage(route, options = {}) {
   else if (historyMode !== 'none') history.pushState(state, '', '#' + parsed.route);
 
   frame.classList.add('switching');
-  frame.src = routeFrameSrc(parsed.route);
+  frame.src = nextFrameSrc;
 }
 
 // iframe 안의 상세 모달이 닫힐 때 현재 화면을 다시 로드하지 않고
@@ -322,7 +344,7 @@ function syncRouteFromFrame() {
     const url = new URL(frame.contentWindow.location.href);
     const file = url.pathname.split('/').pop() || '';
     const page = file.replace(/\.html$/i, '');
-    if (!APP_PAGES.has(page)) return;
+    if (!APP_PAGES.has(page) && page !== 'schedule-order') return;
     url.searchParams.delete('v');
     const query = url.searchParams.toString();
     const actual = normalizeRoute(page + (query ? '?' + query : ''));
@@ -474,7 +496,7 @@ async function runGlobalSearch(rawQuery) {
     const [stocks, presResult, pickResult] = await Promise.all([
       searchStockPrices(term, 8),
       sb.from('presentations')
-        .select('id,topic,stock_code,status,presented_at,category,members(name)')
+        .select('id,schedule_id,topic,stock_code,status,presented_at,category,members(name)')
         .or(`topic.ilike.%${term}%,stock_code.ilike.%${term}%`)
         .order('presented_at', { ascending: false }).limit(8),
       sb.from('picks_with_trades')
@@ -496,7 +518,10 @@ async function runGlobalSearch(rawQuery) {
       html += '<div class="search-section-title">발표종목</div>' + presentations.map(item => {
         const name = String(item.topic || '').split('>').pop().trim();
         const meta = [item.members?.name, item.presented_at].filter(Boolean).join(' · ');
-        return `<button type="button" class="search-result-row" data-route="presentations?id=${encodeURIComponent(item.id)}" data-label="${escapeHtml(name)}"><span class="search-result-icon search-result-pres" aria-hidden="true">▤</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(meta || '발표종목')}</small></span><span class="search-result-state">${item.status === 'planned' ? '예정' : '발표 완료'}</span></button>`;
+        const route = item.status === 'planned'
+          ? 'presentations?view=prepare' + (item.schedule_id ? '&schedule=' + encodeURIComponent(item.schedule_id) : '')
+          : 'presentations?view=history&id=' + encodeURIComponent(item.id);
+        return `<button type="button" class="search-result-row" data-route="${route}" data-label="${escapeHtml(name)}"><span class="search-result-icon search-result-pres" aria-hidden="true">▤</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(meta || '발표종목')}</small></span><span class="search-result-state">${item.status === 'planned' ? '예정' : '발표 완료'}</span></button>`;
       }).join('');
     }
     if (picks.length) {

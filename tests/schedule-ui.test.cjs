@@ -23,7 +23,7 @@ function sourceSection(source, startMarker, endMarker) {
 }
 
 test('changed app pages keep valid inline JavaScript', () => {
-  for (const file of ['app.html', 'index.html', 'schedule-calendar.html', 'schedule-order.html']) {
+  for (const file of ['app.html', 'index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
     inlineScripts(read(file)).forEach((code, index) => {
       assert.doesNotThrow(() => new vm.Script(code, { filename: `${file}#${index}` }));
     });
@@ -108,17 +108,69 @@ test('generated presentation blocks are removed from editable memo text', () => 
   );
 });
 
-test('mobile shell exposes schedule directly and through quick add', () => {
+test('mobile shell exposes schedule and one integrated presentation section', () => {
   const source = read('app.html');
   assert.match(source, /data-page="schedule-calendar" onclick="loadPage\('schedule-calendar'\)"/);
   assert.match(source, /schedule-calendar\?action=new/);
   assert.match(source, /'schedule-calendar': '스터디 일정'/);
-  assert.match(source, /'schedule-order': '발표 준비'/);
-  assert.match(source, /page === 'schedule-order' && mobileScheduleNav/);
-  assert.doesNotMatch(source, /\['index', 'presentations', 'schedule-calendar', 'picks'\]/);
-  assert.match(read('schedule-calendar.html'), /schedule-order\?schedule=/);
+  assert.match(source, /presentations: '발표 관리'/);
+  assert.match(source, /data-page="presentations" onclick="loadPage\('presentations\?view=prepare'\)"/);
+  assert.match(source, /runQuickRoute\('presentations\?view=prepare'\)/);
+  assert.doesNotMatch(source, /data-page="schedule-order"/);
+  assert.match(source, /if \(page === 'schedule-order'\)[\s\S]*params\.set\('view', 'prepare'\)/);
+  assert.match(source, /framePage = parsed\.page === 'presentations' && parsed\.params\.get\('view'\) === 'prepare'/);
+  assert.match(source, /if \(!APP_PAGES\.has\(page\) && page !== 'schedule-order'\) return/);
+  assert.match(read('schedule-calendar.html'), /presentations\?view=prepare&schedule=/);
   assert.match(read('schedule-order.html'), /requestedScheduleId/);
   assert.match(read('js/schedule-shared.js'), /page \+ '\.html' \+ \(query \? '\?' \+ query : ''\)/);
+});
+
+test('legacy presentation routes normalize to the integrated canonical views', () => {
+  const source = read('app.html');
+  const helperSource = sourceSection(source, 'const APP_PAGES', 'function updateActiveNavigation');
+  const context = { URLSearchParams };
+  vm.createContext(context);
+  vm.runInContext(helperSource, context);
+
+  assert.equal(
+    context.normalizeRoute('schedule-order?schedule=abc').route,
+    'presentations?view=prepare&schedule=abc',
+  );
+  assert.equal(
+    context.normalizeRoute('presentations?id=xyz').route,
+    'presentations?view=history&id=xyz',
+  );
+  assert.equal(
+    context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
+    'schedule-order.html?view=prepare&schedule=abc&v=20260724.3',
+  );
+  assert.equal(
+    context.routeFrameSrc('presentations?view=history&id=xyz'),
+    'presentations.html?view=history&id=xyz&v=20260724.3',
+  );
+});
+
+test('presentation management uses prepare and history views without a duplicate planned list', () => {
+  const prepare = read('schedule-order.html');
+  const history = read('presentations.html');
+  const dashboard = read('index.html');
+
+  assert.match(prepare, /<h1 class="page-title">발표 관리<\/h1>/);
+  assert.match(prepare, /class="active" aria-current="page">준비 중<\/button>/);
+  assert.match(prepare, /presentations\?view=history/);
+  assert.doesNotMatch(prepare, /id="calGrid"/);
+
+  assert.match(history, /<h1 class="page-title">발표 관리<\/h1>/);
+  assert.match(history, /presentations\?view=prepare/);
+  assert.match(history, /class="active" aria-current="page">발표 기록<\/button>/);
+  assert.doesNotMatch(history, /tabPlanned|tabDone|mobilePresentationStatus|switchTab/);
+  assert.match(history, /\(p\.status \|\| 'done'\) === 'done'/);
+  assert.match(history, /if \(item\.status === 'planned'\)[\s\S]*presentations\?view=prepare/);
+
+  assert.match(dashboard, /presentations\?view=prepare/);
+  assert.match(dashboard, /presentations\?view=history&id=/);
+  assert.match(dashboard, /item\.status === 'planned'[\s\S]*presentations\?view=prepare/);
+  assert.match(read('app.html'), /item\.status === 'planned'[\s\S]*presentations\?view=prepare/);
 });
 
 test('schedule details reuse the complete in-memory presentation list', () => {
@@ -196,15 +248,19 @@ test('presentation preparation preserves pending input and uses each automatic s
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260724\.1/);
-  assert.match(read('app.html'), /params\.set\('v', '20260724\.1'\)/);
-  for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260724\.1/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260724\.3/);
+  assert.match(read('app.html'), /params\.set\('v', '20260724\.3'\)/);
+  for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
+    assert.match(read(file), /css\/style\.css\?v=20260724\.3/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
     assert.match(read(file), /js\/schedule-shared\.js\?v=20260724\.1/);
   }
-  assert.match(read('sw.js'), /sss-pwa-v20260724-1/);
+  assert.match(read('sw.js'), /sss-pwa-v20260724-3/);
+  assert.equal(
+    (read('sw.js').match(/caches\.match\(request, \{ ignoreSearch: true \}\)/g) || []).length,
+    2,
+  );
 });
 
 test('mobile calendar compaction stays scoped to the schedule calendar', () => {

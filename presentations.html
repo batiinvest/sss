@@ -3,9 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 발표종목</title>
-  <link rel="stylesheet" href="css/style.css?v=20260711.2">
-  <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
+  <title>SSS · 발표 관리 · 발표 기록</title>
+  <link rel="stylesheet" href="css/style.css?v=20260724.3">
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      if (window === window.parent && params.get('view') === 'prepare') {
+        params.delete('view');
+        const query = params.toString();
+        location.replace('schedule-order.html' + (query ? '?' + query : ''));
+        return;
+      }
+      if (window !== window.parent) document.documentElement.classList.add('in-iframe');
+    })();
+  </script>
 
 </head>
 <body>
@@ -13,31 +24,26 @@
 <div class="layout layout-page"><main class="main">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
-    <div class="topbar">
+    <div class="topbar schedule-topbar">
       <div>
-        <div class="page-title">발표종목</div>
-        <div class="updated" id="priceUpdatedAt">발표 아이디어와 현재 성과를 확인하세요.</div>
+        <h1 class="page-title">발표 관리</h1>
+        <div class="updated" id="priceUpdatedAt">다가오는 발표를 준비하고 지난 발표 성과를 확인합니다.</div>
       </div>
-      <div class="btn-row presentation-desktop-controls" style="flex-wrap:wrap;gap:8px;">
-        <!-- 예정/완료 탭 -->
-        <div class="tab-toggle">
-          <button id="tabPlanned" onclick="switchTab('planned')">
-            📋 예정
-          </button>
-          <button id="tabDone" onclick="switchTab('done')" class="active">
-            ✅ 완료
-          </button>
-        </div>
-        <select id="filterMember" aria-label="발표자 필터" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
-          <option value="">전체 발표자</option>
-        </select>
-        <select id="filterCategory" aria-label="발표 구분 필터" onchange="applyFilter()" style="font-size:13px;padding:6px 10px;width:auto;">
-          <option value="">전체 구분</option>
-          <option value="industry">산업 분석</option>
-          <option value="stock">기업 분석</option>
-        </select>
-        <button type="button" class="btn btn-primary" onclick="navigateToAppRoute('index?action=presentation')">발표종목 등록</button>
-      </div>
+      <nav class="schedule-view-tabs" aria-label="발표 관리 화면 전환">
+        <button type="button" onclick="navigateToAppRoute('presentations?view=prepare')">준비 중</button>
+        <button type="button" class="active" aria-current="page">발표 기록</button>
+      </nav>
+    </div>
+
+    <div class="presentation-history-controls desktop-filter-controls" aria-label="발표 기록 필터">
+      <select id="filterMember" aria-label="발표자 필터" onchange="applyFilter()">
+        <option value="">전체 발표자</option>
+      </select>
+      <select id="filterCategory" aria-label="발표 구분 필터" onchange="applyFilter()">
+        <option value="">전체 구분</option>
+        <option value="industry">산업 분석</option>
+        <option value="stock">기업 분석</option>
+      </select>
     </div>
 
     <div class="mobile-only mobile-page-tools">
@@ -45,7 +51,6 @@
       <button type="button" class="btn mobile-filter-toggle" onclick="togglePresentationFilters()" aria-controls="presentationMobileFilters" aria-expanded="false">필터</button>
     </div>
     <div id="presentationMobileFilters" class="mobile-only mobile-filter-panel" hidden>
-      <label>발표 상태<select id="mobilePresentationStatus" onchange="applyMobilePresentationFilters()"><option value="done">발표 완료</option><option value="planned">발표 예정</option></select></label>
       <label>발표자<select id="mobileFilterMember" onchange="applyMobilePresentationFilters()"><option value="">전체 발표자</option></select></label>
       <label>구분<select id="mobileFilterCategory" onchange="applyMobilePresentationFilters()"><option value="">전체 구분</option><option value="industry">산업 분석</option><option value="stock">기업 분석</option></select></label>
       <button type="button" class="btn" onclick="resetPresentationFilters()">필터 초기화</button>
@@ -135,21 +140,11 @@ let presentationSearchTerm = '';
 let presentationDetailId = null;
 let presentationDetailReturnFocus = null;
 
-let currentTab = 'done';  // 'planned' | 'done'
-
 function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' +
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
-}
-
-function switchTab(tab) {
-  currentTab = tab;
-  document.getElementById('tabPlanned').classList.toggle('active', tab === 'planned');
-  document.getElementById('tabDone').classList.toggle('active', tab === 'done');
-  document.getElementById('mobilePresentationStatus').value = tab;
-  renderAll(getFilteredData());
 }
 
 async function init() {
@@ -230,18 +225,14 @@ function togglePresentationFilters() {
 }
 
 function applyMobilePresentationFilters() {
-  currentTab = document.getElementById('mobilePresentationStatus').value;
   document.getElementById('filterMember').value = document.getElementById('mobileFilterMember').value;
   document.getElementById('filterCategory').value = document.getElementById('mobileFilterCategory').value;
-  document.getElementById('tabPlanned').classList.toggle('active', currentTab === 'planned');
-  document.getElementById('tabDone').classList.toggle('active', currentTab === 'done');
   renderAll(getFilteredData());
 }
 
 function resetPresentationFilters() {
   presentationSearchTerm = '';
   document.getElementById('presentationSearch').value = '';
-  document.getElementById('mobilePresentationStatus').value = 'done';
   document.getElementById('mobileFilterMember').value = '';
   document.getElementById('mobileFilterCategory').value = '';
   applyMobilePresentationFilters();
@@ -356,7 +347,7 @@ function renderPresentationCards(data) {
     const hasFilter = presentationSearchTerm || document.getElementById('filterMember').value || document.getElementById('filterCategory').value;
     container.innerHTML = hasFilter
       ? '<div class="mobile-empty-state"><strong>조건에 맞는 발표종목이 없습니다.</strong><span>필터를 초기화하거나 다른 종목을 검색해 보세요.</span><button type="button" class="btn" onclick="resetPresentationFilters()">필터 초기화</button></div>'
-      : '<div class="mobile-empty-state"><strong>아직 등록된 발표종목이 없습니다.</strong><span>첫 발표종목을 등록해 보세요.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'index?action=presentation\')">발표종목 등록</button></div>';
+      : '<div class="mobile-empty-state"><strong>아직 완료된 발표 기록이 없습니다.</strong><span>준비 중 화면에서 다음 발표를 확인해 보세요.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'presentations?view=prepare\')">준비 중 보기</button></div>';
     return;
   }
 
@@ -504,6 +495,12 @@ async function openPresentationDetail(id) {
     toast('발표종목을 찾을 수 없습니다.');
     return;
   }
+  if (item.status === 'planned') {
+    const route = 'presentations?view=prepare' +
+      (item.schedule_id ? '&schedule=' + encodeURIComponent(item.schedule_id) : '');
+    navigateToAppRoute(route);
+    return;
+  }
   presentationDetailId = item.id;
   presentationDetailReturnFocus = document.activeElement;
   const modal = document.getElementById('presentationDetailModal');
@@ -552,7 +549,7 @@ async function openPresentationDetail(id) {
     <section class="detail-section"><h3>주요 리스크</h3><p class="${risk ? '' : 'muted-copy'}">${escapeHtml(risk || '등록된 리스크가 없습니다.')}</p></section>
     <section class="detail-section"><h3>투자 연결 상태</h3><p>${linkedPick ? (isInvesting ? '현재 투자 진행 중인 종목입니다.' : '투자 아이디어가 등록되어 있으며 매수 대기 중입니다.') : '아직 투자종목으로 전환되지 않았습니다.'}${targetCap ? ` 목표 시가총액 ${Number(targetCap).toLocaleString('ko-KR')}억원` : ''}</p></section>`;
 
-  document.getElementById('presentationShareBtn').onclick = () => copyShareLink(`presentations?id=${encodeURIComponent(item.id)}`);
+  document.getElementById('presentationShareBtn').onclick = () => copyShareLink(`presentations?view=history&id=${encodeURIComponent(item.id)}`);
   const convertButton = document.getElementById('presentationConvertBtn');
   if (linkedPick?.pick_id) {
     convertButton.textContent = '투자현황 보기';
@@ -570,7 +567,8 @@ function closePresentationDetail() {
   if (window.parent !== window && typeof window.parent.replaceRouteState === 'function') {
     const params = new URLSearchParams(location.search);
     params.delete('id'); params.delete('v');
-    window.parent.replaceRouteState('presentations' + (params.toString() ? '?' + params.toString() : ''));
+    params.set('view', 'history');
+    window.parent.replaceRouteState('presentations?' + params.toString());
   }
   presentationDetailReturnFocus?.focus?.();
 }
@@ -766,7 +764,7 @@ function getFilteredData() {
   return allData.filter(p => {
     const haystack = [parseStockName(p), p.stock_code, p.topic, p.members?.name]
       .filter(Boolean).join(' ').toLowerCase();
-    return (p.status || 'done') === currentTab &&
+    return (p.status || 'done') === 'done' &&
       (!member || p.member_id === member) &&
       (!cat || p.category === cat) &&
       (!presentationSearchTerm || haystack.includes(presentationSearchTerm));

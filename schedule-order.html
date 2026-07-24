@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 발표 준비</title>
-  <link rel="stylesheet" href="css/style.css?v=20260724.1">
+  <title>SSS · 발표 관리 · 준비 중</title>
+  <link rel="stylesheet" href="css/style.css?v=20260724.3">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -16,12 +16,12 @@
 
   <div class="topbar schedule-topbar">
     <div>
-      <h1 class="page-title">발표 준비</h1>
-      <div class="updated">다음 발표자 확인 · 순서 조정 · 발표종목 입력</div>
+      <h1 class="page-title">발표 관리</h1>
+      <div class="updated">다가오는 발표를 준비하고 지난 발표 성과를 확인합니다.</div>
     </div>
-    <nav class="schedule-view-tabs" aria-label="스터디 운영 화면 전환">
-      <button type="button" onclick="goToSchedulePage('schedule-calendar')">일정 보기</button>
-      <button type="button" class="active" aria-current="page">발표 준비</button>
+    <nav class="schedule-view-tabs" aria-label="발표 관리 화면 전환">
+      <button type="button" class="active" aria-current="page">준비 중</button>
+      <button type="button" onclick="goToSchedulePage('presentations?view=history')">발표 기록</button>
     </nav>
   </div>
 
@@ -54,13 +54,13 @@
       </div>
       <div id="memberPresPanel" class="presentation-member-list"></div>
     </section>
-    <p class="presentation-setup-note">날짜·시간·장소·회식 변경은 <button type="button" onclick="goToSchedulePage('schedule-calendar')">스터디 일정</button>에서 관리합니다.</p>
+    <p class="presentation-setup-note">달력과 날짜·시간·장소·회식 변경은 <button type="button" onclick="goToSchedulePage('schedule-calendar')">스터디 일정</button>에서 관리합니다.</p>
   </div>
 
 </main></div>
 
 <!-- 종목 상세 편집 모달 -->
-<div id="presEditModal">
+<div id="presEditModal" role="dialog" aria-modal="true" aria-labelledby="presEditModalTitle">
   <div class="modal-box">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
       <div id="presEditModalTitle" style="font-size:15px;font-weight:500;"></div>
@@ -95,7 +95,7 @@
   </div>
 </div>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
@@ -112,9 +112,11 @@ const requestedScheduleId = new URLSearchParams(location.search).get('schedule')
 // 종목 상세 편집 모달
 // ════════════════════════════════════════
 let _editDraft = null;
+let _presEditReturnFocus = null;
 
 function openPresEditModal(member, draft) {
   _editDraft  = draft;
+  _presEditReturnFocus = document.activeElement;
 
   const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
   document.getElementById('presEditModalTitle').textContent = member.name + ' — ' + topicName;
@@ -138,11 +140,14 @@ function openPresEditModal(member, draft) {
   calcEditPreview();
 
   document.getElementById('presEditModal').style.display = 'flex';
+  document.getElementById('edit-cur-cap').focus();
 }
 
 function closePresEditModal() {
   document.getElementById('presEditModal').style.display = 'none';
   _editDraft = null;
+  _presEditReturnFocus?.focus?.();
+  _presEditReturnFocus = null;
 }
 
 async function savePresEditModal() {
@@ -179,6 +184,11 @@ async function clearPresEditStock() {
 
 document.getElementById('presEditModal').addEventListener('click', e => {
   if (e.target === document.getElementById('presEditModal')) closePresEditModal();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.getElementById('presEditModal').style.display === 'flex') {
+    closePresEditModal();
+  }
 });
 
 // ── 다음 발표 종류

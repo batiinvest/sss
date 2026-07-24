@@ -1085,7 +1085,7 @@ html.in-iframe .main {
 .pres-stock-chip {
   display: flex; align-items: center; gap: 6px;
   border-radius: var(--r-md); padding: 5px 10px;
-  font-size: 12px; cursor: pointer;
+  font: inherit; font-size: 12px; text-align: left; cursor: pointer;
   flex: 1; min-width: 0; overflow: hidden;
   transition: opacity 0.15s;
 }
@@ -1770,6 +1770,97 @@ button:disabled { cursor: wait; opacity: 0.62; }
   cursor: pointer;
 }
 .schedule-view-tabs button.active { background: var(--accent); color: #fff; }
+.presentation-setup-shell {
+  width: min(100%, 920px);
+  margin: 0 auto;
+}
+.presentation-setup-card {
+  overflow: visible;
+  padding: 0;
+}
+.presentation-turn-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, #f3f8fe 0%, var(--surface) 72%);
+}
+.presentation-turn-copy { min-width: 0; }
+.presentation-turn-copy h2 { margin: 0; font-size: 17px; }
+.presentation-turn-guide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.presentation-turn-category {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e6f1fb;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.presentation-category-control {
+  flex: 0 0 190px;
+}
+.presentation-category-control > label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.presentation-category-control select,
+.presentation-category-control input {
+  width: 100%;
+  min-height: 38px;
+  font-size: 12px;
+}
+.presentation-category-control select:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+#industryNameWrap { margin-top: 7px; }
+.presentation-members-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 10px;
+}
+.presentation-members-head h2 { margin: 0; font-size: 14px; }
+.presentation-members-head #panelGuide {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.presentation-member-list { padding: 0 20px 10px; }
+.presentation-setup-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.presentation-setup-note button {
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
 .schedule-form-panel { width: min(100%, 760px); }
 .schedule-form-head { margin-bottom: 8px; }
 .schedule-form-body { padding-right: 0; padding-left: 0; }
@@ -1863,8 +1954,22 @@ button:disabled { cursor: wait; opacity: 0.62; }
 
 @media (max-width: 768px) {
   .schedule-topbar-actions { width: 100%; }
+  .schedule-topbar > .schedule-view-tabs { width: 100%; }
   .schedule-view-tabs { flex: 1; }
   .schedule-view-tabs button { min-height: 44px; padding: 0 10px; }
+  .presentation-turn-panel {
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+  }
+  .presentation-setup-card { padding: 0 !important; }
+  .presentation-category-control {
+    flex-basis: auto;
+    width: 100%;
+  }
+  .presentation-members-head { padding: 14px 16px 8px; }
+  .presentation-member-list { padding: 0 16px 8px; }
+  .presentation-setup-note { padding: 0 12px; }
   .schedule-add-button { min-height: 44px; }
   .schedule-overview-grid { display: flex !important; flex-direction: column; }
   .schedule-upcoming-card { order: -1; }
@@ -1904,6 +2009,17 @@ button:disabled { cursor: wait; opacity: 0.62; }
   .schedule-form-panel { max-height: 94dvh; }
   .schedule-form-actions { position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); margin: 10px -16px calc(-18px - env(safe-area-inset-bottom)); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); }
   .schedule-form-actions .btn { flex: 1; min-width: 0; }
+}
+
+@media (max-width: 600px) {
+  .presentation-member-list .pres-member-row {
+    flex-wrap: wrap;
+    padding: 10px 0;
+  }
+  .presentation-member-list .pres-member-row > div:last-child {
+    flex: 1 0 calc(100% - 36px) !important;
+    margin-left: 36px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

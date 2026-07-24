@@ -1,5 +1,5 @@
 // ============================================================
-// js/schedule-shared.js  v20260723
+// js/schedule-shared.js  v20260724
 // schedule-calendar.html + schedule-order.html 공통 모듈
 // ============================================================
 
@@ -18,9 +18,6 @@ let presentations = [];
 let calYear  = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-indexed
 
-let dragSrcMemberId   = null;
-let dragSrcScheduleId = null;
-let dragSrcPresId     = null;
 let editingScheduleId = null;
 
 // ── 공통 상수
@@ -640,8 +637,6 @@ async function reloadPresentations() {
 }
 
 function refreshPresentationScheduleViews() {
-  if (typeof renderPresOrderCalendar === 'function') renderPresOrderCalendar();
-  if (typeof renderPresScheduleList === 'function') renderPresScheduleList();
   if (typeof renderMemberPresPanel === 'function') renderMemberPresPanel();
   if (typeof updatePanelGuide === 'function') updatePanelGuide();
 }
@@ -651,6 +646,7 @@ function goToSchedulePage(pageName) {
   if (window.parent && window.parent.loadPage) {
     window.parent.loadPage(pageName);
   } else {
-    location.href = pageName + '.html';
+    const [page, query = ''] = String(pageName).split('?');
+    location.href = page + '.html' + (query ? '?' + query : '');
   }
 }

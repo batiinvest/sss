@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260722.2">
+  <link rel="stylesheet" href="css/style.css?v=20260724.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -48,7 +48,7 @@
           <h2 id="mobilePresentationOrderTitle">발표 순서</h2>
           <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
         </div>
-        <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('schedule-order')" aria-label="전체 발표 순서 보기">전체 보기 <span aria-hidden="true">→</span></button>
+        <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('schedule-order')" aria-label="발표 순서와 종목 관리">순서·종목 관리 <span aria-hidden="true">→</span></button>
       </div>
       <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
     </section>
@@ -83,7 +83,7 @@
         <h2 id="desktopPresentationOrderTitle">발표 순서</h2>
         <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
       </div>
-      <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('schedule-order')">전체 순서 보기 <span aria-hidden="true">→</span></button>
+      <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('schedule-order')">순서·종목 관리 <span aria-hidden="true">→</span></button>
     </div>
     <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
   </section>
@@ -223,7 +223,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
       <div>
         <div id="pres-modal-title" style="font-size:15px;font-weight:500;">발표종목 입력</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">내 발표종목 입력 · 스터디 일정 탭에서 날짜 배정</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">발표 순서와 스터디 일정에 맞춰 날짜가 자동 배정됩니다.</div>
       </div>
       <button class="btn" onclick="closePresModal()" style="font-size:12px;">닫기</button>
     </div>
@@ -245,7 +245,7 @@
 
     <!-- 하단 버튼 -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border);">
-      <div><span id="pm-save-status" role="status" aria-live="polite" style="display:block;font-size:12px;color:var(--green);">변경 내용은 자동 저장됩니다.</span><span style="font-size:11px;color:var(--muted);">저장 후 스터디 일정에서 날짜를 배정하세요.</span></div>
+      <div><span id="pm-save-status" role="status" aria-live="polite" style="display:block;font-size:12px;color:var(--green);">변경 내용은 자동 저장됩니다.</span><span style="font-size:11px;color:var(--muted);">내 차례의 스터디 일정에 자동 연결됩니다.</span></div>
       <button class="btn btn-primary" style="font-size:13px;" onclick="closePresModal()">완료</button>
     </div>
   </div>
@@ -258,7 +258,7 @@
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260723.2"></script>
-<script src="js/schedule-shared.js?v=20260723.2"></script>
+<script src="js/schedule-shared.js?v=20260724.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
 <script src="js/modal-pres.js?v=20260723.2"></script>
 <script>

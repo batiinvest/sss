@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260722.3">
+  <link rel="stylesheet" href="css/style.css?v=20260724.1">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -122,7 +122,7 @@
 
     <div class="nav-section-label">스터디</div>
     <a href="#" onclick="loadPage('schedule-calendar');return false;" class="nav-item" data-page="schedule-calendar"><div class="nav-dot g"></div>스터디 일정</a>
-    <a href="#" onclick="loadPage('schedule-order');return false;" class="nav-item" data-page="schedule-order"><div class="nav-dot g"></div>발표 순서</a>
+    <a href="#" onclick="loadPage('schedule-order');return false;" class="nav-item" data-page="schedule-order"><div class="nav-dot g"></div>발표 준비</a>
     <a href="#" onclick="loadPage('presentations');return false;" class="nav-item" data-page="presentations"><div class="nav-dot g"></div>발표종목</a>
     <a href="#" onclick="loadPage('fees');return false;"          class="nav-item" data-page="fees"><div class="nav-dot a"></div>스터디 회비</a>
 
@@ -180,7 +180,7 @@
     <div class="app-sheet-handle" aria-hidden="true"></div>
     <div class="app-sheet-head"><div><h2 id="quickAddTitle">빠른 등록</h2><p>하려는 작업을 선택하세요.</p></div><button type="button" class="app-sheet-close" onclick="closeQuickAdd()" aria-label="등록 메뉴 닫기">×</button></div>
     <div class="sheet-action-list">
-      <button type="button" onclick="runQuickRoute('schedule-calendar?action=new')"><strong>스터디 일정 등록</strong><span>날짜와 발표자·종목을 함께 등록합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('schedule-calendar?action=new')"><strong>스터디 일정 등록</strong><span>날짜·시간·장소를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('index?action=presentation')"><strong>발표종목 등록</strong><span>발표할 종목을 먼저 저장합니다.</span></button>
       <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>투자종목 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=buy')"><strong>매수 등록</strong><span>보유를 시작하거나 추가 매수합니다.</span></button>
@@ -198,7 +198,7 @@
       <button type="button" onclick="runMoreRoute('mypage')">내 정보</button>
       <button type="button" onclick="runMoreRoute('trade')">매수·매도</button>
       <button type="button" onclick="runMoreRoute('schedule-calendar')">스터디 일정</button>
-      <button type="button" onclick="runMoreRoute('schedule-order')">발표 순서</button>
+      <button type="button" onclick="runMoreRoute('schedule-order')">발표 준비</button>
       <button type="button" onclick="runMoreRoute('fees')">스터디 회비</button>
       <button type="button" onclick="runMoreRoute('settle')">결산 관리</button>
       <button type="button" onclick="runMoreRoute('members')">참여자 현황</button>
@@ -225,7 +225,7 @@ const PAGE_LABELS = {
   picks: '투자종목',
   trade: '매수·매도',
   'schedule-calendar': '스터디 일정',
-  'schedule-order': '발표 순서',
+  'schedule-order': '발표 준비',
   fees: '스터디 회비',
   settle: '결산 관리',
   members: '참여자 현황',
@@ -253,7 +253,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260722.3');
+  params.set('v', '20260724.1');
   return parsed.page + '.html?' + params.toString();
 }
 

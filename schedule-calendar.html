@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260722.3">
+  <link rel="stylesheet" href="css/style.css?v=20260724.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -19,9 +19,9 @@
       <div class="updated">발표 일정마다 3명 자동 편성 · 회식으로 바꾸면 다음 스터디로 순연</div>
     </div>
     <div class="schedule-topbar-actions">
-      <nav class="schedule-view-tabs" aria-label="일정 화면 전환">
+      <nav class="schedule-view-tabs" aria-label="스터디 운영 화면 전환">
         <button type="button" class="active" aria-current="page">일정</button>
-        <button type="button" onclick="goToSchedulePage('schedule-order')">발표 순서</button>
+        <button type="button" onclick="goToSchedulePage('schedule-order')">발표 준비</button>
       </nav>
       <button type="button" class="btn btn-primary schedule-add-button" onclick="openForm()">+ 일정 추가</button>
     </div>
@@ -48,7 +48,7 @@
         </div>
         <div class="form-group">
           <label for="s-category">구분</label>
-          <select id="s-category" onchange="onCategoryChange(this.value)">
+          <select id="s-category">
             <option value="industry">산업 분석</option>
             <option value="stock">종목 분석</option>
             <option value="dinner">회식</option>
@@ -75,13 +75,6 @@
           <label for="s-member">등록자</label>
           <select id="s-member"><option value="">선택 (선택사항)</option></select>
         </div>
-      </div>
-      <div id="presentationSection" style="display:none;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <div id="presentationLabel" style="font-size:12px;color:var(--muted);font-weight:500;">발표 목록</div>
-          <button type="button" class="btn" style="font-size:12px;" onclick="addPresenter()">+ 발표자 추가</button>
-        </div>
-        <div id="presentationList" style="display:flex;flex-direction:column;gap:12px;"></div>
       </div>
       <div class="form-group">
         <label for="s-desc">메모</label>
@@ -175,17 +168,13 @@
       <p id="detailNote"></p>
     </div>
 
-    <!-- 발표 종목 섹션 -->
+    <!-- 자동 발표 순서 (읽기 전용) -->
     <div id="plannedSection" class="detail-section">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <h3>발표 종목</h3>
-        <button type="button" class="btn" id="addPlannedBtn" onclick="addPlannedRow()">+ 종목 추가</button>
+        <h3>자동 발표 순서</h3>
+        <button type="button" class="btn" id="detailPresentationBtn">순서·종목 관리</button>
       </div>
       <div id="plannedList" style="display:flex;flex-direction:column;gap:4px;"></div>
-      <div id="plannedSaveRow" style="display:none;justify-content:flex-end;margin-top:8px;gap:6px;">
-        <button type="button" class="btn" onclick="document.querySelectorAll('.planned-new-row').forEach(r=>r.remove());document.getElementById('plannedSaveRow').style.display='none';">취소</button>
-        <button type="button" class="btn btn-primary" onclick="savePlannedItems()">저장</button>
-      </div>
     </div>
 
     <div class="detail-actions">
@@ -202,7 +191,7 @@
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
 <script src="js/db.js?v=20260723.2"></script>
-<script src="js/schedule-shared.js?v=20260723.2"></script>
+<script src="js/schedule-shared.js?v=20260724.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -210,16 +199,8 @@ let selectedCalendarDate = null;
 let formReturnFocus = null;
 let detailReturnFocus = null;
 let formInitialState = '';
+let formLegacyPresentationPrefix = '';
 let presOrder = [];
-
-function presentationBelongsToSchedule(presentation, scheduleId, date) {
-  if (presentation.schedule_id) return presentation.schedule_id === scheduleId;
-  if (presentation.presented_at !== date) return false;
-  const sameDayTalks = schedules.filter(schedule =>
-    schedule.event_date === date && ['industry', 'stock'].includes(schedule.category)
-  );
-  return sameDayTalks.length === 1 && sameDayTalks[0].id === scheduleId;
-}
 
 function refreshSchedulePageViews() {
   renderCalendar();
@@ -659,8 +640,9 @@ function renderScheduleList() {
 }
 
 // ── 폼
-function extractScheduleMemo(description) {
+function splitScheduleDescription(description) {
   let text = String(description || '').replace(/\r/g, '').trim();
+  const presentationBlocks = [];
   while (text) {
     const lines = text.split('\n');
     if (!/^[《【].+[》】]$/.test((lines[0] || '').trim())) break;
@@ -671,10 +653,18 @@ function extractScheduleMemo(description) {
       index += 1;
     }
     if (!foundPresentation) break;
+    presentationBlocks.push(lines.slice(0, index).join('\n').trim());
     while (index < lines.length && !lines[index].trim()) index += 1;
     text = lines.slice(index).join('\n').trim();
   }
-  return text;
+  return {
+    presentationPrefix: presentationBlocks.join('\n\n'),
+    memo: text,
+  };
+}
+
+function extractScheduleMemo(description) {
+  return splitScheduleDescription(description).memo;
 }
 
 function showScheduleFormError(message, field) {
@@ -705,94 +695,22 @@ function openForm(prefill={}) {
   document.getElementById('s-title').value    = prefill.title       || '';
   const catVal = prefill.category || 'industry';
   document.getElementById('s-category').value = catVal;
-  clearPresentationList();
-  onCategoryChange(catVal);
   document.getElementById('s-date').value     = prefill.event_date  || '';
   document.getElementById('s-time').value     = prefill.event_time
     ? prefill.event_time.slice(0,5)
     : (editingScheduleId ? '' : '20:00');
   document.getElementById('s-location').value = prefill.location    || '';
   document.getElementById('s-member').value   = prefill.created_by  || '';
-  document.getElementById('s-desc').value     = prefill.description || '';
-
-  // 수정 시 기존 발표자+종목 데이터 로드
-  if (prefill.category === 'stock' || prefill.category === 'industry') {
-    // 1순위: presentations 테이블
-    const schedulePresentations = prefill.id ? presentations.filter(p =>
-      presentationBelongsToSchedule(p, prefill.id, prefill.event_date)
-    ) : [];
-    const existingPres = schedulePresentations.filter(p => p.status === 'planned');
-
-    if (existingPres.length > 0) {
-      document.getElementById('s-desc').value = extractScheduleMemo(prefill.description);
-      if (prefill.category === 'industry') {
-        const industryName = schedulePresentations
-          .map(p => p.topic?.includes('>') ? p.topic.split('>')[0].trim() : '')
-          .find(Boolean);
-        const industryInput = document.getElementById('industryName');
-        if (industryInput && industryName) industryInput.value = industryName;
-      }
-      existingPres.forEach(p => {
-        const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic||'');
-        addPresenter();
-        const rows = document.querySelectorAll('.pres-card');
-        const lastRow = rows[rows.length - 1];
-        if (!lastRow) return;
-        const mSel    = lastRow.querySelector('.pres-member');
-        const sTxtEl  = lastRow.querySelector('.pres-stock-input');
-        const sCodeEl = lastRow.querySelector('.pres-stock-code');
-        const sPriceEl = lastRow.querySelector('.pres-price-at');
-        const sCapEl = lastRow.querySelector('.pres-cap-at');
-        lastRow.dataset.presentationId = p.id;
-        if (mSel && p.member_id)     mSel.value = p.member_id;
-        if (sTxtEl && topicName)     sTxtEl.value = topicName;
-        if (sCodeEl && p.stock_code) sCodeEl.value = p.stock_code;
-        if (sPriceEl && p.price_at) sPriceEl.value = p.price_at;
-        if (sCapEl && p.market_cap_at) sCapEl.value = p.market_cap_at;
-      });
-    } else if (!schedulePresentations.length && prefill.description) {
-      // 2순위: description 텍스트 파싱 (기존 데이터)
-      // 형식: "종목 — 발표자" 또는 "1. 종목 — 발표자"
-      const rawLines = prefill.description ? prefill.description.split(String.fromCharCode(10)) : [];
-      const lines = rawLines.map(l => l.trim()).filter(l => l.includes('—') || l.includes('-'));
-
-      lines.forEach(line => {
-        // "1. 비에이치 — 이태진" → 종목: 비에이치, 발표자: 이태진
-        const clean = line.replace(/^\d+\.\s*/, '').trim();
-        const parts = clean.split(/\s*[—-]+\s*/);
-        if (parts.length < 2) return;
-
-        // 종목명이 앞인지 뒤인지 판단 (멤버 이름 매칭)
-        const part0 = parts[0].trim();
-        const part1 = parts[1].trim();
-        const memberByName = members.find(m => m.name === part1 || m.name === part0);
-
-        let stockName, memberName;
-        if (memberByName && memberByName.name === part1) {
-          stockName  = part0;
-          memberName = part1;
-        } else if (memberByName && memberByName.name === part0) {
-          stockName  = part1;
-          memberName = part0;
-        } else {
-          stockName  = part0;
-          memberName = part1;
-        }
-
-        addPresenter();
-        const rows = document.querySelectorAll('.pres-card');
-        const lastRow = rows[rows.length - 1];
-        if (!lastRow) return;
-        const mSel   = lastRow.querySelector('.pres-member');
-        const sTxtEl = lastRow.querySelector('.pres-stock-input');
-        if (sTxtEl) sTxtEl.value = stockName;
-        if (mSel) {
-          const member = members.find(m => m.name === memberName);
-          if (member) mSel.value = member.id;
-        }
-      });
-    }
-  }
+  const descriptionParts = splitScheduleDescription(prefill.description);
+  const hasStoredTopics = prefill.id && getLinkedSchedulePresentations(
+    prefill,
+    schedules,
+    presentations
+  ).some(presentation => presentation.topic);
+  formLegacyPresentationPrefix = hasStoredTopics
+    ? ''
+    : descriptionParts.presentationPrefix;
+  document.getElementById('s-desc').value = descriptionParts.memo;
 
   formInitialState = getScheduleFormState();
 
@@ -807,6 +725,7 @@ function closeForm(force = false) {
   if (!force && isScheduleFormDirty() && !confirm('작성 중인 내용이 있습니다. 입력을 취소할까요?')) return false;
   editingScheduleId = null;
   formInitialState = '';
+  formLegacyPresentationPrefix = '';
   const modal = document.getElementById('scheduleForm');
   modal.classList.remove('open');
   modal.hidden = true;
@@ -828,7 +747,11 @@ async function saveSchedule(event) {
   const time     = document.getElementById('s-time').value || null;
   const location = document.getElementById('s-location').value.trim() || null;
   const memberId = document.getElementById('s-member').value || null;
-  let desc = document.getElementById('s-desc').value.trim() || '';
+  const memo     = document.getElementById('s-desc').value.trim();
+  const desc     = [formLegacyPresentationPrefix, memo].filter(Boolean).join('\n\n') || null;
+  const previousCategory = editingScheduleId
+    ? schedules.find(schedule => String(schedule.id) === String(editingScheduleId))?.category
+    : null;
 
   showScheduleFormError('');
 
@@ -840,43 +763,6 @@ async function saveSchedule(event) {
     showScheduleFormError('일정 날짜를 선택하세요.', document.getElementById('s-date'));
     return;
   }
-
-  // 발표 목록 수집
-  const presCards = ['industry', 'stock'].includes(category)
-    ? document.querySelectorAll('.pres-card')
-    : [];
-  const presLines = [];
-  for (const [i, card] of Array.from(presCards).entries()) {
-    const stockName = card.querySelector('.pres-stock-input')?.value?.trim() || '';
-    const memberSel = card.querySelector('.pres-member');
-    const memberId = memberSel?.value || '';
-    const memberName = memberSel?.selectedOptions[0]?.text || '';
-    if (!stockName || !memberId) {
-      const field = !stockName ? card.querySelector('.pres-stock-input') : memberSel;
-      showScheduleFormError(`${i + 1}번째 발표의 종목과 발표자를 모두 입력하세요.`, field);
-      return;
-    }
-    presLines.push((i+1) + '. ' + stockName + ' — ' + memberName);
-  }
-
-  // 산업 분석이면 테마명 포함
-  if (presLines.length > 0) {
-    let header = '';
-    if (category === 'industry') {
-      const industryInput = document.getElementById('industryName');
-      const industryName = industryInput?.value?.trim() || '';
-      if (!industryName) {
-        showScheduleFormError('산업/테마명을 입력하세요.', industryInput);
-        return;
-      }
-      header = '《' + industryName + '》';
-    } else {
-      header = '《종목 분석》';
-    }
-    const ps = header + '\n' + presLines.join('\n');
-    desc = desc ? ps + '\n\n' + desc : ps;
-  }
-  desc = desc || null;
 
   const btn = document.getElementById('saveScheduleBtn');
   btn.textContent = '저장 중...'; btn.disabled = true;
@@ -894,78 +780,29 @@ async function saveSchedule(event) {
       if (!editingScheduleId) throw new Error('저장된 일정 ID를 확인하지 못했습니다.');
     }
 
-    // 산업/종목 분석이면 presentations 테이블에 저장
-    const targetScheduleId = editingScheduleId || savedSchedule?.id;
-    if ((category === 'industry' || category === 'stock') && targetScheduleId) {
-      const presCards = document.querySelectorAll('.pres-card');
-      const industryName = category === 'industry'
-        ? (document.getElementById('industryName')?.value?.trim() || '')
-        : null;
+    if (
+      editingScheduleId &&
+      previousCategory &&
+      previousCategory !== category &&
+      ['industry', 'stock'].includes(category)
+    ) {
+      const linkedPlanned = presentations.filter(presentation =>
+        String(presentation.schedule_id || '') === String(editingScheduleId) &&
+        presentation.status === 'planned'
+      );
+      const results = await Promise.all(linkedPlanned.map(presentation => {
+        const topic = category === 'stock' && presentation.topic?.includes('>')
+          ? presentation.topic.split('>').pop().trim()
+          : presentation.topic;
+        return sb.from('presentations')
+          .update({ category, topic })
+          .eq('id', presentation.id);
+      }));
+      const failed = results.find(result => result.error);
+      if (failed?.error) throw failed.error;
+    }
 
-      const presentationPayloads = [];
-      const presentationUpdates = [];
-      const retainedPresentationIds = new Set();
-      for (const card of presCards) {
-        const stockName = card.querySelector('.pres-stock-input')?.value?.trim() || '';
-        const stockCode = card.querySelector('.pres-stock-code')?.value || null;
-        const priceAt   = parseInt(card.querySelector('.pres-price-at')?.value) || null;
-        const capAt     = parseInt(card.querySelector('.pres-cap-at')?.value) || null;
-        const memberSel = card.querySelector('.pres-member');
-        const memberId  = memberSel?.value || null;
-
-        if (!stockName || !memberId) continue;
-
-        const topic = industryName ? industryName + ' > ' + stockName : stockName;
-
-        const basePayload = {
-          schedule_id:   targetScheduleId,
-          member_id:     memberId,
-          category:      category,
-          topic:         topic,
-          stock_code:    stockCode,
-          price_at:      priceAt,
-          market_cap_at: capAt,
-          presented_at:  date,
-        };
-        const presentationId = card.dataset.presentationId;
-        if (presentationId) {
-          retainedPresentationIds.add(presentationId);
-          presentationUpdates.push(
-            sb.from('presentations').update(basePayload).eq('id', presentationId)
-          );
-        } else {
-          presentationPayloads.push({ ...basePayload, status: 'planned' });
-        }
-      }
-      if (presentationUpdates.length) {
-        const results = await Promise.all(presentationUpdates);
-        const failed = results.find(result => result.error);
-        if (failed?.error) throw failed.error;
-      }
-      if (presentationPayloads.length) {
-        const { error } = await sb.from('presentations').insert(presentationPayloads);
-        if (error) throw error;
-      }
-
-      // 폼에서 제외된 기존 발표는 삭제하지 않고 일정 연결만 해제한다.
-      // 작성해 둔 사유·리스크·목표값과 원본 ID를 안전하게 보존한다.
-      if (editingScheduleId) {
-        const removedIds = presentations
-          .filter(p =>
-            p.schedule_id === editingScheduleId &&
-            p.status === 'planned' &&
-            !retainedPresentationIds.has(String(p.id))
-          )
-          .map(p => p.id);
-        if (removedIds.length) {
-          const { error } = await sb.from('presentations')
-            .update({ schedule_id: null, presented_at: null })
-            .in('id', removedIds);
-          if (error) throw error;
-        }
-      }
-
-    } else if (editingScheduleId) {
+    if (!['industry', 'stock'].includes(category) && editingScheduleId) {
       // 발표 일정에서 회식·기타로 바뀌면 작성 중인 발표만 연결 해제한다.
       // 완료 기록은 이력 보존을 위해 수정하지 않는다.
       const linkedPlannedIds = presentations
@@ -1084,8 +921,6 @@ async function confirmDelete(id) {
 }
 
 // ── 상세 모달
-let currentDetailScheduleId = null;
-
 async function showDetail(id, e) {
   if (e) e.stopPropagation();
   detailReturnFocus = document.activeElement;
@@ -1096,7 +931,6 @@ async function showDetail(id, e) {
     s = schedules.find(s => s.id === id);
   }
   if (!s) { console.warn('일정을 찾을 수 없음:', id); return; }
-  currentDetailScheduleId = id;
 
   document.getElementById('detailTitle').textContent = s.title;
   document.getElementById('detailBody').innerHTML = [
@@ -1113,6 +947,8 @@ async function showDetail(id, e) {
   document.getElementById('detailEditBtn').onclick   = () => { closeDetail(); editSchedule(id); };
   document.getElementById('detailDeleteBtn').onclick = () => { closeDetail(); confirmDelete(id); };
   document.getElementById('detailKakaoShareBtn').onclick = (event) => shareScheduleToKakao(id, event);
+  document.getElementById('detailPresentationBtn').onclick = () =>
+    goToSchedulePage('schedule-order?schedule=' + encodeURIComponent(id));
   const modal = document.getElementById('detailModal');
   modal.hidden = false;
   requestAnimationFrame(() => modal.classList.add('open'));
@@ -1134,10 +970,14 @@ async function loadPlannedItems(scheduleId, s) {
 
   // 실제 발표 내용과 자동 편성된 발표자 슬롯을 함께 표시한다.
   const filteredItems = getSchedulePresentations(scheduleId, s.event_date);
+  const manageButton = document.getElementById('detailPresentationBtn');
+  if (manageButton) {
+    manageButton.hidden = !filteredItems.length || s.event_date < toDateStr(new Date());
+  }
 
   listEl.innerHTML = '';
   if (!filteredItems || !filteredItems.length) {
-    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">등록된 발표 종목이 없습니다.</div>';
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">편성된 발표자가 없습니다.</div>';
     return;
   }
 
@@ -1171,22 +1011,8 @@ async function loadPlannedItems(scheduleId, s) {
       statusSpan.style.cssText = 'font-size:10px;color:#185fa5;padding:1px 6px;background:#e8f2fb;border-radius:4px;white-space:nowrap;';
       statusSpan.textContent = '자동 순서';
     } else {
-      const delBtn = document.createElement('button');
-      delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;';
-      delBtn.textContent = '✕';
-      delBtn.onclick = async () => {
-        if (!confirm('이 발표종목을 일정에서 제외할까요?\n작성한 아이디어와 리스크는 삭제하지 않고 보관합니다.')) return;
-        const { error } = await sb.from('presentations')
-          .update({ schedule_id: null, presented_at: null })
-          .eq('id', item.id);
-        if (error) { toast('일정에서 제외하지 못했습니다: ' + error.message); return; }
-        presentations = await sb.from('presentations')
-          .select('*, members(name)').order('created_at').then(r => r.data || []);
-        await loadPlannedItems(scheduleId, s);
-        refreshSchedulePageViews();
-        toast('일정에서 제외했습니다. 발표 내용은 보관됩니다.');
-      };
-      statusSpan.appendChild(delBtn);
+      statusSpan.style.cssText = 'font-size:10px;color:var(--muted);padding:1px 6px;background:var(--surface);border:1px solid var(--border);border-radius:4px;white-space:nowrap;';
+      statusSpan.textContent = '예정';
     }
 
     row.appendChild(dot);
@@ -1197,93 +1023,6 @@ async function loadPlannedItems(scheduleId, s) {
   });
 }
 
-function addPlannedRow() {
-  const listEl  = document.getElementById('plannedList');
-  const saveRow = document.getElementById('plannedSaveRow');
-
-  if (listEl.querySelector('[style*="등록된"]') || listEl.querySelector('[style*="불러오는"]')) {
-    listEl.innerHTML = '';
-  }
-
-  const row = document.createElement('div');
-  row.className = 'planned-new-row';
-  row.style.cssText = 'display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;margin-bottom:4px;';
-
-  const stockWrap = document.createElement('div');
-  stockWrap.style.position = 'relative';
-  const stockInput = document.createElement('input');
-  stockInput.type = 'text';
-  stockInput.className = 'pres-stock-input';
-  stockInput.placeholder = '종목명 검색';
-  stockInput.style.cssText = 'font-size:12px;width:100%;padding:5px 8px;';
-  stockInput.oninput = function() { presStockSearch(this); };
-
-  const dd = document.createElement('div');
-  dd.className = 'pres-stock-dropdown';
-  dd.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:400;' +
-    'background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r-md);' +
-    'box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;';
-  const stockCode  = document.createElement('input'); stockCode.type = 'hidden'; stockCode.className = 'pres-stock-code';
-  const stockPrice = document.createElement('input'); stockPrice.type = 'hidden'; stockPrice.className = 'pres-price-at';
-  const stockCap   = document.createElement('input'); stockCap.type = 'hidden'; stockCap.className = 'pres-cap-at';
-  stockWrap.append(stockInput, dd, stockCode, stockPrice, stockCap);
-
-  const memberSel = document.createElement('select');
-  memberSel.className = 'pres-member';
-  memberSel.style.cssText = 'font-size:12px;padding:5px 8px;';
-  memberSel.innerHTML = '<option value="">발표자</option>' +
-    members.map(m => '<option value="' + m.id + '">' + m.name + '</option>').join('');
-
-  const delBtn = document.createElement('button');
-  delBtn.textContent = '✕';
-  delBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;';
-  delBtn.onclick = () => row.remove();
-
-  row.append(stockWrap, memberSel, delBtn);
-  listEl.appendChild(row);
-  if (saveRow) saveRow.style.display = 'flex';
-  stockInput.focus();
-}
-
-async function savePlannedItems() {
-  const scheduleId = currentDetailScheduleId;
-  if (!scheduleId) return;
-  const s = schedules.find(s => s.id === scheduleId);
-  if (!s) return;
-
-  const newRows = document.querySelectorAll('.planned-new-row');
-  const presentationPayloads = [];
-  for (const row of newRows) {
-    const stockName = row.querySelector('.pres-stock-input')?.value?.trim();
-    const stockCode = row.querySelector('.pres-stock-code')?.value || null;
-    const priceAt   = parseInt(row.querySelector('.pres-price-at')?.value) || null;
-    const capAt     = parseInt(row.querySelector('.pres-cap-at')?.value)   || null;
-    const memberId  = row.querySelector('.pres-member')?.value || null;
-    if (!stockName || !memberId) { toast('종목명과 발표자를 입력하세요.'); return; }
-
-    const topic = s.category === 'industry' && s.title
-      ? s.title + ' > ' + stockName : stockName;
-
-    presentationPayloads.push({
-      schedule_id: scheduleId, member_id: memberId,
-      category: s.category, topic,
-      stock_code: stockCode, price_at: priceAt, market_cap_at: capAt,
-      presented_at: s.event_date, status: 'planned',
-    });
-  }
-
-  if (!presentationPayloads.length) return;
-  const { error } = await sb.from('presentations').insert(presentationPayloads);
-  if (error) { toast('저장 오류: ' + error.message); return; }
-  const saved = presentationPayloads.length;
-  toast('✅ ' + saved + '개 발표 종목 저장');
-  presentations = await sb.from('presentations')
-    .select('*, members(name)').order('created_at').then(r => r.data || []);
-  await loadPlannedItems(scheduleId, s);
-  document.getElementById('plannedSaveRow').style.display = 'none';
-  refreshSchedulePageViews();
-}
-
 function closeDetail() {
   const modal = document.getElementById('detailModal');
   modal.classList.remove('open');
@@ -1291,205 +1030,6 @@ function closeDetail() {
   if (!document.getElementById('scheduleForm').classList.contains('open')) document.body.classList.remove('sheet-open');
   detailReturnFocus?.focus?.();
 }
-
-
-// ── 구분 변경 시 동적 필드 표시
-function onCategoryChange(val) {
-  const section = document.getElementById('presentationSection');
-  const label   = document.getElementById('presentationLabel');
-  if (val === 'industry') {
-    section.style.display = 'block';
-    label.textContent = '발표 목록 — 산업명 입력 후 종목·발표자 순서대로 추가하세요';
-    // 산업명 입력란 표시
-    let industryRow = document.getElementById('industryNameRow');
-    if (!industryRow) {
-      industryRow = document.createElement('div');
-      industryRow.id = 'industryNameRow';
-      industryRow.className = 'form-group';
-      industryRow.style.marginBottom = '8px';
-      industryRow.innerHTML =
-        '<label for="industryName" style="font-size:11px;color:var(--muted);">산업/테마명 *</label>' +
-        '<input type="text" id="industryName" placeholder="예: CPO 관련주, 2차전지, AI 반도체" ' +
-        'style="font-size:13px;" />';
-      section.insertBefore(industryRow, document.getElementById('presentationList'));
-    }
-    industryRow.style.display = 'block';
-  } else if (val === 'stock') {
-    section.style.display = 'block';
-    label.textContent = '발표 목록 — 발표자와 종목을 순서대로 추가하세요';
-    const industryRow = document.getElementById('industryNameRow');
-    if (industryRow) industryRow.style.display = 'none';
-  } else {
-    section.style.display = 'none';
-  }
-}
-
-// 발표 항목 추가 (산업/종목 분석 공통)
-function addPresenter() {
-  const list     = document.getElementById('presentationList');
-  const category = document.getElementById('s-category').value;
-  const idx      = list.children.length;
-
-  const card = document.createElement('div');
-  card.className = 'pres-card';
-  card.style.cssText = 'background:var(--bg);border-radius:var(--r-md);padding:10px 12px;position:relative;';
-
-  // 순번 + 삭제 버튼
-  const header = document.createElement('div');
-  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
-  header.innerHTML =
-    '<span class="pres-num" style="font-size:12px;font-weight:500;color:var(--muted);">' + (idx+1) + '번째 발표</span>' +
-    '<button type="button" onclick="removePresenter(this)" ' +
-    'style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0;">✕ 삭제</button>';
-
-  // 종목 검색 (자동완성)
-  const stockRow = document.createElement('div');
-  stockRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;';
-
-  // 종목 검색 입력
-  const stockWrap = document.createElement('div');
-  stockWrap.style.position = 'relative';
-  const stockInput = document.createElement('input');
-  stockInput.type = 'text';
-  stockInput.className = 'pres-stock-input';
-  stockInput.placeholder = '종목명 검색 (예: 대한광통신)';
-  stockInput.style.cssText = 'font-size:13px;width:100%;';
-  stockInput.oninput = function() { presStockSearch(this); };
-
-  const stockDropdown = document.createElement('div');
-  stockDropdown.className = 'pres-stock-dropdown';
-  stockDropdown.style.cssText =
-    'display:none;position:absolute;top:100%;left:0;right:0;z-index:300;' +
-    'background:var(--surface);border:0.5px solid var(--border2);' +
-    'border-radius:var(--r-md);box-shadow:0 4px 12px rgba(0,0,0,0.1);' +
-    'max-height:180px;overflow-y:auto;margin-top:2px;';
-
-  // 숨겨진 데이터 저장
-  const stockCode  = document.createElement('input'); stockCode.type = 'hidden'; stockCode.className = 'pres-stock-code';
-  const stockPrice = document.createElement('input'); stockPrice.type = 'hidden'; stockPrice.className = 'pres-price-at';
-  const stockCap   = document.createElement('input'); stockCap.type = 'hidden'; stockCap.className = 'pres-cap-at';
-
-  stockWrap.appendChild(stockInput);
-  stockWrap.appendChild(stockDropdown);
-  stockWrap.appendChild(stockCode);
-  stockWrap.appendChild(stockPrice);
-  stockWrap.appendChild(stockCap);
-
-  // 발표자 선택
-  const memberWrap = document.createElement('div');
-  const memberSel  = document.createElement('select');
-  memberSel.className = 'pres-member';
-  memberSel.style.cssText = 'font-size:13px;width:100%;';
-  memberSel.innerHTML = '<option value="">발표자 선택</option>' +
-    members.map(m => '<option value="' + m.id + '" data-name="' + m.name + '">' + m.name + '</option>').join('');
-  memberWrap.appendChild(memberSel);
-
-  stockRow.appendChild(stockWrap);
-  stockRow.appendChild(memberWrap);
-
-  // 현재가 표시 배지
-  const priceBadge = document.createElement('div');
-  priceBadge.className = 'pres-price-badge';
-  priceBadge.style.cssText = 'font-size:12px;color:var(--muted);display:none;';
-
-  card.appendChild(header);
-  card.appendChild(stockRow);
-  card.appendChild(priceBadge);
-  list.appendChild(card);
-
-  stockInput.focus();
-}
-
-function removePresenter(btn) {
-  btn.closest('.pres-card').remove();
-  document.querySelectorAll('.pres-num').forEach((el, i) => {
-    el.textContent = (i+1) + '번째 발표';
-  });
-}
-
-// 종목 자동완성 검색
-let presSearchTimer = null;
-function presStockSearch(input) {
-  clearTimeout(presSearchTimer);
-  const q  = input.value.trim();
-  const dd = input.parentElement.querySelector('.pres-stock-dropdown');
-  if (q.length < 2) { dd.style.display = 'none'; return; }
-
-  presSearchTimer = setTimeout(async () => {
-    const data = await searchStockPrices(q, 10);
-    if (!data.length) { dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);">검색 결과 없음</div>'; dd.style.display = 'block'; return; }
-
-    dd.innerHTML = '';
-    data.forEach(s => {
-      const item = document.createElement('div');
-      item.className = 'pres-dd-item';
-      item.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer;border-bottom:0.5px solid var(--border);font-size:12px;';
-      item.dataset.code   = s.stock_code;
-      item.dataset.name   = s.stock_name;
-      item.dataset.price  = s.price || 0;
-      item.dataset.cap    = s.market_cap || 0;
-      item.dataset.market = s.market;
-      item.dataset.change = s.change_rate || 0;
-      const sign = (s.change_rate||0) >= 0 ? '+' : '';
-      const cl   = (s.change_rate||0) >= 0 ? 'color:#0f6e56' : 'color:#a32d2d';
-      item.innerHTML =
-        '<div><span style="font-weight:500;">' + s.stock_name + '</span>' +
-        '<span style="color:var(--muted);margin-left:6px;">' + s.stock_code + ' · ' + s.market + '</span></div>' +
-        '<div style="text-align:right;"><div style="font-weight:500;">' + (s.price||0).toLocaleString() + '\uC6D0</div>' +
-        '<div style="' + cl + '">' + sign + (s.change_rate||0).toFixed(2) + '%</div></div>';
-      item.addEventListener('click', () => selectPresStockEl(item));
-      item.addEventListener('mouseenter', () => item.style.background = 'var(--bg)');
-      item.addEventListener('mouseleave', () => item.style.background = '');
-      dd.appendChild(item);
-    });
-    dd.style.display = 'block';
-
-    dd.querySelectorAll('.pres-dd-item').forEach(el => {
-      el.addEventListener('mouseenter', () => el.style.background = 'var(--bg)');
-      el.addEventListener('mouseleave', () => el.style.background = '');
-    });
-  }, 300);
-}
-
-function selectPresStockEl(el) {
-  const code   = el.dataset.code;
-  const name   = el.dataset.name;
-  const price  = parseInt(el.dataset.price)  || 0;
-  const cap    = parseInt(el.dataset.cap)    || 0;
-  const change = parseFloat(el.dataset.change) || 0;
-
-  const dd   = el.closest('.pres-stock-dropdown');
-  const wrap = dd.parentElement;
-  const card = wrap.closest('.pres-card');
-
-  wrap.querySelector('.pres-stock-input').value = name;
-  wrap.querySelector('.pres-stock-code').value  = code;
-  wrap.querySelector('.pres-price-at').value    = price;
-  wrap.querySelector('.pres-cap-at').value      = cap;
-  dd.style.display = 'none';
-
-  const badge = card.querySelector('.pres-price-badge');
-  const sign  = change >= 0 ? '+' : '';
-  const cl    = change >= 0 ? 'color:#0f6e56' : 'color:#a32d2d';
-  badge.innerHTML = code + ' · ' + price.toLocaleString() + '원 <span style="' + cl + '">' + sign + change.toFixed(2) + '%</span>' +
-    (cap ? ' · 시총 ' + cap.toLocaleString() + '억' : '');
-  badge.style.display = 'block';
-  card.querySelector('.pres-member').focus();
-}
-
-function selectPresStock(el, code, name, price, cap, market, change) {
-  selectPresStockEl(el);
-}
-
-function clearPresentationList() {
-  const el = document.getElementById('presentationList');
-  if (el) el.innerHTML = '';
-  const industryInput = document.getElementById('industryName');
-  if (industryInput) industryInput.value = '';
-}
-
-function clearPresenterList() { clearPresentationList(); }
-
 document.addEventListener('keydown', event => {
   const formModal = document.getElementById('scheduleForm');
   const detailModal = document.getElementById('detailModal');

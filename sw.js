@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sss-pwa-v20260725-1';
+const CACHE_NAME = 'sss-pwa-v20260725-2';
 
 const APP_SHELL = [
   './',
@@ -64,14 +64,14 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => caches.match(request, { ignoreSearch: true })
+        .catch(() => caches.match(request)
           .then((cached) => cached || caches.match('./offline.html')))
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then((cached) => {
+    caches.match(request).then((cached) => {
       const network = fetch(request)
         .then((response) => {
           if (response.ok) {

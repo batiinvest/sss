@@ -44,6 +44,20 @@ function presentation(id, scheduleId, memberId, date, status = 'planned') {
   };
 }
 
+function orphanDraft(id, memberId, createdAt, overrides = {}) {
+  return {
+    id,
+    schedule_id: null,
+    member_id: memberId,
+    presented_at: null,
+    category: 'stock',
+    topic: `${memberId} topic`,
+    status: 'planned',
+    created_at: createdAt,
+    ...overrides,
+  };
+}
+
 test('seven members rotate by 3, 3, 1 and restart on the next study date', () => {
   const { buildPresentationSchedulePlan } = loadHelpers();
   const schedules = [
@@ -584,6 +598,351 @@ test('the new draft epoch separates legacy orphan topics from the current cycle'
     ).id,
     'assigned'
   );
+});
+
+test('initial migration recovers only the latest post-cycle draft for each next-roster member', () => {
+  const { selectInitialPresentationDraftRecoveryIds } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
+    schedule('next-talk', '2026-07-27', 'industry', '20:00:00'),
+  ];
+  const plan = {
+    nextMemberIds: ['A', 'B', 'C'],
+    items: [{
+      schedule: schedules[1],
+      memberIds: ['A', 'B', 'C'],
+    }],
+  };
+  const cycleState = {
+    cycleKey: 'rotation:2026-06-15',
+    cycleMarker: '2026-06-15',
+    startedAt: '2026-07-25T02:37:00.000Z',
+  };
+  const rows = [
+    // 6/15 20:00 KST(11:00Z) 이전 값과 경계 시각 값은 이전 사이클이다.
+    orphanDraft('A-before', 'A', '2026-06-15T10:59:59.999Z'),
+    orphanDraft('A-boundary', 'A', '2026-06-15T11:00:00.000Z'),
+    orphanDraft('A-current-old', 'A', '2026-06-20T01:00:00.000Z'),
+    orphanDraft('A-current-latest', 'A', '2026-07-20T01:00:00.000Z'),
+    // activityAt은 created_at과 updated_at 중 최신 시각이다.
+    orphanDraft('B-edited', 'B', '2026-06-01T01:00:00.000Z', {
+      updated_at: '2026-07-10T01:00:00.000Z',
+      // 예전 입력 흐름이 남긴 날짜는 schedule_id가 없으면 복구를 막지 않는다.
+      presented_at: '2026-06-15',
+    }),
+    // 현재 roster 밖의 행은 같은 기간에 입력했어도 복구하지 않는다.
+    orphanDraft('D-outside-roster', 'D', '2026-07-12T01:00:00.000Z'),
+    orphanDraft('C-boundary', 'C', '2026-06-15T11:00:00.000Z'),
+    // 빈 종목은 복구 후보가 아니다.
+    orphanDraft('C-empty', 'C', '2026-07-15T01:00:00.000Z', { topic: '  ' }),
+  ];
+
+  assert.deepEqual(
+    [...selectInitialPresentationDraftRecoveryIds(
+      schedules,
+      rows,
+      plan,
+      cycleState,
+      { draftEpoch: cycleState.startedAt }
+    )].sort(),
+    ['A-current-latest', 'B-edited']
+  );
+});
+
+test('initial migration never replaces a current or already assigned roster draft', () => {
+  const { selectInitialPresentationDraftRecoveryIds } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
+    schedule('next-talk', '2026-07-27', 'industry', '20:00:00'),
+  ];
+  const plan = {
+    nextMemberIds: ['A', 'B', 'C'],
+    items: [{
+      schedule: schedules[1],
+      memberIds: ['A', 'B', 'C'],
+    }],
+  };
+  const cycleState = {
+    cycleKey: 'rotation:2026-06-15',
+    cycleMarker: '2026-06-15',
+    startedAt: '2026-07-25T02:37:00.000Z',
+  };
+  const rows = [
+    orphanDraft('A-recover', 'A', '2026-07-01T01:00:00.000Z'),
+    orphanDraft('B-legacy', 'B', '2026-07-02T01:00:00.000Z'),
+    orphanDraft('B-current', 'B', '2026-07-25T03:00:00.000Z'),
+    orphanDraft('C-legacy', 'C', '2026-07-03T01:00:00.000Z'),
+    {
+      ...orphanDraft('C-assigned', 'C', '2026-07-24T01:00:00.000Z'),
+      schedule_id: 'next-talk',
+      presented_at: '2026-07-27',
+    },
+  ];
+
+  assert.deepEqual(
+    plain(selectInitialPresentationDraftRecoveryIds(
+      schedules,
+      rows,
+      plan,
+      cycleState,
+      { draftEpoch: cycleState.startedAt }
+    )),
+    ['A-recover']
+  );
+});
+
+test('legacy draft recovery is disabled outside the one initial migration cycle', () => {
+  const { selectInitialPresentationDraftRecoveryIds } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
+    schedule('next-talk', '2026-07-27', 'industry', '20:00:00'),
+  ];
+  const plan = {
+    nextMemberIds: ['A', 'B', 'C'],
+    items: [{
+      schedule: schedules[1],
+      memberIds: ['A', 'B', 'C'],
+    }],
+  };
+  const draft = orphanDraft(
+    'A-legacy',
+    'A',
+    '2026-07-01T01:00:00.000Z'
+  );
+
+  assert.deepEqual(
+    plain(selectInitialPresentationDraftRecoveryIds(
+      schedules,
+      [draft],
+      plan,
+      {
+        cycleKey: 'rotation:2026-07-27',
+        cycleMarker: '2026-07-27',
+        startedAt: '2026-07-28T00:00:00.000Z',
+      },
+      { draftEpoch: '2026-07-28T00:00:00.000Z' }
+    )),
+    []
+  );
+  assert.deepEqual(
+    plain(selectInitialPresentationDraftRecoveryIds(
+      schedules,
+      [draft],
+      plan,
+      {
+        cycleKey: 'rotation:initial',
+        cycleMarker: 'initial',
+        startedAt: '2026-07-25T02:37:00.000Z',
+      },
+      { draftEpoch: '2026-07-25T02:37:00.000Z' }
+    )),
+    []
+  );
+});
+
+test('initial recovery registers carryover before normalizing stale presentation dates and marking completion', async () => {
+  const { recoverInitialPresentationDrafts } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
+    schedule('next-talk', '2026-07-27', 'industry', '20:00:00'),
+  ];
+  const plan = {
+    nextMemberIds: ['A', 'B', 'C'],
+    items: [{
+      schedule: schedules[1],
+      memberIds: ['A', 'B', 'C'],
+    }],
+  };
+  const cycleState = {
+    cycleKey: 'rotation:2026-06-15',
+    cycleMarker: '2026-06-15',
+  };
+  const rows = [
+    orphanDraft('A-recover', 'A', '2026-07-01T01:00:00.000Z', {
+      presented_at: '2026-06-15',
+    }),
+    orphanDraft('D-old', 'D', '2026-07-02T01:00:00.000Z', {
+      presented_at: '2026-06-15',
+    }),
+  ];
+  const events = [];
+  const client = {
+    from(table) {
+      assert.equal(table, 'presentations');
+      return {
+        update(payload) {
+          return {
+            async in(column, ids) {
+              events.push({
+                type: 'normalize',
+                column,
+                ids: [...ids],
+                payload: plain(payload),
+              });
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const result = await recoverInitialPresentationDrafts(
+    client,
+    schedules,
+    rows,
+    members,
+    {
+      plan,
+      cycleState,
+      draftEpoch: '2026-07-25T02:37:00.000Z',
+      recoveryState: null,
+      now: '2026-07-25T04:00:00.000Z',
+      async registerCarryoverIds(ids) {
+        events.push({ type: 'carryover', ids: [...ids] });
+      },
+      async writeRecoveryState(value) {
+        events.push({ type: 'complete', value: plain(value) });
+      },
+    }
+  );
+
+  assert.deepEqual(plain(result), {
+    recoveredIds: ['A-recover'],
+    skipped: null,
+  });
+  assert.deepEqual(events.map(event => event.type), [
+    'carryover',
+    'normalize',
+    'complete',
+  ]);
+  assert.deepEqual(events[0].ids, ['A-recover']);
+  assert.deepEqual(events[1], {
+    type: 'normalize',
+    column: 'id',
+    ids: ['A-recover'],
+    payload: { schedule_id: null, presented_at: null },
+  });
+  assert.deepEqual(events[2].value, {
+    cycle_key: 'rotation:2026-06-15',
+    cycle_marker: '2026-06-15',
+    roster_member_ids: ['A', 'B', 'C'],
+    recovered_ids: ['A-recover'],
+    completed_at: '2026-07-25T04:00:00.000Z',
+  });
+  assert.equal(rows[0].presented_at, null);
+  assert.equal(rows[1].presented_at, '2026-06-15');
+});
+
+test('carryover registration failure leaves legacy drafts and recovery state untouched', async () => {
+  const { recoverInitialPresentationDrafts } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
+    schedule('next-talk', '2026-07-27', 'industry', '20:00:00'),
+  ];
+  const plan = {
+    nextMemberIds: ['A', 'B', 'C'],
+    items: [{
+      schedule: schedules[1],
+      memberIds: ['A', 'B', 'C'],
+    }],
+  };
+  const cycleState = {
+    cycleKey: 'rotation:2026-06-15',
+    cycleMarker: '2026-06-15',
+  };
+  const draft = orphanDraft(
+    'A-recover',
+    'A',
+    '2026-07-01T01:00:00.000Z',
+    { presented_at: '2026-06-15' }
+  );
+  let normalizeCalls = 0;
+  let completionCalls = 0;
+  const client = {
+    from() {
+      return {
+        update() {
+          normalizeCalls += 1;
+          return {
+            async in() {
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => recoverInitialPresentationDrafts(
+      client,
+      schedules,
+      [draft],
+      members,
+      {
+        plan,
+        cycleState,
+        draftEpoch: '2026-07-25T02:37:00.000Z',
+        recoveryState: null,
+        async registerCarryoverIds() {
+          throw new Error('carryover unavailable');
+        },
+        async writeRecoveryState() {
+          completionCalls += 1;
+        },
+      }
+    ),
+    /carryover unavailable/
+  );
+  assert.equal(normalizeCalls, 0);
+  assert.equal(completionCalls, 0);
+  assert.equal(draft.presented_at, '2026-06-15');
+});
+
+test('completed initial recovery is idempotent and performs no further writes', async () => {
+  const { recoverInitialPresentationDrafts } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
+    schedule('next-talk', '2026-07-27', 'industry', '20:00:00'),
+  ];
+  const draft = orphanDraft(
+    'A-recover',
+    'A',
+    '2026-07-01T01:00:00.000Z',
+    { presented_at: '2026-06-15' }
+  );
+  let writes = 0;
+  const result = await recoverInitialPresentationDrafts(
+    {
+      from() {
+        writes += 1;
+        throw new Error('must not write');
+      },
+    },
+    schedules,
+    [draft],
+    members,
+    {
+      recoveryState: {
+        cycle_key: 'rotation:2026-06-15',
+        completed_at: '2026-07-25T04:00:00.000Z',
+      },
+      async registerCarryoverIds() {
+        writes += 1;
+      },
+      async writeRecoveryState() {
+        writes += 1;
+      },
+    }
+  );
+
+  assert.deepEqual(plain(result), {
+    recoveredIds: [],
+    skipped: 'completed',
+  });
+  assert.equal(writes, 0);
+  assert.equal(draft.presented_at, '2026-06-15');
 });
 
 test('an unavailable cycle fails closed for unassigned drafts', () => {

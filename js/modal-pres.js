@@ -155,13 +155,13 @@ const ModalPres = (() => {
           .select('*').eq('status','planned').eq('member_id',_me.id)
           .order('created_at', { ascending: true }),
         sb.from('presentations')
-          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at')
+          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at,updated_at')
           .eq('status','planned').is('schedule_id',null)
           .order('created_at', { ascending: false }).limit(10),
         sb.from('members').select('*').eq('is_active', true).order('joined_at'),
         getConfigStrict('pres_order'),
         sb.from('presentations')
-          .select('id,member_id,category,status,schedule_id,presented_at,created_at'),
+          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at,updated_at'),
         sb.from('schedules')
           .select('id,title,category,event_date,event_time')
           .order('event_date', { ascending: true }),
@@ -234,6 +234,17 @@ const ModalPres = (() => {
       );
       if (openToken !== _openToken) return;
       _draftEpoch = draftCycle.startedAt;
+      await recoverInitialPresentationDrafts(
+        sb,
+        scheduleRows,
+        turnRows,
+        orderedMembers,
+        {
+          fromDate: today,
+          cycleState: draftCycleState,
+        }
+      );
+      if (openToken !== _openToken) return;
     } catch (error) {
       console.error('발표 초안 사이클 저장 오류:', error);
       if (openToken === _openToken) {

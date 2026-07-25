@@ -27,9 +27,11 @@ const MONTH_KR  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월
 const PRESENTATION_GROUP_SIZE = 3;
 const PRESENTATION_DRAFT_CYCLE_CONFIG_KEY = 'presentation_draft_cycle_v1';
 const PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX = 'presentation_draft_carryover_v1:';
+const PRESENTATION_DRAFT_RECOVERY_CONFIG_KEY = 'presentation_draft_recovery_v1';
 const PRESENTATION_INDUSTRY_CONFIG_PREFIX = 'presentation_industry_v1:';
 // 최초 배포 전에 일정 연결 없이 남은 planned 행만 이전 사이클로 분리한다.
 const PRESENTATION_DRAFT_MIGRATION_EPOCH = '2026-07-25T02:37:00.000Z';
+const PRESENTATION_DEFAULT_EVENT_TIME = '20:00:00';
 let presentationDraftEpoch = null;
 let presentationDraftCycleKey = null;
 let presentationDraftCarryoverIds = new Set();
@@ -194,6 +196,7 @@ async function ensurePresentationDraftCycle(cycleKey, opts = {}) {
   presentationDraftCarryoverIds = savedCarryoverIds;
   return {
     cycleKey: presentationDraftCycleKey,
+    cycleMarker: authoritative.cycleMarker,
     startedAt: presentationDraftEpoch,
     carryoverIds: [...presentationDraftCarryoverIds],
   };
@@ -214,6 +217,242 @@ async function registerPresentationDraftCarryoverIds(ids = []) {
   return [...presentationDraftCarryoverIds];
 }
 
+function presentationDraftActivityTime(presentation) {
+  const timestamps = [
+    presentation?.created_at,
+    presentation?.updated_at,
+  ]
+    .map(value => Date.parse(value || ''))
+    .filter(Number.isFinite);
+  return timestamps.length ? Math.max(...timestamps) : NaN;
+}
+
+function presentationCycleBoundaryTime(
+  allSchedules = [],
+  cycleMarker,
+  defaultEventTime = PRESENTATION_DEFAULT_EVENT_TIME
+) {
+  const marker = String(cycleMarker || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(marker)) return NaN;
+  const markerSchedule = [...(allSchedules || [])]
+    .filter(schedule => schedule?.event_date === marker)
+    .sort((a, b) =>
+      String(a.event_time || '').localeCompare(String(b.event_time || ''))
+    )[0];
+  const rawTime = String(
+    markerSchedule?.event_time || defaultEventTime
+  ).trim();
+  const match = /^(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(rawTime);
+  const hour = Number(match?.[1]);
+  const minute = Number(match?.[2]);
+  const second = Number(match?.[3] || 0);
+  const validTime = (
+    Number.isInteger(hour) && hour >= 0 && hour <= 23 &&
+    Number.isInteger(minute) && minute >= 0 && minute <= 59 &&
+    Number.isInteger(second) && second >= 0 && second <= 59
+  )
+    ? [
+        String(hour).padStart(2, '0'),
+        String(minute).padStart(2, '0'),
+        String(second).padStart(2, '0'),
+      ].join(':')
+    : PRESENTATION_DEFAULT_EVENT_TIME;
+  return Date.parse(marker + 'T' + validTime + '+09:00');
+}
+
+function isInitialPresentationDraftRecoveryContext(
+  allSchedules = [],
+  plan,
+  cycleState,
+  opts = {}
+) {
+  const migrationEpoch = normalizePresentationDraftEpoch(
+    opts.migrationEpoch || PRESENTATION_DRAFT_MIGRATION_EPOCH
+  );
+  const draftEpoch = normalizePresentationDraftEpoch(
+    opts.draftEpoch || presentationDraftEpoch
+  );
+  const cycleMarker = String(
+    cycleState?.cycleMarker ||
+    (String(cycleState?.cycleKey || '').startsWith('rotation:')
+      ? String(cycleState.cycleKey).slice('rotation:'.length)
+      : '')
+  ).trim();
+  const rosterIds = [...new Set(
+    (plan?.nextMemberIds || []).filter(Boolean).map(String)
+  )];
+  const boundaryTime = presentationCycleBoundaryTime(
+    allSchedules,
+    cycleMarker,
+    opts.defaultEventTime
+  );
+  return {
+    eligible: (
+      Boolean(migrationEpoch) &&
+      draftEpoch === migrationEpoch &&
+      /^\d{4}-\d{2}-\d{2}$/.test(cycleMarker) &&
+      rosterIds.length > 0 &&
+      Number.isFinite(boundaryTime)
+    ),
+    migrationEpoch,
+    cycleMarker,
+    rosterIds,
+    boundaryTime,
+  };
+}
+
+function selectInitialPresentationDraftRecoveryIds(
+  allSchedules = [],
+  allPresentations = [],
+  plan,
+  cycleState,
+  opts = {}
+) {
+  const context = isInitialPresentationDraftRecoveryContext(
+    allSchedules,
+    plan,
+    cycleState,
+    opts
+  );
+  if (!context.eligible) return [];
+
+  const epochTime = Date.parse(context.migrationEpoch);
+  const carryoverIds = normalizePresentationDraftIds(
+    opts.carryoverIds || presentationDraftCarryoverIds
+  );
+  const rowsByMember = new Map();
+  for (const presentation of allPresentations || []) {
+    const memberId = String(presentation?.member_id || '');
+    if (!context.rosterIds.includes(memberId)) continue;
+    if (!rowsByMember.has(memberId)) rowsByMember.set(memberId, []);
+    rowsByMember.get(memberId).push(presentation);
+  }
+
+  const selectedIds = [];
+  for (const memberId of context.rosterIds) {
+    const plannedRows = (rowsByMember.get(memberId) || []).filter(
+      presentation => presentation?.status === 'planned'
+    );
+    if (plannedRows.some(presentation => presentation.schedule_id)) continue;
+
+    // A post-migration orphan without a presentation date is already a visible
+    // current draft. Never replace it with an older hidden row.
+    const hasCurrentDraft = plannedRows.some(presentation => {
+      if (
+        presentation.schedule_id ||
+        presentation.presented_at ||
+        carryoverIds.has(String(presentation.id || ''))
+      ) {
+        return false;
+      }
+      const createdAt = Date.parse(presentation.created_at || '');
+      return Number.isFinite(createdAt) && createdAt >= epochTime;
+    });
+    if (hasCurrentDraft) continue;
+
+    const candidates = plannedRows
+      .filter(presentation =>
+        presentation.id &&
+        !presentation.schedule_id &&
+        String(presentation.topic || '').trim() &&
+        presentationDraftActivityTime(presentation) > context.boundaryTime
+      )
+      .sort((a, b) =>
+        presentationDraftActivityTime(b) - presentationDraftActivityTime(a) ||
+        String(b.updated_at || '').localeCompare(String(a.updated_at || '')) ||
+        String(b.created_at || '').localeCompare(String(a.created_at || '')) ||
+        String(b.id || '').localeCompare(String(a.id || ''))
+      );
+    const registeredCandidates = candidates.filter(presentation =>
+      carryoverIds.has(String(presentation.id))
+    );
+    const selected = registeredCandidates[0] || candidates[0];
+    if (selected?.id) selectedIds.push(String(selected.id));
+  }
+  return selectedIds;
+}
+
+async function recoverInitialPresentationDrafts(
+  client,
+  allSchedules = [],
+  allPresentations = [],
+  orderedMembers = [],
+  opts = {}
+) {
+  const readRecoveryState = opts.readRecoveryState ||
+    (() => getConfigStrict(PRESENTATION_DRAFT_RECOVERY_CONFIG_KEY));
+  const writeRecoveryState = opts.writeRecoveryState ||
+    (value => setConfig(PRESENTATION_DRAFT_RECOVERY_CONFIG_KEY, value));
+  const registerCarryoverIds = opts.registerCarryoverIds ||
+    registerPresentationDraftCarryoverIds;
+  const savedRecovery = Object.prototype.hasOwnProperty.call(
+    opts,
+    'recoveryState'
+  )
+    ? opts.recoveryState
+    : await readRecoveryState();
+  if (savedRecovery) {
+    return { recoveredIds: [], skipped: 'completed' };
+  }
+
+  const fromDate = opts.fromDate || toDateStr(new Date());
+  const cycleState = opts.cycleState || getPresentationDraftCycleState(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    { fromDate }
+  );
+  const plan = opts.plan || buildPresentationSchedulePlan(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    { fromDate }
+  );
+  const context = isInitialPresentationDraftRecoveryContext(
+    allSchedules,
+    plan,
+    cycleState,
+    opts
+  );
+  if (!context.eligible) {
+    return { recoveredIds: [], skipped: 'not-initial-migration' };
+  }
+
+  const recoveredIds = selectInitialPresentationDraftRecoveryIds(
+    allSchedules,
+    allPresentations,
+    plan,
+    cycleState,
+    opts
+  );
+  if (recoveredIds.length) {
+    await registerCarryoverIds(recoveredIds);
+    const { error } = await client
+      .from('presentations')
+      .update({ schedule_id: null, presented_at: null })
+      .in('id', recoveredIds);
+    if (error) throw error;
+
+    const recoveredIdSet = new Set(recoveredIds.map(String));
+    for (const presentation of allPresentations || []) {
+      if (!recoveredIdSet.has(String(presentation?.id || ''))) continue;
+      presentation.schedule_id = null;
+      presentation.presented_at = null;
+    }
+  }
+
+  const completedAt = normalizePresentationDraftEpoch(opts.now) ||
+    new Date().toISOString();
+  await writeRecoveryState({
+    cycle_key: cycleState.cycleKey,
+    cycle_marker: context.cycleMarker,
+    roster_member_ids: context.rosterIds,
+    recovered_ids: recoveredIds,
+    completed_at: completedAt,
+  });
+  return { recoveredIds, skipped: null };
+}
+
 function isCurrentUnassignedPresentationDraft(
   presentation,
   draftEpoch = presentationDraftEpoch,
@@ -222,8 +461,7 @@ function isCurrentUnassignedPresentationDraft(
   if (
     !presentation ||
     presentation.status !== 'planned' ||
-    presentation.schedule_id ||
-    presentation.presented_at
+    presentation.schedule_id
   ) {
     return false;
   }
@@ -231,6 +469,7 @@ function isCurrentUnassignedPresentationDraft(
   if (presentation.id && normalizedCarryoverIds.has(String(presentation.id))) {
     return true;
   }
+  if (presentation.presented_at) return false;
   const normalizedEpoch = normalizePresentationDraftEpoch(draftEpoch);
   if (!normalizedEpoch) return false;
   const createdAt = Date.parse(presentation.created_at || '');

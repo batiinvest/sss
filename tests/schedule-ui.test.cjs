@@ -142,11 +142,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.1',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.2',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.1',
+    'presentations.html?view=history&id=xyz&v=20260725.2',
   );
 });
 
@@ -270,9 +270,13 @@ test('industry names persist independently and legacy topics stay outside the ne
   assert.match(shared, /PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX/);
   assert.match(shared, /ensurePresentationDraftCycle/);
   assert.match(shared, /registerPresentationDraftCarryoverIds/);
+  assert.match(shared, /recoverInitialPresentationDrafts/);
   assert.match(shared, /syncPastScheduledPresentationsDone/);
   assert.match(shared, /isCurrentUnassignedPresentationDraft/);
   assert.match(modal, /findCurrentPresentationDraft\(/);
+  for (const source of [order, read('schedule-calendar.html'), read('index.html'), modal]) {
+    assert.match(source, /recoverInitialPresentationDrafts\(/);
+  }
   assert.match(modal, /getPresentationIndustryConfigKey\(/);
   assert.match(modal, /return getPresentationTurnState\(allPresentations, orderedMembers\)/);
   assert.doesNotMatch(
@@ -303,18 +307,22 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.1/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.1'\)/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.2/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.2/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.2'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.2/);
+  assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.1/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.2/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.1/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.2/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-1/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-2/);
+  assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
-    (read('sw.js').match(/caches\.match\(request, \{ ignoreSearch: true \}\)/g) || []).length,
+    (read('sw.js').match(/caches\.match\(request\)/g) || []).length,
     2,
   );
 });

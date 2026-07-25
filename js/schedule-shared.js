@@ -1,5 +1,5 @@
 // ============================================================
-// js/schedule-shared.js  v20260724
+// js/schedule-shared.js  v20260725
 // schedule-calendar.html + schedule-order.html 공통 모듈
 // ============================================================
 
@@ -25,9 +25,387 @@ const CAT_LABEL = { industry: '산업 분석', stock: '종목 분석', dinner: '
 const CAT_CLASS = { industry: 'ev-meeting', stock: 'ev-deadline', dinner: 'ev-dinner', other: 'ev-other' };
 const MONTH_KR  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 const PRESENTATION_GROUP_SIZE = 3;
+const PRESENTATION_DRAFT_CYCLE_CONFIG_KEY = 'presentation_draft_cycle_v1';
+const PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX = 'presentation_draft_carryover_v1:';
+const PRESENTATION_INDUSTRY_CONFIG_PREFIX = 'presentation_industry_v1:';
+// 최초 배포 전에 일정 연결 없이 남은 planned 행만 이전 사이클로 분리한다.
+const PRESENTATION_DRAFT_MIGRATION_EPOCH = '2026-07-25T02:37:00.000Z';
+let presentationDraftEpoch = null;
+let presentationDraftCycleKey = null;
+let presentationDraftCarryoverIds = new Set();
 
 function isPresentationSchedule(schedule) {
   return !!schedule && ['industry', 'stock'].includes(schedule.category);
+}
+
+function normalizePresentationDraftEpoch(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function normalizePresentationDraftCycleState(value) {
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const cycleKey = String(parsed.cycle_key || parsed.cycleKey || '').trim();
+  const startedAt = normalizePresentationDraftEpoch(
+    parsed.started_at || parsed.startedAt
+  );
+  const cycleMarker = String(
+    parsed.cycle_marker ||
+    parsed.cycleMarker ||
+    (cycleKey.startsWith('rotation:') ? cycleKey.slice('rotation:'.length) : '')
+  ).trim();
+  return cycleKey && startedAt
+    ? { cycleKey, startedAt, cycleMarker: cycleMarker || 'initial' }
+    : null;
+}
+
+function normalizePresentationDraftIds(value) {
+  if (value instanceof Set) {
+    return new Set([...value].filter(Boolean).map(String));
+  }
+  if (!Array.isArray(value)) return new Set();
+  return new Set(value.filter(Boolean).map(String));
+}
+
+function presentationDraftCyclePayload(state) {
+  return {
+    cycle_key: state.cycleKey,
+    cycle_marker: state.cycleMarker,
+    started_at: state.startedAt,
+  };
+}
+
+async function persistPresentationDraftCycleMonotonic(state) {
+  const payload = presentationDraftCyclePayload(state);
+  const cycleMarker = String(payload.cycle_marker || '').trim();
+  if (
+    cycleMarker !== 'initial' &&
+    !/^\d{4}-\d{2}-\d{2}$/.test(cycleMarker)
+  ) {
+    throw new Error('발표 사이클 기준일이 올바르지 않습니다.');
+  }
+
+  // 먼저 "없을 때만 삽입"한다. 동시에 여러 탭이 열려도 기존 행은
+  // 덮어쓰지 않으며, 아래 조건부 UPDATE가 더 최신 marker만 허용한다.
+  const { error: insertError } = await sb.from('app_config').upsert(
+    {
+      key: PRESENTATION_DRAFT_CYCLE_CONFIG_KEY,
+      value: payload,
+    },
+    {
+      onConflict: 'key',
+      ignoreDuplicates: true,
+    }
+  );
+  if (insertError) throw insertError;
+
+  if (cycleMarker !== 'initial') {
+    const markerFilter = [
+      'value->>cycle_marker.is.null',
+      'value->>cycle_marker.eq.initial',
+      'value->>cycle_marker.lt.' + cycleMarker,
+    ].join(',');
+    const { error: updateError } = await sb.from('app_config')
+      .update({ value: payload })
+      .eq('key', PRESENTATION_DRAFT_CYCLE_CONFIG_KEY)
+      .or(markerFilter);
+    if (updateError) throw updateError;
+  }
+
+  const authoritative = normalizePresentationDraftCycleState(
+    await getConfigStrict(PRESENTATION_DRAFT_CYCLE_CONFIG_KEY)
+  );
+  if (!authoritative) {
+    throw new Error('저장된 발표 사이클을 확인하지 못했습니다.');
+  }
+  return authoritative;
+}
+
+function resolvePresentationDraftCycleState(savedState, cycleKey, opts = {}) {
+  const normalizedCycleKey = String(cycleKey || '').trim();
+  if (!normalizedCycleKey) return null;
+  const cycleMarker = String(
+    opts.cycleMarker ||
+    (normalizedCycleKey.startsWith('rotation:')
+      ? normalizedCycleKey.slice('rotation:'.length)
+      : 'initial')
+  ).trim() || 'initial';
+  const normalizedSaved = normalizePresentationDraftCycleState(savedState);
+  if (normalizedSaved?.cycleKey === normalizedCycleKey) {
+    return { ...normalizedSaved, changed: false };
+  }
+  if (normalizedSaved) {
+    const savedMarker = normalizedSaved.cycleMarker === 'initial'
+      ? ''
+      : normalizedSaved.cycleMarker;
+    const incomingMarker = cycleMarker === 'initial' ? '' : cycleMarker;
+    if (savedMarker >= incomingMarker) {
+      return { ...normalizedSaved, changed: false, ignoredStale: true };
+    }
+  }
+  const startedAt = normalizedSaved
+    ? normalizePresentationDraftEpoch(opts.now) || new Date().toISOString()
+    : normalizePresentationDraftEpoch(opts.initialEpoch) ||
+      PRESENTATION_DRAFT_MIGRATION_EPOCH;
+  return {
+    cycleKey: normalizedCycleKey,
+    cycleMarker,
+    startedAt,
+    changed: true,
+  };
+}
+
+async function fetchPresentationDraftCarryoverIds() {
+  const { data, error } = await sb.from('app_config')
+    .select('key,value')
+    .like('key', PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX + '%');
+  if (error) throw error;
+  return new Set((data || [])
+    .filter(row => row.value !== false && row.value !== null)
+    .map(row => String(row.key || '').slice(
+      PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX.length
+    ))
+    .filter(Boolean));
+}
+
+async function ensurePresentationDraftCycle(cycleKey, opts = {}) {
+  const [savedState, savedCarryoverIds] = await Promise.all([
+    getConfigStrict(PRESENTATION_DRAFT_CYCLE_CONFIG_KEY),
+    fetchPresentationDraftCarryoverIds(),
+  ]);
+  const resolved = resolvePresentationDraftCycleState(
+    savedState,
+    cycleKey,
+    opts
+  );
+  if (!resolved) throw new Error('발표 사이클을 확인하지 못했습니다.');
+  const authoritative = await persistPresentationDraftCycleMonotonic(resolved);
+  presentationDraftCycleKey = authoritative.cycleKey;
+  presentationDraftEpoch = authoritative.startedAt;
+  presentationDraftCarryoverIds = savedCarryoverIds;
+  return {
+    cycleKey: presentationDraftCycleKey,
+    startedAt: presentationDraftEpoch,
+    carryoverIds: [...presentationDraftCarryoverIds],
+  };
+}
+
+async function registerPresentationDraftCarryoverIds(ids = []) {
+  const requested = normalizePresentationDraftIds(ids);
+  if (!requested.size) return [...presentationDraftCarryoverIds];
+  const { error } = await sb.from('app_config').upsert(
+    [...requested].map(id => ({
+      key: PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX + id,
+      value: true,
+    })),
+    { onConflict: 'key' }
+  );
+  if (error) throw error;
+  requested.forEach(id => presentationDraftCarryoverIds.add(id));
+  return [...presentationDraftCarryoverIds];
+}
+
+function isCurrentUnassignedPresentationDraft(
+  presentation,
+  draftEpoch = presentationDraftEpoch,
+  carryoverIds = presentationDraftCarryoverIds
+) {
+  if (
+    !presentation ||
+    presentation.status !== 'planned' ||
+    presentation.schedule_id ||
+    presentation.presented_at
+  ) {
+    return false;
+  }
+  const normalizedCarryoverIds = normalizePresentationDraftIds(carryoverIds);
+  if (presentation.id && normalizedCarryoverIds.has(String(presentation.id))) {
+    return true;
+  }
+  const normalizedEpoch = normalizePresentationDraftEpoch(draftEpoch);
+  if (!normalizedEpoch) return false;
+  const createdAt = Date.parse(presentation.created_at || '');
+  return Number.isFinite(createdAt) && createdAt >= Date.parse(normalizedEpoch);
+}
+
+function findCurrentPresentationDraft(
+  allPresentations = [],
+  memberId,
+  opts = {}
+) {
+  const memberKey = String(memberId || '');
+  const plannedRows = (allPresentations || [])
+    .filter(presentation =>
+      String(presentation.member_id || '') === memberKey &&
+      presentation.status === 'planned'
+    )
+    .sort((a, b) =>
+      String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    );
+  const scheduleId = opts.scheduleId ? String(opts.scheduleId) : '';
+  if (scheduleId) {
+    const assigned = plannedRows.find(presentation =>
+      String(presentation.schedule_id || '') === scheduleId
+    );
+    if (assigned) return assigned;
+  }
+  return plannedRows.find(presentation =>
+    isCurrentUnassignedPresentationDraft(
+      presentation,
+      opts.draftEpoch,
+      opts.carryoverIds
+    )
+  ) || null;
+}
+
+function getPresentationIndustryConfigKey(
+  scheduleId,
+  draftEpoch = presentationDraftEpoch,
+  cycleKey = null
+) {
+  if (scheduleId) {
+    return PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'schedule:' + String(scheduleId);
+  }
+  if (cycleKey) {
+    return PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'cycle:' + String(cycleKey);
+  }
+  const normalizedEpoch = normalizePresentationDraftEpoch(draftEpoch);
+  return normalizedEpoch
+    ? PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'draft:' + normalizedEpoch
+    : null;
+}
+
+function classifyPastScheduledPresentationRows(
+  allSchedules = [],
+  allPresentations = [],
+  opts = {}
+) {
+  const today = opts.today || toDateStr(new Date());
+  const orderedMembers = (opts.orderedMembers || []).filter(member => member?.id);
+  if (!orderedMembers.length) {
+    return { completionPatches: [], carryoverPatches: [] };
+  }
+  const orderedIds = orderedMembers.map(member => String(member.id));
+  const pastSchedules = sortPresentationSchedules(allSchedules)
+    .filter(schedule => schedule.event_date && schedule.event_date < today);
+  const primaryByDate = new Map();
+  pastSchedules.forEach(schedule => {
+    if (!primaryByDate.has(schedule.event_date)) {
+      primaryByDate.set(schedule.event_date, schedule);
+    }
+  });
+
+  const completionPatches = [];
+  const carryoverPatches = [];
+  const processedIds = new Set();
+  for (const schedule of primaryByDate.values()) {
+    const cursor = inferPresentationCursor(
+      allSchedules,
+      allPresentations,
+      orderedMembers,
+      schedule.event_date,
+      opts.groupSize
+    );
+    const take = Math.min(
+      Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE),
+      orderedIds.length - cursor
+    );
+    const expectedIds = new Set(orderedIds.slice(cursor, cursor + take));
+    const completedMembers = new Set();
+    const linkedRows = (allPresentations || [])
+      .filter(presentation =>
+        presentation.status === 'planned' &&
+        String(presentation.schedule_id || '') === String(schedule.id)
+      )
+      .sort((a, b) =>
+        String(a.created_at || '').localeCompare(String(b.created_at || ''))
+      );
+
+    for (const presentation of linkedRows) {
+      processedIds.add(String(presentation.id));
+      const memberId = String(presentation.member_id || '');
+      if (expectedIds.has(memberId) && !completedMembers.has(memberId)) {
+        completedMembers.add(memberId);
+        completionPatches.push({
+          id: presentation.id,
+          payload: { status: 'done' },
+        });
+      } else {
+        carryoverPatches.push({
+          id: presentation.id,
+          payload: { schedule_id: null, presented_at: null },
+        });
+      }
+    }
+  }
+  const pastScheduleIds = new Set(pastSchedules.map(schedule => String(schedule.id)));
+  for (const presentation of allPresentations || []) {
+    if (
+      presentation.status !== 'planned' ||
+      !presentation.schedule_id ||
+      !pastScheduleIds.has(String(presentation.schedule_id)) ||
+      processedIds.has(String(presentation.id))
+    ) {
+      continue;
+    }
+    carryoverPatches.push({
+      id: presentation.id,
+      payload: { schedule_id: null, presented_at: null },
+    });
+  }
+  return { completionPatches, carryoverPatches };
+}
+
+function buildPastPresentationCompletionPatches(
+  allSchedules = [],
+  allPresentations = [],
+  opts = {}
+) {
+  return classifyPastScheduledPresentationRows(
+    allSchedules,
+    allPresentations,
+    opts
+  ).completionPatches;
+}
+
+async function syncPastScheduledPresentationsDone(
+  client,
+  allSchedules = [],
+  allPresentations = [],
+  opts = {}
+) {
+  const classified = classifyPastScheduledPresentationRows(
+    allSchedules,
+    allPresentations,
+    opts
+  );
+  const carryoverIds = classified.carryoverPatches.map(patch => patch.id);
+  if (carryoverIds.length) {
+    await registerPresentationDraftCarryoverIds(carryoverIds);
+    const { error } = await client
+      .from('presentations')
+      .update({ schedule_id: null, presented_at: null })
+      .in('id', carryoverIds);
+    if (error) throw error;
+  }
+  const patches = classified.completionPatches;
+  if (patches.length) {
+    const { error } = await client
+      .from('presentations')
+      .update({ status: 'done' })
+      .in('id', patches.map(patch => patch.id));
+    if (error) throw error;
+  }
+  return { patches, carryoverPatches: classified.carryoverPatches };
 }
 
 function normalizePresentationOrder(allMembers = [], savedOrder = []) {
@@ -84,7 +462,7 @@ function getLinkedSchedulePresentations(schedule, allSchedules = [], allPresenta
   });
 }
 
-function inferPresentationCursor(
+function inferPresentationCyclePosition(
   allSchedules,
   allPresentations,
   orderedMembers,
@@ -92,7 +470,13 @@ function inferPresentationCursor(
   groupSize = PRESENTATION_GROUP_SIZE
 ) {
   const orderedIds = (orderedMembers || []).map(member => String(member.id));
-  if (!orderedIds.length) return 0;
+  if (!orderedIds.length) {
+    return {
+      cursor: 0,
+      cycleMarker: 'initial',
+      cycleKey: 'rotation:initial',
+    };
+  }
 
   const scheduleById = new Map(
     (allSchedules || []).map(schedule => [String(schedule.id), schedule])
@@ -120,6 +504,7 @@ function inferPresentationCursor(
 
   let anchorIndex = -1;
   let cursor = 0;
+  let cycleMarker = 'initial';
   const memberIdsByDate = new Map();
   for (let index = 0; index < historyDates.length; index += 1) {
     const date = historyDates[index];
@@ -130,6 +515,7 @@ function inferPresentationCursor(
     const memberIds = [...new Set(
       (allPresentations || [])
         .filter(presentation =>
+          presentation.status === 'done' &&
           presentation.member_id &&
           (
             (presentation.schedule_id && scheduleIds.has(String(presentation.schedule_id))) ||
@@ -153,15 +539,80 @@ function inferPresentationCursor(
     if (!memberIds.includes(lastMemberId)) continue;
     cursor = 0;
     anchorIndex = index;
+    cycleMarker = historyDates[index];
     break;
   }
   // 자동 슬롯은 발표종목 행이 없어도 실제 스터디 날짜가 지나면 순서를 소비한다.
   for (let index = anchorIndex + 1; index < historyDates.length; index += 1) {
     const remainingInCycle = orderedIds.length - cursor;
     cursor += Math.min(groupSize, remainingInCycle);
-    if (cursor >= orderedIds.length) cursor = 0;
+    if (cursor >= orderedIds.length) {
+      cursor = 0;
+      cycleMarker = historyDates[index];
+    }
   }
-  return cursor;
+  return {
+    cursor,
+    cycleMarker,
+    cycleKey: 'rotation:' + cycleMarker,
+  };
+}
+
+function inferPresentationCursor(
+  allSchedules,
+  allPresentations,
+  orderedMembers,
+  fromDate,
+  groupSize = PRESENTATION_GROUP_SIZE
+) {
+  return inferPresentationCyclePosition(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    fromDate,
+    groupSize
+  ).cursor;
+}
+
+function getPresentationDraftCycleState(
+  allSchedules = [],
+  allPresentations = [],
+  orderedMembers = [],
+  opts = {}
+) {
+  const requestedFromDate = opts.fromDate || toDateStr(new Date());
+  const plan = buildPresentationSchedulePlan(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    { ...opts, fromDate: requestedFromDate }
+  );
+  return inferPresentationCyclePosition(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    plan.fromDate || requestedFromDate,
+    Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE)
+  );
+}
+
+function shouldCarryPresentationDraftToNextCycle(
+  memberId,
+  allSchedules = [],
+  allPresentations = [],
+  orderedMembers = [],
+  opts = {}
+) {
+  const orderedIds = (orderedMembers || []).map(member => String(member.id));
+  const memberIndex = orderedIds.indexOf(String(memberId || ''));
+  if (memberIndex < 0) return false;
+  const position = getPresentationDraftCycleState(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    opts
+  );
+  return position.cursor > 0 && memberIndex < position.cursor;
 }
 
 function buildPresentationSchedulePlan(
@@ -387,6 +838,9 @@ function buildPresentationAssignmentPatches(
   opts = {}
 ) {
   const fromDate = opts.fromDate || plan?.fromDate || toDateStr(new Date());
+  const draftEpoch = opts.draftEpoch || presentationDraftEpoch;
+  const draftCarryoverIds = opts.draftCarryoverIds ||
+    presentationDraftCarryoverIds;
   if (!plan?.items?.length) return [];
   const scheduleById = new Map(
     (allSchedules || []).map(schedule => [String(schedule.id), schedule])
@@ -409,6 +863,13 @@ function buildPresentationAssignmentPatches(
   const eligibleRows = (allPresentations || []).filter(presentation => {
     if (presentation.status !== 'planned' || !presentation.member_id) return false;
     if (!presentation.schedule_id) {
+      if (draftEpoch && !isCurrentUnassignedPresentationDraft(
+        presentation,
+        draftEpoch,
+        draftCarryoverIds
+      )) {
+        return false;
+      }
       return !presentation.presented_at || presentation.presented_at >= fromDate;
     }
     const schedule = scheduleById.get(String(presentation.schedule_id));
@@ -469,9 +930,12 @@ function buildPresentationAssignmentPatches(
       }
     }
 
-    // 자동 계획 범위를 벗어난 예정 발표는 내용은 보존하고 날짜 연결만 해제한다.
-    // 다음 스터디가 등록되면 이 행이 새 자동 슬롯에 다시 연결된다.
+    // 회식·기타 일정은 다음 발표 일정이 생길 때까지 carry anchor로 보존한다.
+    // 발표 일정에 남은 overflow는 과거 날짜에 잘못 완료되지 않도록 연결을
+    // 해제하고, 실제 쓰기 전에 carryover ID로 별도 보존한다.
     for (const row of remainingRows) {
+      const linkedSchedule = scheduleById.get(String(row.schedule_id || ''));
+      if (linkedSchedule && !isPresentationSchedule(linkedSchedule)) continue;
       if (row.schedule_id || row.presented_at) {
         patches.push({
           id: row.id,
@@ -520,6 +984,15 @@ async function syncPlannedPresentationsToSchedulePlan(
     plan,
     opts
   );
+  const carryoverIds = patches
+    .filter(patch =>
+      patch.payload?.schedule_id === null &&
+      patch.payload?.presented_at === null
+    )
+    .map(patch => patch.id);
+  if (carryoverIds.length) {
+    await registerPresentationDraftCarryoverIds(carryoverIds);
+  }
   const originals = new Map(
     (allPresentations || []).map(presentation => [
       String(presentation.id),
@@ -573,6 +1046,8 @@ function getPresentationTurnState(allPresentations, orderedMembers, opts = {}) {
   const total = orderedIds.length;
   let category = 'industry';
   const doneInCycle = new Set();
+  let completedCycleCount = 0;
+  let lastCompletedCycleMarker = 'initial';
 
   const talks = (allPresentations || [])
     .filter(p => {
@@ -596,6 +1071,11 @@ function getPresentationTurnState(allPresentations, orderedMembers, opts = {}) {
 
     doneInCycle.add(p.member_id);
     if (doneInCycle.size >= total) {
+      completedCycleCount += 1;
+      lastCompletedCycleMarker = [
+        p.presented_at || '',
+        p.id || p.created_at || p.member_id,
+      ].join(':');
       category = category === 'industry' ? 'stock' : 'industry';
       doneInCycle.clear();
     }
@@ -609,26 +1089,45 @@ function getPresentationTurnState(allPresentations, orderedMembers, opts = {}) {
     total,
     pendingMembers: pending,
     nextMember: pending[0] || ordered[0] || null,
+    cycleKey: [
+      category,
+      completedCycleCount,
+      lastCompletedCycleMarker,
+    ].join(':'),
   };
 }
 
 // ── 공통 데이터 로드 (schedules + members + presentations 동시 조회)
 async function loadSharedData() {
   const [s, m, p] = await Promise.all([
-    fetchSchedules(),
-    fetchMembers(),
-    reloadPresentations()
+    fetchSchedules({ strict: true }),
+    fetchMembers({ strict: true }),
+    reloadPresentations({ strict: true })
   ]);
   schedules     = s;
   members       = m;
   presentations = p;
 }
 
-async function reloadPresentations() {
+async function syncLoadedPastPresentations(orderedMembers) {
+  const result = await syncPastScheduledPresentationsDone(
+    sb,
+    schedules,
+    presentations,
+    { orderedMembers }
+  );
+  if (result.patches.length || result.carryoverPatches.length) {
+    presentations = await reloadPresentations({ strict: true });
+  }
+  return result;
+}
+
+async function reloadPresentations(opts = {}) {
   const { data, error } = await sb.from('presentations')
     .select('*, members(name)')
     .order('created_at');
   if (error) {
+    if (opts.strict) throw error;
     console.error('reloadPresentations:', error);
     return [];
   }

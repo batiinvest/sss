@@ -10,8 +10,8 @@ function read(file) {
   return fs.readFileSync(path.join(root, file), 'utf8');
 }
 
-function loadHelpers() {
-  const context = { console, Date, Map, Set };
+function loadHelpers(overrides = {}) {
+  const context = { console, Date, Map, Set, ...overrides };
   vm.createContext(context);
   vm.runInContext(read('js/schedule-shared.js'), context);
   return context;
@@ -489,6 +489,612 @@ test('multiple future cycles preserve one planned row per matching member occurr
   );
 });
 
+test('only past drafts linked to real presentation schedules are completed', () => {
+  const { buildPastPresentationCompletionPatches } = loadHelpers();
+  const schedules = [
+    schedule('past-talk', '2026-07-01', 'industry'),
+    schedule('future-talk', '2026-08-01', 'stock'),
+    schedule('past-dinner', '2026-07-01', 'dinner'),
+  ];
+  const rows = [
+    presentation('complete-me', 'past-talk', 'A', '2026-07-01'),
+    presentation('keep-future', 'future-talk', 'B', '2026-08-01'),
+    presentation('keep-dinner', 'past-dinner', 'C', '2026-07-01'),
+    presentation('keep-orphan', null, 'D', null),
+    presentation('already-done', 'past-talk', 'E', '2026-07-01', 'done'),
+  ];
+
+  assert.deepEqual(
+    plain(buildPastPresentationCompletionPatches(
+      schedules,
+      rows,
+      { today: '2026-07-25', orderedMembers: members }
+    )),
+    [{ id: 'complete-me', payload: { status: 'done' } }]
+  );
+});
+
+test('past schedule overflow is carried forward before expected rows are completed', () => {
+  const { classifyPastScheduledPresentationRows } = loadHelpers();
+  const schedules = [schedule('past-talk', '2026-07-01', 'industry')];
+  const rows = [
+    ...['A', 'B', 'C', 'D'].map(memberId => ({
+      ...presentation(`p${memberId}`, 'past-talk', memberId, '2026-07-01'),
+      category: 'industry',
+    })),
+  ];
+
+  assert.deepEqual(
+    plain(classifyPastScheduledPresentationRows(
+      schedules,
+      rows,
+      { today: '2026-07-25', orderedMembers: members }
+    )),
+    {
+      completionPatches: ['A', 'B', 'C'].map(memberId => ({
+        id: `p${memberId}`,
+        payload: { status: 'done' },
+      })),
+      carryoverPatches: [{
+        id: 'pD',
+        payload: { schedule_id: null, presented_at: null },
+      }],
+    }
+  );
+});
+
+test('the new draft epoch separates legacy orphan topics from the current cycle', () => {
+  const {
+    findCurrentPresentationDraft,
+    isCurrentUnassignedPresentationDraft,
+  } = loadHelpers();
+  const epoch = '2026-07-25T00:00:00.000Z';
+  const legacy = {
+    ...presentation('legacy', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-07-01T00:00:00.000Z',
+  };
+  const current = {
+    ...presentation('current', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-07-26T00:00:00.000Z',
+  };
+  const assigned = {
+    ...presentation('assigned', 'future', 'A', '2026-08-03'),
+    created_at: '2026-07-01T00:00:00.000Z',
+  };
+
+  assert.equal(isCurrentUnassignedPresentationDraft(legacy, epoch), false);
+  assert.equal(isCurrentUnassignedPresentationDraft(current, epoch), true);
+  assert.equal(
+    findCurrentPresentationDraft(
+      [legacy, current, assigned],
+      'A',
+      { draftEpoch: epoch }
+    ).id,
+    'current'
+  );
+  assert.equal(
+    findCurrentPresentationDraft(
+      [legacy, current, assigned],
+      'A',
+      { scheduleId: 'future', draftEpoch: epoch }
+    ).id,
+    'assigned'
+  );
+});
+
+test('an unavailable cycle fails closed for unassigned drafts', () => {
+  const { isCurrentUnassignedPresentationDraft } = loadHelpers();
+  const draft = {
+    id: 'draft',
+    status: 'planned',
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-07-26T00:00:00.000Z',
+  };
+
+  assert.equal(isCurrentUnassignedPresentationDraft(draft, null, []), false);
+  assert.equal(
+    isCurrentUnassignedPresentationDraft(draft, null, ['draft']),
+    true
+  );
+});
+
+test('draft cycle state keeps one epoch per cycle and resets for the next cycle', () => {
+  const { resolvePresentationDraftCycleState } = loadHelpers();
+  const initial = plain(resolvePresentationDraftCycleState(
+    null,
+    'rotation:initial',
+    {
+      cycleMarker: 'initial',
+      initialEpoch: '2026-07-25T00:00:00Z',
+    }
+  ));
+  assert.deepEqual(initial, {
+    cycleKey: 'rotation:initial',
+    cycleMarker: 'initial',
+    startedAt: '2026-07-25T00:00:00.000Z',
+    changed: true,
+  });
+
+  assert.deepEqual(
+    plain(resolvePresentationDraftCycleState(
+      {
+        cycle_key: initial.cycleKey,
+        cycle_marker: initial.cycleMarker,
+        started_at: initial.startedAt,
+      },
+      initial.cycleKey,
+      {
+        cycleMarker: initial.cycleMarker,
+        now: '2026-08-01T00:00:00Z',
+      }
+    )),
+    {
+      cycleKey: initial.cycleKey,
+      cycleMarker: initial.cycleMarker,
+      startedAt: initial.startedAt,
+      changed: false,
+    }
+  );
+
+  assert.deepEqual(
+    plain(resolvePresentationDraftCycleState(
+      {
+        cycle_key: initial.cycleKey,
+        cycle_marker: initial.cycleMarker,
+        started_at: initial.startedAt,
+      },
+      'rotation:2026-08-03',
+      {
+        cycleMarker: '2026-08-03',
+        now: '2026-08-04T09:00:00Z',
+      }
+    )),
+    {
+      cycleKey: 'rotation:2026-08-03',
+      cycleMarker: '2026-08-03',
+      startedAt: '2026-08-04T09:00:00.000Z',
+      changed: true,
+    }
+  );
+
+  assert.deepEqual(
+    plain(resolvePresentationDraftCycleState(
+      {
+        cycle_key: 'rotation:2026-08-03',
+        cycle_marker: '2026-08-03',
+        started_at: '2026-08-04T09:00:00.000Z',
+      },
+      'rotation:initial',
+      {
+        cycleMarker: 'initial',
+        now: '2026-08-05T00:00:00Z',
+      }
+    )),
+    {
+      cycleKey: 'rotation:2026-08-03',
+      cycleMarker: '2026-08-03',
+      startedAt: '2026-08-04T09:00:00.000Z',
+      changed: false,
+      ignoredStale: true,
+    }
+  );
+});
+
+test('cycle persistence cannot overwrite a newer marker from another tab', async () => {
+  let stored = {
+    cycle_key: 'rotation:2026-08-31',
+    cycle_marker: '2026-08-31',
+    started_at: '2026-09-01T00:00:00.000Z',
+  };
+  const writes = [];
+  const sb = {
+    from(table) {
+      assert.equal(table, 'app_config');
+      return {
+        async upsert(row, options) {
+          assert.equal(options.ignoreDuplicates, true);
+          if (!stored) stored = row.value;
+          return { error: null };
+        },
+        update({ value }) {
+          return {
+            eq(column, key) {
+              assert.equal(column, 'key');
+              assert.equal(key, 'presentation_draft_cycle_v1');
+              return {
+                async or(filter) {
+                  writes.push({ value, filter });
+                  if (
+                    stored.cycle_marker === 'initial' ||
+                    stored.cycle_marker < value.cycle_marker
+                  ) {
+                    stored = value;
+                  }
+                  return { error: null };
+                },
+              };
+            },
+          };
+        },
+        select() {
+          return {
+            eq() {
+              return {
+                async maybeSingle() {
+                  return { data: { value: stored }, error: null };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const { persistPresentationDraftCycleMonotonic } = loadHelpers({
+    sb,
+    async getConfigStrict(key) {
+      assert.equal(key, 'presentation_draft_cycle_v1');
+      return stored;
+    },
+  });
+
+  const staleResult = await persistPresentationDraftCycleMonotonic({
+    cycleKey: 'rotation:2026-08-17',
+    cycleMarker: '2026-08-17',
+    startedAt: '2026-08-18T00:00:00.000Z',
+  });
+  assert.equal(staleResult.cycleMarker, '2026-08-31');
+  assert.equal(stored.cycle_marker, '2026-08-31');
+
+  const currentResult = await persistPresentationDraftCycleMonotonic({
+    cycleKey: 'rotation:2026-09-14',
+    cycleMarker: '2026-09-14',
+    startedAt: '2026-09-15T00:00:00.000Z',
+  });
+  assert.equal(currentResult.cycleMarker, '2026-09-14');
+  assert.equal(stored.cycle_marker, '2026-09-14');
+  assert.match(writes[0].filter, /cycle_marker\.lt\.2026-08-17/);
+});
+
+test('cycle keys ignore future planned rows until those presentations are done', () => {
+  const { getPresentationTurnState } = loadHelpers();
+  const ordered = members.slice(0, 3);
+  const rows = [
+    ...['A', 'B', 'C'].map(memberId => ({
+      ...presentation(`p${memberId}-done`, 'past', memberId, '2026-07-01', 'done'),
+      category: 'industry',
+    })),
+    ...['A', 'B', 'C'].map(memberId => ({
+      ...presentation(`p${memberId}-planned`, 'future', memberId, '2026-08-01'),
+      category: 'stock',
+    })),
+  ];
+
+  assert.equal(
+    getPresentationTurnState(rows, ordered).cycleKey,
+    'stock:1:2026-07-01:pC-done'
+  );
+  assert.equal(
+    getPresentationTurnState(
+      rows,
+      ordered,
+      { includePlanned: true }
+    ).cycleKey,
+    'industry:2:2026-08-01:pC-planned'
+  );
+});
+
+test('draft cycle advances from the 3-3-1 study schedule even with missing topics', () => {
+  const {
+    buildPresentationSchedulePlan,
+    getPresentationDraftCycleState,
+  } = loadHelpers();
+  const schedules = [
+    schedule('s1', '2026-07-01', 'industry'),
+    schedule('s2', '2026-07-15', 'industry'),
+    schedule('s3', '2026-07-29', 'industry'),
+    schedule('s4', '2026-08-12', 'stock'),
+  ];
+  const rows = [
+    ...['A', 'B', 'C'].map(memberId => ({
+      ...presentation(`p${memberId}`, 's1', memberId, '2026-07-01', 'done'),
+      category: 'industry',
+    })),
+    ...['D', 'E'].map(memberId => ({
+      ...presentation(`p${memberId}`, 's2', memberId, '2026-07-15', 'done'),
+      category: 'industry',
+    })),
+  ];
+  const plan = buildPresentationSchedulePlan(
+    schedules,
+    rows,
+    members,
+    { fromDate: '2026-08-01' }
+  );
+  const draftCycle = getPresentationDraftCycleState(
+    schedules,
+    rows,
+    members,
+    { fromDate: '2026-08-01' }
+  );
+
+  assert.deepEqual(plain(plan.nextMemberIds), ['A', 'B', 'C']);
+  assert.deepEqual(plain(draftCycle), {
+    cursor: 0,
+    cycleMarker: '2026-07-29',
+    cycleKey: 'rotation:2026-07-29',
+  });
+});
+
+test('members whose turn passed can prepare a carryover draft for the next cycle', () => {
+  const { shouldCarryPresentationDraftToNextCycle } = loadHelpers();
+  const onePastStudy = [schedule('s1', '2026-07-01', 'industry')];
+
+  assert.equal(
+    shouldCarryPresentationDraftToNextCycle(
+      'A',
+      onePastStudy,
+      [],
+      members,
+      { fromDate: '2026-07-02' }
+    ),
+    true
+  );
+  assert.equal(
+    shouldCarryPresentationDraftToNextCycle(
+      'D',
+      onePastStudy,
+      [],
+      members,
+      { fromDate: '2026-07-02' }
+    ),
+    false
+  );
+  assert.equal(
+    shouldCarryPresentationDraftToNextCycle(
+      'A',
+      [
+        ...onePastStudy,
+        schedule('s2', '2026-07-15', 'industry'),
+        schedule('s3', '2026-07-29', 'industry'),
+      ],
+      [],
+      members,
+      { fromDate: '2026-08-01' }
+    ),
+    false
+  );
+});
+
+test('legacy orphan topics are not assigned into a new cycle', () => {
+  const { buildPresentationAssignmentPatches } = loadHelpers();
+  const targetSchedule = schedule('next', '2026-08-03');
+  const plan = {
+    fromDate: '2026-07-25',
+    items: [{ schedule: targetSchedule, memberIds: ['A'] }],
+  };
+  const legacy = {
+    ...presentation('legacy', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-07-01T00:00:00.000Z',
+  };
+  const current = {
+    ...presentation('current', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-07-26T00:00:00.000Z',
+  };
+  const opts = {
+    fromDate: '2026-07-25',
+    draftEpoch: '2026-07-25T00:00:00.000Z',
+  };
+
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [targetSchedule],
+      [legacy],
+      plan,
+      opts
+    )),
+    []
+  );
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [targetSchedule],
+      [legacy, current],
+      plan,
+      opts
+    )),
+    [{
+      id: 'current',
+      payload: { schedule_id: 'next', presented_at: '2026-08-03' },
+    }]
+  );
+});
+
+test('a prior-cycle orphan is not reused after the cycle epoch advances', () => {
+  const {
+    buildPresentationAssignmentPatches,
+    findCurrentPresentationDraft,
+  } = loadHelpers();
+  const targetSchedule = schedule('cycle-b-talk', '2026-09-14');
+  const plan = {
+    fromDate: '2026-09-01',
+    items: [{ schedule: targetSchedule, memberIds: ['A'] }],
+  };
+  const cycleA = {
+    ...presentation('cycle-a', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-08-01T00:00:00.000Z',
+  };
+  const cycleB = {
+    ...presentation('cycle-b', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-09-02T00:00:00.000Z',
+  };
+  const opts = {
+    fromDate: '2026-09-01',
+    draftEpoch: '2026-09-01T00:00:00.000Z',
+    draftCarryoverIds: [],
+  };
+
+  assert.equal(
+    findCurrentPresentationDraft(
+      [cycleA],
+      'A',
+      {
+        draftEpoch: opts.draftEpoch,
+        carryoverIds: opts.draftCarryoverIds,
+      }
+    ),
+    null
+  );
+  assert.equal(
+    findCurrentPresentationDraft(
+      [cycleA, cycleB],
+      'A',
+      {
+        draftEpoch: opts.draftEpoch,
+        carryoverIds: opts.draftCarryoverIds,
+      }
+    ).id,
+    'cycle-b'
+  );
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [targetSchedule],
+      [cycleA, cycleB],
+      plan,
+      opts
+    )),
+    [{
+      id: 'cycle-b',
+      payload: {
+        schedule_id: 'cycle-b-talk',
+        presented_at: '2026-09-14',
+      },
+    }]
+  );
+});
+
+test('a detached legacy draft is eligible only when registered as carryover', () => {
+  const {
+    buildPresentationAssignmentPatches,
+    isCurrentUnassignedPresentationDraft,
+  } = loadHelpers();
+  const targetSchedule = schedule('next-talk', '2026-09-14');
+  const detached = {
+    ...presentation('deleted-A', null, 'A', null),
+    schedule_id: null,
+    presented_at: null,
+    created_at: '2026-07-01T00:00:00.000Z',
+  };
+  const plan = {
+    fromDate: '2026-09-01',
+    items: [{ schedule: targetSchedule, memberIds: ['A'] }],
+  };
+  const epoch = '2026-09-01T00:00:00.000Z';
+
+  assert.equal(
+    isCurrentUnassignedPresentationDraft(detached, epoch, []),
+    false
+  );
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [targetSchedule],
+      [detached],
+      plan,
+      {
+        fromDate: '2026-09-01',
+        draftEpoch: epoch,
+        draftCarryoverIds: [],
+      }
+    )),
+    []
+  );
+
+  assert.equal(
+    isCurrentUnassignedPresentationDraft(detached, epoch, ['deleted-A']),
+    true
+  );
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [targetSchedule],
+      [detached],
+      plan,
+      {
+        fromDate: '2026-09-01',
+        draftEpoch: epoch,
+        draftCarryoverIds: ['deleted-A'],
+      }
+    )),
+    [{
+      id: 'deleted-A',
+      payload: {
+        schedule_id: 'next-talk',
+        presented_at: '2026-09-14',
+      },
+    }]
+  );
+});
+
+test('a dinner carry anchor waits when no target exists and moves when one appears', () => {
+  const { buildPresentationAssignmentPatches } = loadHelpers();
+  const dinner = schedule('dinner-old', '2026-08-17', 'dinner');
+  const futureTalk = schedule('future-talk', '2026-08-31', 'stock');
+  const anchored = {
+    ...presentation('pD', 'dinner-old', 'D', '2026-08-17'),
+    created_at: '2026-07-01T00:00:00.000Z',
+  };
+  const waitingPlan = {
+    fromDate: '2026-08-01',
+    items: [{ schedule: futureTalk, memberIds: ['A'] }],
+  };
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [dinner, futureTalk],
+      [anchored],
+      waitingPlan,
+      {
+        fromDate: '2026-08-01',
+        draftEpoch: '2026-07-25T00:00:00.000Z',
+      }
+    )),
+    []
+  );
+
+  const movingPlan = {
+    fromDate: '2026-08-01',
+    items: [{ schedule: futureTalk, memberIds: ['D'] }],
+  };
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [dinner, futureTalk],
+      [anchored],
+      movingPlan,
+      {
+        fromDate: '2026-08-01',
+        draftEpoch: '2026-07-25T00:00:00.000Z',
+      }
+    )),
+    [{
+      id: 'pD',
+      payload: {
+        schedule_id: 'future-talk',
+        presented_at: '2026-08-31',
+      },
+    }]
+  );
+});
+
 test('a just-detached earlier cycle stays ahead of an already scheduled later cycle', () => {
   const {
     buildPresentationSchedulePlan,
@@ -614,6 +1220,56 @@ test('an empty or unavailable future plan never detaches existing assignments', 
     )),
     []
   );
+});
+
+test('carryover registration failure prevents overflow rows from being detached', async () => {
+  let updateCalls = 0;
+  const { syncPlannedPresentationsToSchedulePlan } = loadHelpers({
+    sb: {
+      from(table) {
+        assert.equal(table, 'app_config');
+        return {
+          async upsert() {
+            return { error: new Error('config unavailable') };
+          },
+        };
+      },
+    },
+  });
+  const schedules = [
+    schedule('s1', '2026-08-03'),
+    schedule('s2', '2026-08-17'),
+  ];
+  const rows = [
+    presentation('A1', 's1', 'A', '2026-08-03'),
+    presentation('A2', 's2', 'A', '2026-08-17'),
+  ];
+  const client = {
+    from() {
+      return {
+        update() {
+          updateCalls += 1;
+          return {
+            async eq() {
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    syncPlannedPresentationsToSchedulePlan(
+      client,
+      schedules,
+      rows,
+      members,
+      { fromDate: '2026-08-01' }
+    ),
+    /config unavailable/
+  );
+  assert.equal(updateCalls, 0);
 });
 
 test('assignment sync rolls back earlier updates when a later update fails', async () => {
@@ -750,7 +1406,7 @@ test('all schedule surfaces consume the same automatic plan', () => {
   assert.match(calendar, /reconcileAutomaticPresentationAssignments/);
   assert.match(order, /getAutomaticPresentationPlan/);
   assert.match(index, /turnData\?\.schedules/);
-  assert.match(modal, /getConfig\('pres_order'\)/);
+  assert.match(modal, /getConfigStrict\('pres_order'\)/);
   assert.doesNotMatch(modal, /from\('app_settings'\).*pres_order/);
   assert.match(modal, /topic, category: cat/);
   assert.doesNotMatch(modal, /category:\s*_autoAssignment/);

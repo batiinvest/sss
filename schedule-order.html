@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20260724.3">
+  <link rel="stylesheet" href="css/style.css?v=20260725.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -41,10 +41,21 @@
           </select>
           <div id="industryNameWrap" style="display:none;">
             <label class="sr-only" for="thisTurnIndustry">산업명</label>
-            <input type="text" id="thisTurnIndustry" placeholder="산업명 입력" />
+            <div class="presentation-industry-input-row">
+              <input
+                type="text"
+                id="thisTurnIndustry"
+                placeholder="산업명 입력"
+                oninput="onIndustryNameInput()"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();saveTurnIndustryName();}"
+              />
+              <button type="button" id="saveIndustryNameBtn" class="btn" onclick="saveTurnIndustryName()">저장</button>
+            </div>
+            <span id="industryNameSaveStatus" class="presentation-industry-save-status" role="status" aria-live="polite"></span>
           </div>
         </div>
       </div>
+      <div id="legacyDraftNotice" class="presentation-legacy-draft-notice" hidden></div>
 
       <div class="presentation-members-head">
         <div>
@@ -99,13 +110,47 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260723.2"></script>
-<script src="js/schedule-shared.js?v=20260724.1"></script>
+<script src="js/db.js?v=20260725.1"></script>
+<script src="js/schedule-shared.js?v=20260725.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
 let adminUser   = false; // 관리자 여부
 const requestedScheduleId = new URLSearchParams(location.search).get('schedule');
+let currentIndustryConfigKey = null;
+let currentIndustryName = '';
+let industryLoadToken = 0;
+let industrySaveToken = 0;
+let industrySaveQueue = Promise.resolve(true);
+let industrySavePending = 0;
+let presentationSetupReady = false;
+
+function lockPresentationSetup(message) {
+  presentationSetupReady = false;
+  presentationDraftEpoch = null;
+  presentationDraftCarryoverIds = new Set();
+  const category = document.getElementById('thisTurnCategory');
+  const industry = document.getElementById('thisTurnIndustry');
+  const saveIndustry = document.getElementById('saveIndustryNameBtn');
+  if (category) category.disabled = true;
+  if (industry) industry.disabled = true;
+  if (saveIndustry) saveIndustry.disabled = true;
+  document.getElementById('turnGuide').textContent =
+    message || '발표 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
+  document.getElementById('memberPresPanel').innerHTML =
+    '<div class="empty-state">이전 발표 종목과 섞이지 않도록 입력을 잠시 중단했습니다.</div>';
+}
+
+async function reloadPresentationSetupData() {
+  try {
+    return await reloadPresentations({ strict: true });
+  } catch (error) {
+    console.error('발표 데이터 다시 불러오기 오류:', error);
+    lockPresentationSetup();
+    toast('저장 후 화면을 갱신하지 못했습니다. 새로고침해 주세요.');
+    throw error;
+  }
+}
 
 
 // ════════════════════════════════════════
@@ -163,7 +208,7 @@ async function savePresEditModal() {
     };
     const { error } = await sb.from('presentations').update(payload).eq('id', _editDraft.id);
     if (error) throw error;
-    await reloadPresentations();
+    await reloadPresentationSetupData();
     toast('✅ 저장 완료');
     closePresEditModal();
     refreshPresentationScheduleViews();
@@ -177,7 +222,7 @@ async function savePresEditModal() {
 async function clearPresEditStock() {
   if (!_editDraft || !confirm('종목을 초기화하고 다시 입력하시겠습니까?')) return;
   await sb.from('presentations').delete().eq('id', _editDraft.id);
-  await reloadPresentations();
+  await reloadPresentationSetupData();
   closePresEditModal();
   refreshPresentationScheduleViews();
 }
@@ -196,6 +241,313 @@ function onTurnCategoryChange() {
   const cat  = document.getElementById('thisTurnCategory').value;
   const wrap = document.getElementById('industryNameWrap');
   wrap.style.display = cat === 'industry' ? 'flex' : 'none';
+  if (cat === 'industry' && members.length) {
+    loadIndustryNameForContext(getAutomaticPresentationPlan(), cat);
+  }
+}
+
+function setIndustryNameSaveStatus(message, isError = false) {
+  const status = document.getElementById('industryNameSaveStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle('is-error', isError);
+}
+
+function onIndustryNameInput() {
+  const input = document.getElementById('thisTurnIndustry');
+  if (!input) return;
+  industryLoadToken += 1;
+  const value = input.value.trim();
+  const persisted = input.dataset.persisted === 'true';
+  input.dataset.dirty = String(
+    !persisted || value !== (input.dataset.savedValue || '')
+  );
+  setIndustryNameSaveStatus(
+    value
+      ? (input.dataset.dirty === 'true' ? '저장 필요' : '저장됨')
+      : '산업명을 입력해 주세요.'
+  );
+}
+
+function getVisiblePresentationPlanItem(plan) {
+  return getFocusedPresentationPlanItem(plan) || plan?.items?.[0] || null;
+}
+
+function inferIndustryNameForContext(plan) {
+  const visibleItem = getVisiblePresentationPlanItem(plan);
+  const scheduleId = visibleItem?.schedule?.id || null;
+  return [...presentations]
+    .filter(presentation => {
+      if (
+        presentation.status !== 'planned' ||
+        presentation.category !== 'industry' ||
+        !presentation.topic?.includes('>')
+      ) {
+        return false;
+      }
+      if (scheduleId) {
+        return String(presentation.schedule_id || '') === String(scheduleId);
+      }
+      return isCurrentUnassignedPresentationDraft(
+        presentation,
+        presentationDraftEpoch
+      );
+    })
+    .sort((a, b) =>
+      String(b.created_at || '').localeCompare(String(a.created_at || ''))
+    )
+    .map(presentation => presentation.topic.split('>')[0].trim())
+    .find(Boolean) || '';
+}
+
+async function loadIndustryNameForContext(plan, category) {
+  const input = document.getElementById('thisTurnIndustry');
+  if (!input || category !== 'industry') return;
+  const visibleItem = getVisiblePresentationPlanItem(plan);
+  const draftCycle = getPresentationDraftCycleState(
+    schedules,
+    presentations,
+    getOrderedCycleMembers(),
+    { fromDate: toDateStr(new Date()) }
+  );
+  const key = getPresentationIndustryConfigKey(
+    visibleItem?.schedule?.id,
+    presentationDraftEpoch,
+    draftCycle.cycleKey
+  );
+  if (!key) return;
+  if (
+    input.dataset.contextKey === key &&
+    ['true', 'loading'].includes(input.dataset.loaded)
+  ) {
+    return;
+  }
+
+  const token = ++industryLoadToken;
+  const contextChanged = input.dataset.contextKey !== key;
+  input.dataset.contextKey = key;
+  input.dataset.loaded = 'loading';
+  if (contextChanged) {
+    input.value = '';
+    input.dataset.savedValue = '';
+    input.dataset.persisted = 'false';
+    input.dataset.dirty = 'false';
+  }
+  setIndustryNameSaveStatus('불러오는 중...');
+  let saved;
+  let savedForCycle;
+  try {
+    saved = await getConfigStrict(key);
+    const cycleKey = visibleItem?.schedule?.id
+      ? getPresentationIndustryConfigKey(
+          null,
+          presentationDraftEpoch,
+          draftCycle.cycleKey
+        )
+      : null;
+    savedForCycle = !saved && cycleKey
+      ? await getConfigStrict(cycleKey)
+      : null;
+  } catch (error) {
+    console.error('산업명 불러오기 오류:', error);
+    if (token === industryLoadToken && input.dataset.contextKey === key) {
+      input.dataset.loaded = 'error';
+      input.dataset.persisted = 'false';
+      input.dataset.dirty = 'false';
+      setIndustryNameSaveStatus('불러오기 실패 · 새로고침해 주세요.', true);
+    }
+    return;
+  }
+  if (token !== industryLoadToken || input.dataset.contextKey !== key) return;
+
+  const savedName = typeof saved === 'string' && saved.trim()
+    ? saved.trim()
+    : (typeof savedForCycle === 'string' ? savedForCycle.trim() : '');
+  const inferredName = savedName ? '' : inferIndustryNameForContext(plan);
+  const name = savedName || inferredName;
+  const wasDirty = input.dataset.dirty === 'true';
+  currentIndustryConfigKey = key;
+  currentIndustryName = savedName || inferredName;
+  if (!wasDirty) input.value = name;
+  input.dataset.savedValue = savedName;
+  input.dataset.persisted = String(Boolean(savedName));
+  input.dataset.dirty = String(
+    wasDirty || (!savedName && Boolean(input.value.trim()))
+  );
+  input.dataset.loaded = 'true';
+  setIndustryNameSaveStatus(
+    input.dataset.dirty === 'true'
+      ? '저장 필요'
+      : (savedName ? '저장됨' : '산업명을 입력해 주세요.')
+  );
+}
+
+function saveTurnIndustryName(opts = {}) {
+  if (!presentationSetupReady) {
+    setIndustryNameSaveStatus('발표 데이터를 먼저 다시 불러와 주세요.', true);
+    return Promise.resolve(false);
+  }
+  const input = document.getElementById('thisTurnIndustry');
+  const category = document.getElementById('thisTurnCategory').value;
+  if (category !== 'industry') return Promise.resolve(true);
+  if (input?.dataset.loaded === 'error') {
+    setIndustryNameSaveStatus('기존 산업명을 확인하지 못해 저장하지 않았습니다.', true);
+    return Promise.resolve(false);
+  }
+
+  const name = input?.value?.trim() || '';
+  if (!name) {
+    setIndustryNameSaveStatus('산업명을 입력해 주세요.', true);
+    input?.focus();
+    return Promise.resolve(false);
+  }
+
+  const plan = getAutomaticPresentationPlan();
+  const visibleItem = getVisiblePresentationPlanItem(plan);
+  const scheduleId = visibleItem?.schedule?.id || null;
+  const draftCycle = getPresentationDraftCycleState(
+    schedules,
+    presentations,
+    getOrderedCycleMembers(),
+    { fromDate: toDateStr(new Date()) }
+  );
+  const key = getPresentationIndustryConfigKey(
+    scheduleId,
+    presentationDraftEpoch,
+    draftCycle.cycleKey
+  );
+  if (!key) {
+    setIndustryNameSaveStatus('저장할 발표 회차를 확인하지 못했습니다.', true);
+    return Promise.resolve(false);
+  }
+
+  const requestToken = ++industrySaveToken;
+  const request = { key, name, scheduleId, requestToken, opts };
+  const button = document.getElementById('saveIndustryNameBtn');
+  industrySavePending += 1;
+  button && (button.disabled = true);
+  button && (button.textContent = '저장 중...');
+  setIndustryNameSaveStatus('저장 중...');
+
+  const queued = industrySaveQueue.then(
+    () => persistTurnIndustryName(request),
+    () => persistTurnIndustryName(request)
+  );
+  industrySaveQueue = queued.catch(() => false);
+  return queued.finally(() => {
+    industrySavePending = Math.max(0, industrySavePending - 1);
+    if (!industrySavePending && button) {
+      button.disabled = false;
+      button.textContent = '저장';
+    }
+  });
+}
+
+async function persistTurnIndustryName(request) {
+  const { key, name, scheduleId, requestToken, opts } = request;
+  const input = document.getElementById('thisTurnIndustry');
+  try {
+    await setConfig(key, name);
+    const targets = presentations.filter(presentation => {
+      if (
+        presentation.status !== 'planned' ||
+        presentation.category !== 'industry' ||
+        !presentation.topic
+      ) {
+        return false;
+      }
+      if (scheduleId) {
+        return String(presentation.schedule_id || '') === String(scheduleId);
+      }
+      return isCurrentUnassignedPresentationDraft(
+        presentation,
+        presentationDraftEpoch
+      );
+    });
+    const updates = targets.map(presentation => {
+      const stockName = presentation.topic.split('>').pop().trim();
+      const topic = name + ' > ' + stockName;
+      return {
+        presentation,
+        topic,
+        request: sb.from('presentations').update({ topic }).eq('id', presentation.id),
+      };
+    });
+    const results = await Promise.all(updates.map(update => update.request));
+    const failedCount = results.filter(result => result.error).length;
+    updates.forEach((update, index) => {
+      if (!results[index].error) update.presentation.topic = update.topic;
+    });
+
+    currentIndustryConfigKey = key;
+    currentIndustryName = name;
+    if (
+      requestToken === industrySaveToken &&
+      input?.dataset.contextKey === key &&
+      input.value.trim() === name
+    ) {
+      input.dataset.savedValue = name;
+      input.dataset.persisted = 'true';
+      input.dataset.dirty = 'false';
+      input.dataset.loaded = 'true';
+      setIndustryNameSaveStatus(
+        failedCount ? '산업명 저장됨 · 일부 종목 반영 대기' : '저장됨',
+        Boolean(failedCount)
+      );
+    }
+    if (!opts.silent) {
+      toast(failedCount
+        ? '산업명은 저장됐지만 일부 종목에는 아직 반영되지 않았습니다.'
+        : '산업명이 저장되었습니다.');
+    }
+    return true;
+  } catch (error) {
+    console.error('산업명 저장 오류:', error);
+    if (requestToken === industrySaveToken) {
+      setIndustryNameSaveStatus('저장 실패 · 다시 시도해 주세요.', true);
+    }
+    return false;
+  }
+}
+
+async function ensureIndustryNameSaved() {
+  if (document.getElementById('thisTurnCategory').value !== 'industry') return true;
+  const input = document.getElementById('thisTurnIndustry');
+  if (!input?.value?.trim()) {
+    toast('산업명을 먼저 입력해 주세요.');
+    input?.focus();
+    return false;
+  }
+  if (
+    input.dataset.dirty === 'true' ||
+    input.dataset.persisted !== 'true' ||
+    currentIndustryConfigKey !== input.dataset.contextKey
+  ) {
+    return saveTurnIndustryName({ silent: true });
+  }
+  return true;
+}
+
+function renderLegacyDraftNotice() {
+  const notice = document.getElementById('legacyDraftNotice');
+  if (!notice) return;
+  const legacyDrafts = presentations.filter(presentation =>
+    presentation.status === 'planned' &&
+    !presentation.schedule_id &&
+    !presentation.presented_at &&
+    !isCurrentUnassignedPresentationDraft(
+      presentation,
+      presentationDraftEpoch
+    )
+  );
+  notice.hidden = !legacyDrafts.length;
+  if (!legacyDrafts.length) {
+    notice.textContent = '';
+    return;
+  }
+  notice.innerHTML =
+    '<strong>이전 사이클 종목 ' + legacyDrafts.length + '건을 분리했습니다.</strong>' +
+    '<span>기존 입력 내용은 삭제하지 않고, 새 사이클 자동 편성에서만 제외했습니다.</span>';
 }
 
 // ════════════════════════════════════════
@@ -296,17 +648,14 @@ function renderMemberPresPanel() {
       schedules,
       presentations
     );
-    const draft = (autoItem
-      ? presentations.find(p =>
-          String(p.member_id) === String(m.id) &&
-          p.status === 'planned' &&
-          String(p.schedule_id || '') === String(autoItem.schedule.id)
-        )
-      : null) || presentations.find(p =>
-        String(p.member_id) === String(m.id) &&
-        p.status === 'planned' &&
-        !p.schedule_id
-      );
+    const draft = findCurrentPresentationDraft(
+      presentations,
+      m.id,
+      {
+        scheduleId: autoItem?.schedule.id,
+        draftEpoch: presentationDraftEpoch,
+      }
+    );
 
     const isAssigned   = draft && !!draft.schedule_id;
     const assignedDate = isAssigned
@@ -351,7 +700,7 @@ function renderMemberPresPanel() {
         clearBtn.onclick = async () => {
           if (!confirm(m.name + '의 발표종목을 초기화할까요?')) return;
           await sb.from('presentations').delete().eq('id', draft.id);
-          await reloadPresentations();
+          await reloadPresentationSetupData();
           refreshPresentationScheduleViews();
         };
         rightArea.appendChild(clearBtn);
@@ -408,6 +757,7 @@ function renderMemberPresPanel() {
       manualBtn.onclick = async () => {
         const stockName = input.value.trim();
         if (!stockName) { toast('종목명을 먼저 입력하세요.'); input.focus(); return; }
+        if (!await ensureIndustryNameSaved()) return;
         const entry = buildPresentationEntry(stockName, autoItem, automaticPlan);
         const payload  = {
           member_id: m.id, status: 'planned',
@@ -417,20 +767,30 @@ function renderMemberPresPanel() {
           schedule_id: autoItem?.schedule.id || null,
           presented_at: autoItem?.schedule.event_date || null,
         };
-        const { error } = await sb.from('presentations').insert(payload);
+        const request = draft?.id
+          ? sb.from('presentations').update(payload).eq('id', draft.id)
+          : sb.from('presentations').insert(payload);
+        const { error } = await request;
         if (error) { toast('저장 오류: ' + error.message); return; }
-        await reloadPresentations();
+        await reloadPresentationSetupData();
         refreshPresentationScheduleViews();
-        const newDraft = presentations.find(p =>
-          String(p.member_id) === String(m.id) &&
-          p.status === 'planned' &&
-          String(p.schedule_id || '') === String(autoItem?.schedule.id || '')
+        const newDraft = findCurrentPresentationDraft(
+          presentations,
+          m.id,
+          {
+            scheduleId: autoItem?.schedule.id,
+            draftEpoch: presentationDraftEpoch,
+          }
         );
-        if (newDraft) openPresEditModal(m, newDraft);
+        if (newDraft) {
+          await registerDraftForFutureCycleIfNeeded(newDraft, autoItem);
+          openPresEditModal(m, newDraft);
+        }
       };
 
       // 종목 선택 시 → draft 저장 후 재렌더
       bindStockSearch(input, dd, async s => {
+        if (!await ensureIndustryNameSaved()) return;
         const entry = buildPresentationEntry(s.stock_name, autoItem, automaticPlan);
         const payload  = {
           member_id: m.id, status: 'planned',
@@ -442,16 +802,25 @@ function renderMemberPresPanel() {
           schedule_id: autoItem?.schedule.id || null,
           presented_at: autoItem?.schedule.event_date || null,
         };
-        const { error } = await sb.from('presentations').insert(payload);
+        const request = draft?.id
+          ? sb.from('presentations').update(payload).eq('id', draft.id)
+          : sb.from('presentations').insert(payload);
+        const { error } = await request;
         if (error) { toast('저장 오류: ' + error.message); return; }
-        await reloadPresentations();
+        await reloadPresentationSetupData();
         refreshPresentationScheduleViews();
-        const newDraft = presentations.find(p =>
-          String(p.member_id) === String(m.id) &&
-          p.status === 'planned' &&
-          String(p.schedule_id || '') === String(autoItem?.schedule.id || '')
+        const newDraft = findCurrentPresentationDraft(
+          presentations,
+          m.id,
+          {
+            scheduleId: autoItem?.schedule.id,
+            draftEpoch: presentationDraftEpoch,
+          }
         );
-        if (newDraft) openPresEditModal(m, newDraft);
+        if (newDraft) {
+          await registerDraftForFutureCycleIfNeeded(newDraft, autoItem);
+          openPresEditModal(m, newDraft);
+        }
       }, { limit: 8 });
 
       searchWrap.appendChild(input);
@@ -467,6 +836,7 @@ function renderMemberPresPanel() {
     row.appendChild(rightArea);
     panel.appendChild(row);
   });
+  renderLegacyDraftNotice();
 }
 
 // 외부 클릭 시 드롭다운 닫기
@@ -544,12 +914,33 @@ function buildPresentationEntry(stockName, autoItem, plan) {
   const matchesVisibleContext = !autoItem?.schedule || !contextItem?.schedule ||
     String(autoItem.schedule.id) === String(contextItem.schedule.id);
   const industry = category === 'industry' && matchesVisibleContext
-    ? (document.getElementById('thisTurnIndustry')?.value?.trim() || '')
+    ? (currentIndustryName || document.getElementById('thisTurnIndustry')?.value?.trim() || '')
     : '';
   return {
     category,
     topic: industry ? industry + ' > ' + stockName : stockName,
   };
+}
+
+async function registerDraftForFutureCycleIfNeeded(draft, autoItem) {
+  if (!draft?.id || autoItem || draft.schedule_id) return false;
+  if (!shouldCarryPresentationDraftToNextCycle(
+    draft.member_id,
+    schedules,
+    presentations,
+    getOrderedCycleMembers(),
+    { fromDate: toDateStr(new Date()) }
+  )) {
+    return false;
+  }
+  try {
+    await registerPresentationDraftCarryoverIds([draft.id]);
+    return true;
+  } catch (error) {
+    console.error('다음 사이클 발표 초안 보존 오류:', error);
+    toast('종목은 저장됐지만 다음 사이클 연결을 보존하지 못했습니다. 다시 저장해 주세요.');
+    return false;
+  }
 }
 
 async function reconcileAutomaticPresentationPlan(fromDate = toDateStr(new Date())) {
@@ -560,7 +951,7 @@ async function reconcileAutomaticPresentationPlan(fromDate = toDateStr(new Date(
     getOrderedCycleMembers(),
     { fromDate }
   );
-  if (result.patches.length) await reloadPresentations();
+  if (result.patches.length) await reloadPresentationSetupData();
   refreshPresentationScheduleViews();
   guessNextTurn();
   if (result.patches.length) {
@@ -601,6 +992,7 @@ function guessNextTurn() {
       (nextNames.length < PRESENTATION_GROUP_SIZE ? ' · 이번 사이클 마지막' : '')
     : '활성 발표자가 없습니다.';
   guide.innerHTML = guideHtml;
+  loadIndustryNameForContext(plan, category);
 }
 
 async function init() {
@@ -611,12 +1003,25 @@ async function init() {
     [adminUser] = await Promise.all([isAdmin()]);
     await loadSharedData();   // js/schedule-shared.js
     // 발표자 순서 DB에서 불러오기
-    const savedOrder = await getConfig('pres_order');
+    const savedOrder = await getConfigStrict('pres_order');
     presOrder = normalizePresentationOrder(members, savedOrder).map(member => member.id);
+    await syncLoadedPastPresentations(getOrderedCycleMembers());
+    const draftCycle = getPresentationDraftCycleState(
+      schedules,
+      presentations,
+      getOrderedCycleMembers(),
+      { fromDate: toDateStr(new Date()) }
+    );
+    await ensurePresentationDraftCycle(
+      draftCycle.cycleKey,
+      { cycleMarker: draftCycle.cycleMarker }
+    );
+    await reconcileAutomaticPresentationPlan();
+    presentationSetupReady = true;
   } catch(e) {
     console.error('데이터 로드 오류:', e.message);
-    schedules = []; members = []; presentations = [];
-    presOrder = members.map(m => m.id);
+    lockPresentationSetup();
+    return;
   }
 
   guessNextTurn();

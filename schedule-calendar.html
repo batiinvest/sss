@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260724.3">
+  <link rel="stylesheet" href="css/style.css?v=20260725.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -190,8 +190,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260723.2"></script>
-<script src="js/schedule-shared.js?v=20260724.1"></script>
+<script src="js/db.js?v=20260725.1"></script>
+<script src="js/schedule-shared.js?v=20260725.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -201,6 +201,13 @@ let detailReturnFocus = null;
 let formInitialState = '';
 let formLegacyPresentationPrefix = '';
 let presOrder = [];
+let scheduleDataReady = false;
+
+function lockScheduleData() {
+  scheduleDataReady = false;
+  presentationDraftEpoch = null;
+  presentationDraftCarryoverIds = new Set();
+}
 
 function refreshSchedulePageViews() {
   renderCalendar();
@@ -258,7 +265,7 @@ async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(ne
     { fromDate }
   );
   if (result.patches.length) {
-    presentations = await reloadPresentations();
+    presentations = await reloadPresentations({ strict: true });
   }
   return result.patches.length;
 }
@@ -318,11 +325,26 @@ async function init() {
 
   try {
     await loadSharedData();   // js/schedule-shared.js
-    const savedOrder = await getConfig('pres_order');
+    const savedOrder = await getConfigStrict('pres_order');
     presOrder = normalizePresentationOrder(members, savedOrder).map(member => member.id);
+    const orderedMembers = normalizePresentationOrder(members, presOrder);
+    await syncLoadedPastPresentations(orderedMembers);
+    const draftCycle = getPresentationDraftCycleState(
+      schedules,
+      presentations,
+      orderedMembers,
+      { fromDate: toDateStr(new Date()) }
+    );
+    await ensurePresentationDraftCycle(
+      draftCycle.cycleKey,
+      { cycleMarker: draftCycle.cycleMarker }
+    );
+    await reconcileAutomaticPresentationAssignments();
+    scheduleDataReady = true;
   } catch(e) {
     console.error('일정 데이터 로드 오류:', e.message);
-    schedules = []; members = []; presentations = [];
+    lockScheduleData();
+    toast('발표 사이클을 확인하지 못해 일정 편집을 잠시 중단했습니다. 새로고침해 주세요.');
   }
 
   const sel = document.getElementById('s-member');
@@ -688,6 +710,10 @@ function isScheduleFormDirty() {
 }
 
 function openForm(prefill={}) {
+  if (!scheduleDataReady) {
+    toast('일정 데이터를 모두 확인한 뒤 편집할 수 있습니다. 새로고침해 주세요.');
+    return;
+  }
   formReturnFocus = document.activeElement;
   editingScheduleId = prefill.id || null;
   document.getElementById('formTitle').textContent = editingScheduleId ? '일정 수정' : '일정 추가';
@@ -741,6 +767,10 @@ function editSchedule(id) {
 
 async function saveSchedule(event) {
   event?.preventDefault?.();
+  if (!scheduleDataReady) {
+    showScheduleFormError('일정 데이터를 모두 확인하지 못해 저장하지 않았습니다. 새로고침해 주세요.');
+    return;
+  }
   const title    = document.getElementById('s-title').value.trim();
   const category = document.getElementById('s-category').value;
   const date     = document.getElementById('s-date').value;
@@ -749,9 +779,10 @@ async function saveSchedule(event) {
   const memberId = document.getElementById('s-member').value || null;
   const memo     = document.getElementById('s-desc').value.trim();
   const desc     = [formLegacyPresentationPrefix, memo].filter(Boolean).join('\n\n') || null;
-  const previousCategory = editingScheduleId
-    ? schedules.find(schedule => String(schedule.id) === String(editingScheduleId))?.category
+  const previousSchedule = editingScheduleId
+    ? schedules.find(schedule => String(schedule.id) === String(editingScheduleId))
     : null;
+  const previousCategory = previousSchedule?.category || null;
 
   showScheduleFormError('');
 
@@ -767,12 +798,50 @@ async function saveSchedule(event) {
   const btn = document.getElementById('saveScheduleBtn');
   btn.textContent = '저장 중...'; btn.disabled = true;
 
+  let reopenedDoneIds = [];
+  let reopenedDoneRows = false;
   try {
     const payload = { title, category, event_date: date, event_time: time, location, created_by: memberId, description: desc };
     let savedSchedule = null;
     const wasEditing = Boolean(editingScheduleId);
     if (editingScheduleId) {
-      await updateSchedule(editingScheduleId, payload);
+      if (
+        isPresentationSchedule(previousSchedule) &&
+        !['industry', 'stock'].includes(category)
+      ) {
+        const { data: doneRows, error: doneRowsError } = await sb
+          .from('presentations')
+          .select('id')
+          .eq('schedule_id', editingScheduleId)
+          .eq('status', 'done');
+        if (doneRowsError) throw doneRowsError;
+        reopenedDoneIds = (doneRows || []).map(presentation => presentation.id);
+        if (reopenedDoneIds.length) {
+          await registerPresentationDraftCarryoverIds(reopenedDoneIds);
+          const { error: reopenError } = await sb.from('presentations')
+            .update({ status: 'planned' })
+            .in('id', reopenedDoneIds);
+          if (reopenError) throw reopenError;
+          reopenedDoneRows = true;
+        }
+      }
+      try {
+        await updateSchedule(editingScheduleId, payload);
+      } catch (updateError) {
+        if (reopenedDoneRows) {
+          const { error: rollbackError } = await sb.from('presentations')
+            .update({ status: 'done' })
+            .in('id', reopenedDoneIds);
+          if (rollbackError) {
+            throw new Error(
+              (updateError.message || '일정 저장 실패') +
+              ' · 발표 상태 복구에도 실패했습니다: ' +
+              rollbackError.message
+            );
+          }
+        }
+        throw updateError;
+      }
     } else {
       savedSchedule = await submitSchedule(payload);
       // 발표 저장이 실패해도 재시도 시 같은 일정을 수정하도록 새 ID를 즉시 보존한다.
@@ -802,24 +871,9 @@ async function saveSchedule(event) {
       if (failed?.error) throw failed.error;
     }
 
-    if (!['industry', 'stock'].includes(category) && editingScheduleId) {
-      // 발표 일정에서 회식·기타로 바뀌면 작성 중인 발표만 연결 해제한다.
-      // 완료 기록은 이력 보존을 위해 수정하지 않는다.
-      const linkedPlannedIds = presentations
-        .filter(p => p.schedule_id === editingScheduleId && p.status === 'planned')
-        .map(p => p.id);
-      if (linkedPlannedIds.length) {
-        const { error } = await sb.from('presentations')
-          .update({ schedule_id: null, presented_at: null })
-          .in('id', linkedPlannedIds);
-        if (error) throw error;
-      }
-    }
-
     // 발표 목록과 일정 목록을 함께 갱신해 모든 화면의 연결 상태를 맞춘다.
-    presentations = await sb.from('presentations')
-      .select('*, members(name)').order('created_at').then(r => r.data || []);
-    schedules = await fetchSchedules();
+    presentations = await reloadPresentations({ strict: true });
+    schedules = await fetchSchedules({ strict: true });
     const today = toDateStr(new Date());
     await reconcileAutomaticPresentationAssignments(today);
     refreshSchedulePageViews();
@@ -828,6 +882,7 @@ async function saveSchedule(event) {
       : '일정이 추가되고 발표 순서가 자동 반영되었습니다!');
     closeForm(true);
   } catch(e) {
+    lockScheduleData();
     showScheduleFormError('저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도하세요.'));
     toast('오류: ' + e.message);
   }
@@ -835,6 +890,10 @@ async function saveSchedule(event) {
 }
 
 async function confirmDelete(id) {
+  if (!scheduleDataReady) {
+    toast('일정 데이터를 모두 확인하지 못해 삭제하지 않았습니다. 새로고침해 주세요.');
+    return;
+  }
   const s = schedules.find(s => s.id === id);
   if (!s || !confirm(`"${s.title}" 일정을 삭제할까요?`)) return;
   const { data: linkedRowsData, error: linkedRowsError } = await sb
@@ -858,6 +917,7 @@ async function confirmDelete(id) {
   let rollbackFailed = false;
   try {
     if (plannedIds.length) {
+      await registerPresentationDraftCarryoverIds(plannedIds);
       const { error } = await sb.from('presentations')
         .update({ schedule_id: null, presented_at: null })
         .in('id', plannedIds);
@@ -873,13 +933,14 @@ async function confirmDelete(id) {
     }
     await deleteSchedule(id);
     scheduleDeleted = true;
-    schedules = await fetchSchedules();
-    presentations = await reloadPresentations();
+    schedules = await fetchSchedules({ strict: true });
+    presentations = await reloadPresentations({ strict: true });
     const today = toDateStr(new Date());
     await reconcileAutomaticPresentationAssignments(today);
     refreshSchedulePageViews();
     toast('일정이 삭제되고 이후 발표 순서가 자동으로 조정되었습니다.');
   } catch(e) {
+    lockScheduleData();
     if (!scheduleDeleted && (plannedDetached || historyDetached)) {
       const rollbackTasks = [];
       if (plannedDetached) {

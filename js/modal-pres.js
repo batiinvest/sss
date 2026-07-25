@@ -1,5 +1,5 @@
 // ============================================================
-// js/modal-pres.js  v20260427
+// js/modal-pres.js  v20260725
 // 발표종목 입력 팝업 — index.html 전용 (본인 발표종목 draft 저장)
 // ============================================================
 
@@ -13,11 +13,20 @@ const ModalPres = (() => {
   let _lastQueuedDraftKey = null;
   let _returnFocus = null;
   let _autoAssignment = null;
+  let _draftEpoch = null;
+  let _industryConfigKey = null;
+  let _industrySaveQueue = Promise.resolve(true);
+  let _industrySaveToken = 0;
+  let _scheduleRows = [];
+  let _turnRows = [];
+  let _orderedMembers = [];
+  let _openToken = 0;
+  let _closePromise = Promise.resolve();
   const DRAFT_SAVE_DELAY = 500;
 
   function getModalTurnState(allPresentations, orderedMembers) {
     if (typeof getPresentationTurnState === 'function') {
-      return getPresentationTurnState(allPresentations, orderedMembers, { includePlanned: true });
+      return getPresentationTurnState(allPresentations, orderedMembers);
     }
 
     const ordered = (orderedMembers || []).filter(Boolean);
@@ -30,7 +39,7 @@ const ModalPres = (() => {
         p.member_id &&
         p.presented_at &&
         ['industry', 'stock'].includes(p.category) &&
-        (p.status === 'done' || (p.status === 'planned' && p.schedule_id))
+        p.status === 'done'
       )
       .sort((a, b) =>
         String(a.presented_at || '').localeCompare(String(b.presented_at || '')) ||
@@ -49,7 +58,14 @@ const ModalPres = (() => {
         }
       });
 
-    return { category };
+    return { category, cycleKey: 'legacy:' + category };
+  }
+
+  function setModalContextControlsDisabled(disabled) {
+    const category = document.getElementById('pm-category');
+    const industry = document.getElementById('pm-industry');
+    if (category) category.disabled = disabled;
+    if (industry) industry.disabled = disabled;
   }
 
   // ── 팝업 HTML 마운트
@@ -95,13 +111,30 @@ const ModalPres = (() => {
 
   // ── 열기
   async function open() {
+    const openToken = ++_openToken;
+    await _closePromise;
+    if (openToken !== _openToken) return;
+
     mount();
     _returnFocus = document.activeElement;
     document.getElementById('presModal').style.display = 'flex';
     document.getElementById('pm-memberPanel').innerHTML =
       '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">불러오는 중...</div>';
+    const industryInput = document.getElementById('pm-industry');
+    const industryHint = document.getElementById('pm-industry-hint');
+    if (industryInput) industryInput.value = '';
+    if (industryInput) {
+      industryInput.onchange = null;
+      industryInput.onblur = null;
+    }
+    if (industryHint) industryHint.style.display = 'none';
+    setModalContextControlsDisabled(true);
+    _industryConfigKey = null;
+    _industrySaveToken += 1;
 
-    _me = await getCurrentMember();
+    const currentMember = await getCurrentMember();
+    if (openToken !== _openToken) return;
+    _me = currentMember;
     if (!_me) {
       document.getElementById('pm-memberPanel').innerHTML =
         '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">멤버 정보를 찾을 수 없습니다.</div>';
@@ -110,51 +143,148 @@ const ModalPres = (() => {
 
     // 내 예정 발표를 모두 불러온 뒤 자동 회차와 정확히 일치하는 draft만 편집한다.
     const today = toDateStr(new Date());
-    const [myPlanned, allRes, membersRes, savedOrder, turnRes, schedulesRes] = await Promise.all([
-      sb.from('presentations')
-        .select('*').eq('status','planned').eq('member_id',_me.id)
-        .order('created_at', { ascending: true }),
-      sb.from('presentations')
-        .select('category,topic').eq('status','planned').is('schedule_id',null)
-        .order('created_at', { ascending: false }).limit(10),
-      sb.from('members').select('*').eq('is_active', true).order('joined_at'),
-      getConfig('pres_order'),
-      sb.from('presentations')
-        .select('id,member_id,category,status,schedule_id,presented_at,created_at'),
-      sb.from('schedules')
-        .select('id,title,category,event_date,event_time')
-        .order('event_date', { ascending: true }),
-    ]);
+    let myPlanned;
+    let allRes;
+    let membersRes;
+    let savedOrder;
+    let turnRes;
+    let schedulesRes;
+    try {
+      [myPlanned, allRes, membersRes, savedOrder, turnRes, schedulesRes] = await Promise.all([
+        sb.from('presentations')
+          .select('*').eq('status','planned').eq('member_id',_me.id)
+          .order('created_at', { ascending: true }),
+        sb.from('presentations')
+          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at')
+          .eq('status','planned').is('schedule_id',null)
+          .order('created_at', { ascending: false }).limit(10),
+        sb.from('members').select('*').eq('is_active', true).order('joined_at'),
+        getConfigStrict('pres_order'),
+        sb.from('presentations')
+          .select('id,member_id,category,status,schedule_id,presented_at,created_at'),
+        sb.from('schedules')
+          .select('id,title,category,event_date,event_time')
+          .order('event_date', { ascending: true }),
+      ]);
+      const dataError = [
+        myPlanned.error,
+        allRes.error,
+        membersRes.error,
+        turnRes.error,
+        schedulesRes.error,
+      ].find(Boolean);
+      if (dataError) throw dataError;
+    } catch (error) {
+      console.error('발표 입력 데이터 로드 오류:', error);
+      if (openToken === _openToken) {
+        document.getElementById('pm-memberPanel').innerHTML =
+          '<div style="font-size:13px;color:var(--up);padding:1rem;text-align:center;">발표 데이터를 불러오지 못했습니다. 닫은 뒤 다시 시도해 주세요.</div>';
+      }
+      return;
+    }
+    if (openToken !== _openToken) return;
 
     const allMembers = membersRes.data || [];
     const orderedMembers = normalizePresentationOrder(allMembers, savedOrder);
+    const scheduleRows = schedulesRes.data || [];
+    let turnRows = turnRes.data || [];
+    try {
+      const completion = await syncPastScheduledPresentationsDone(
+        sb,
+        scheduleRows,
+        turnRows,
+        { orderedMembers }
+      );
+      if (completion.patches.length || completion.carryoverPatches.length) {
+        const completedIds = new Set(completion.patches.map(patch => String(patch.id)));
+        const carryoverIds = new Set(
+          completion.carryoverPatches.map(patch => String(patch.id))
+        );
+        turnRows = turnRows.map(row =>
+          completedIds.has(String(row.id))
+            ? { ...row, status: 'done' }
+            : carryoverIds.has(String(row.id))
+              ? { ...row, schedule_id: null, presented_at: null }
+              : row
+        );
+      }
+    } catch (error) {
+      console.error('지난 발표 완료 처리 오류:', error);
+      if (openToken === _openToken) {
+        document.getElementById('pm-memberPanel').innerHTML =
+          '<div style="font-size:13px;color:var(--up);padding:1rem;text-align:center;">지난 발표 상태를 확인하지 못해 입력을 중단했습니다. 닫은 뒤 다시 시도해 주세요.</div>';
+      }
+      return;
+    }
+    if (openToken !== _openToken) return;
+    _scheduleRows = scheduleRows;
+    _turnRows = turnRows;
+    _orderedMembers = orderedMembers;
+    const modalTurnState = getModalTurnState(turnRows, orderedMembers);
+    const draftCycleState = getPresentationDraftCycleState(
+      scheduleRows,
+      turnRows,
+      orderedMembers,
+      { fromDate: today }
+    );
+    try {
+      const draftCycle = await ensurePresentationDraftCycle(
+        draftCycleState.cycleKey,
+        { cycleMarker: draftCycleState.cycleMarker }
+      );
+      if (openToken !== _openToken) return;
+      _draftEpoch = draftCycle.startedAt;
+    } catch (error) {
+      console.error('발표 초안 사이클 저장 오류:', error);
+      if (openToken === _openToken) {
+        document.getElementById('pm-memberPanel').innerHTML =
+          '<div style="font-size:13px;color:var(--up);padding:1rem;text-align:center;">새 발표 사이클을 확인하지 못해 입력을 중단했습니다. 닫은 뒤 다시 시도해 주세요.</div>';
+      }
+      return;
+    }
     const presentationPlan = buildPresentationSchedulePlan(
-      schedulesRes.data || [],
-      turnRes.data || [],
+      scheduleRows,
+      turnRows,
       orderedMembers,
       { fromDate: today }
     );
     _autoAssignment = getNextPresentationInputPlanItem(
       presentationPlan,
       _me.id,
-      schedulesRes.data || [],
-      turnRes.data || []
+      scheduleRows,
+      turnRows
     );
-    const plannedRows = myPlanned.data || [];
-    const assignedDraft = _autoAssignment
-      ? plannedRows.find(row =>
-          String(row.schedule_id || '') === String(_autoAssignment.schedule.id)
-        )
-      : null;
-    const unassignedDraft = plannedRows.find(row => !row.schedule_id);
-    _drafts = assignedDraft
-      ? [assignedDraft]
-      : (unassignedDraft ? [unassignedDraft] : []);
+    const completedIds = new Set(
+      turnRows.filter(row => row.status === 'done').map(row => String(row.id))
+    );
+    const plannedRows = (myPlanned.data || [])
+      .filter(row => !completedIds.has(String(row.id)))
+      .map(row =>
+        presentationDraftCarryoverIds.has(String(row.id))
+          ? { ...row, schedule_id: null, presented_at: null }
+          : row
+      );
+    const currentDraft = findCurrentPresentationDraft(
+      plannedRows,
+      _me.id,
+      {
+        scheduleId: _autoAssignment?.schedule.id,
+        draftEpoch: _draftEpoch,
+        carryoverIds: presentationDraftCarryoverIds,
+      }
+    );
+    _drafts = currentDraft ? [currentDraft] : [];
 
     // 이번 세션의 카테고리 + 산업명 추론
     // 1순위: 전체 draft에서 가장 최근 category/industry
     // 2순위: 완료된 발표 기준 다음 카테고리 추천
-    const allDrafts = allRes.data || [];
+    const allDrafts = (allRes.data || []).filter(row =>
+      isCurrentUnassignedPresentationDraft(
+        row,
+        _draftEpoch,
+        presentationDraftCarryoverIds
+      )
+    );
     let sharedCat      = null;
     let sharedIndustry = '';
 
@@ -168,7 +298,7 @@ const ModalPres = (() => {
 
     // 카테고리 추천: 산업/종목 한 사이클이 끝날 때만 다음 구분으로 전환
     if (!sharedCat) {
-      sharedCat = getModalTurnState(turnRes.data || [], orderedMembers).category;
+      sharedCat = modalTurnState.category;
     }
     const myDraft = _drafts.find(p => p.member_id === _me.id);
     if (_autoAssignment?.schedule.category && !myDraft) {
@@ -179,6 +309,40 @@ const ModalPres = (() => {
       document.getElementById('pm-category').value = sharedCat;
       onCategoryChange();
     }
+
+    _industryConfigKey = getPresentationIndustryConfigKey(
+      _autoAssignment?.schedule.id,
+      _draftEpoch,
+      draftCycleState.cycleKey
+    );
+    try {
+      if (_industryConfigKey) {
+        const savedIndustry = await getConfigStrict(_industryConfigKey);
+        if (typeof savedIndustry === 'string' && savedIndustry.trim()) {
+          sharedIndustry = savedIndustry.trim();
+        } else if (_autoAssignment?.schedule.id) {
+          const cycleIndustryKey = getPresentationIndustryConfigKey(
+            null,
+            _draftEpoch,
+            draftCycleState.cycleKey
+          );
+          const savedCycleIndustry = cycleIndustryKey
+            ? await getConfigStrict(cycleIndustryKey)
+            : null;
+          if (typeof savedCycleIndustry === 'string' && savedCycleIndustry.trim()) {
+            sharedIndustry = savedCycleIndustry.trim();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('산업명 불러오기 오류:', error);
+      if (openToken === _openToken) {
+        document.getElementById('pm-memberPanel').innerHTML =
+          '<div style="font-size:13px;color:var(--up);padding:1rem;text-align:center;">저장된 산업명을 확인하지 못해 입력을 중단했습니다. 닫은 뒤 다시 시도해 주세요.</div>';
+      }
+      return;
+    }
+    if (openToken !== _openToken) return;
 
     // 공유 산업명 자동 입력
     if (sharedIndustry) {
@@ -196,23 +360,34 @@ const ModalPres = (() => {
 
     // 산업명 변경 시 다른 draft들에도 반영 (실시간 공유)
     setTimeout(() => {
+      if (openToken !== _openToken) return;
       const industryEl = document.getElementById('pm-industry');
       if (industryEl) {
-        industryEl.addEventListener('change', () => syncIndustryName(industryEl.value.trim()));
-        industryEl.addEventListener('blur',   () => syncIndustryName(industryEl.value.trim()));
+        industryEl.onchange = () => syncIndustryName(industryEl.value.trim());
+        industryEl.onblur = () => syncIndustryName(industryEl.value.trim());
       }
     }, 0);
 
+    if (openToken !== _openToken) return;
+    setModalContextControlsDisabled(false);
     renderPanel();
   }
 
   // ── 닫기
   function close() {
-    document.getElementById('presModal').style.display = 'none';
-    flushDraftSave().finally(() => {
+    const modal = document.getElementById('presModal');
+    if (!modal || modal.style.display === 'none') return _closePromise;
+    _openToken += 1;
+    modal.style.display = 'none';
+    const returnFocus = _returnFocus;
+    _closePromise = Promise.allSettled([
+      flushDraftSave(),
+      _industrySaveQueue,
+    ]).finally(() => {
       if (typeof ModalPres._onClose === 'function') ModalPres._onClose();
-      _returnFocus?.focus?.();
+      returnFocus?.focus?.();
     });
+    return _closePromise;
   }
 
   function onCategoryChange() {
@@ -240,7 +415,9 @@ const ModalPres = (() => {
     }
     if (draft?.category === 'industry' && draft?.topic?.includes('>')) {
       const industryEl = document.getElementById('pm-industry');
-      if (industryEl) industryEl.value = draft.topic.split('>')[0].trim();
+      if (industryEl && !industryEl.value) {
+        industryEl.value = draft.topic.split('>')[0].trim();
+      }
     }
 
     panel.innerHTML =
@@ -368,20 +545,66 @@ const ModalPres = (() => {
   }
 
   // ── 산업명 변경 시 내 draft topic 즉시 업데이트
-  async function syncIndustryName(industryName) {
-    if (!_me || !industryName) return;
+  function syncIndustryName(industryName) {
+    if (!_me || !industryName) return Promise.resolve(false);
+    const token = ++_industrySaveToken;
     const myDraft = _drafts.find(p => p.member_id === _me.id);
-    if (!myDraft || myDraft.category !== 'industry') return;
-
-    // 현재 topic에서 종목명 추출
-    const stockName = myDraft.topic?.includes('>')
+    const stockName = myDraft?.topic?.includes('>')
       ? myDraft.topic.split('>')[1].trim()
-      : (myDraft.topic || '');
-    if (!stockName) return;
+      : (myDraft?.topic || '');
+    const request = {
+      industryName,
+      token,
+      configKey: _industryConfigKey,
+      draftId: myDraft?.id || null,
+      draftCategory: myDraft?.category || null,
+      stockName,
+    };
+    const queued = _industrySaveQueue.then(
+      () => persistIndustryName(request),
+      () => persistIndustryName(request)
+    );
+    _industrySaveQueue = queued.catch(() => false);
+    return queued;
+  }
+
+  async function persistIndustryName(request) {
+    const {
+      industryName,
+      token,
+      configKey,
+      draftId,
+      draftCategory,
+      stockName,
+    } = request;
+    if (configKey) {
+      try {
+        await setConfig(configKey, industryName);
+        if (token === _industrySaveToken) {
+          setDraftSaveStatus('산업명 저장됨', false);
+        }
+      } catch (error) {
+        if (token === _industrySaveToken) {
+          setDraftSaveStatus('산업명 저장 실패 · 다시 시도해 주세요.', true);
+        }
+        return false;
+      }
+    }
+    if (!draftId || draftCategory !== 'industry' || !stockName) return true;
 
     const newTopic = industryName + ' > ' + stockName;
-    await sb.from('presentations').update({ topic: newTopic }).eq('id', myDraft.id);
-    myDraft.topic = newTopic;
+    const { error } = await sb.from('presentations')
+      .update({ topic: newTopic })
+      .eq('id', draftId);
+    if (error) {
+      if (token === _industrySaveToken) {
+        setDraftSaveStatus('산업명은 저장됐지만 종목 반영에 실패했습니다.', true);
+      }
+      return false;
+    }
+    const currentDraft = _drafts.find(draft => String(draft.id) === String(draftId));
+    if (currentDraft) currentDraft.topic = newTopic;
+    return true;
   }
 
   function readDraftState(inp) {
@@ -413,6 +636,7 @@ const ModalPres = (() => {
     const { payload, key } = state;
 
     const existing = _drafts.find(p => p.member_id === _me.id);
+    let savedDraft = existing || null;
     if (existing) {
       // 기존 draft 수정 (배정된 것 포함)
       const { error } = await sb.from('presentations').update(payload).eq('id', existing.id);
@@ -422,7 +646,24 @@ const ModalPres = (() => {
       const { data, error } = await sb.from('presentations')
         .insert({ member_id: _me.id, ...payload }).select().single();
       if (error) throw error;
-      if (data) _drafts.push(data);
+      if (data) {
+        _drafts.push(data);
+        savedDraft = data;
+      }
+    }
+    if (
+      savedDraft?.id &&
+      !_autoAssignment &&
+      !savedDraft.schedule_id &&
+      shouldCarryPresentationDraftToNextCycle(
+        savedDraft.member_id,
+        _scheduleRows,
+        _turnRows,
+        _orderedMembers,
+        { fromDate: toDateStr(new Date()) }
+      )
+    ) {
+      await registerPresentationDraftCarryoverIds([savedDraft.id]);
     }
     _lastSavedDraftKey = key;
     setDraftSaveStatus('자동 저장됨', false);

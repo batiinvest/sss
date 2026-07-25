@@ -4,10 +4,14 @@
 // ============================================================
 
 // ── 멤버
-async function fetchMembers() {
+async function fetchMembers(opts = {}) {
   const { data, error } = await sb.from('members')
     .select('*').eq('is_active', true).order('joined_at');
-  if (error) { console.error('fetchMembers:', error); return []; }
+  if (error) {
+    if (opts.strict) throw error;
+    console.error('fetchMembers:', error);
+    return [];
+  }
   return data;
 }
 
@@ -235,9 +239,13 @@ async function fetchStockPrices() {
 }
 
 // ── 일정
-async function fetchSchedules() {
+async function fetchSchedules(opts = {}) {
   const { data, error } = await sb.from('schedules').select('*').order('event_date', { ascending: true });
-  if (error) { console.error('fetchSchedules:', error.message); return []; }
+  if (error) {
+    if (opts.strict) throw error;
+    console.error('fetchSchedules:', error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -452,6 +460,14 @@ function bindStockSearch(input, ddEl, onSelect, options = {}) {
 async function getConfig(key) {
   const { data, error } = await sb.from('app_config').select('value').eq('key', key).maybeSingle();
   if (error) { console.error('getConfig 오류:', error.message); return null; }
+  return data?.value ?? null;
+}
+async function getConfigStrict(key) {
+  const { data, error } = await sb.from('app_config')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle();
+  if (error) throw error;
   return data?.value ?? null;
 }
 async function setConfig(key, value) {

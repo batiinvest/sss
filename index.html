@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260724.3">
+  <link rel="stylesheet" href="css/style.css?v=20260725.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -257,10 +257,10 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260723.2"></script>
-<script src="js/schedule-shared.js?v=20260724.1"></script>
+<script src="js/db.js?v=20260725.1"></script>
+<script src="js/schedule-shared.js?v=20260725.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260723.2"></script>
+<script src="js/modal-pres.js?v=20260725.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -296,15 +296,34 @@ async function init() {
     `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 체결가 기준`;
 
   if (mobileHomeQuery.matches) {
-    await initMobileHome(now);
+    try {
+      await initMobileHome(now);
+    } catch (error) {
+      console.error('모바일 홈 데이터 로드 오류:', error);
+      toast('발표 데이터를 불러오지 못했습니다. 새로고침해 주세요.');
+    }
     return;
   }
 
   // 내 섹션 스켈레톤 먼저 표시 (로딩 중 UI)
   showMySectionSkeleton();
 
-  const dashboardData = await loadDashboardData();
+  let dashboardData;
+  try {
+    dashboardData = await loadDashboardData();
+  } catch (error) {
+    console.error('대시보드 데이터 로드 오류:', error);
+    toast('대시보드 데이터를 불러오지 못했습니다. 새로고침해 주세요.');
+    return;
+  }
   const { members, picks, allPicks, trades, allTradesData, me } = dashboardData;
+  try {
+    await activatePresentationDraftCycle(members, dashboardData.turnData);
+  } catch (error) {
+    console.error('발표 초안 사이클 확인 오류:', error);
+    toast('발표 사이클을 확인하지 못했습니다. 새로고침해 주세요.');
+    return;
+  }
 
   currentMembers  = members;
   currentPicks    = picks;
@@ -339,9 +358,10 @@ async function initMobileHome(now = new Date()) {
     getCurrentMember(),
     sb.from('presentations')
       .select('*, members(name)')
-      .order('presented_at', { ascending: false })
+      .not('presented_at', 'is', null)
+      .order('presented_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
-      .limit(6),
+      .limit(12),
     fetchPicksByMonthWithCarryFallback(month),
     fetchMembers(),
     loadPresentationOrderData(),
@@ -351,7 +371,17 @@ async function initMobileHome(now = new Date()) {
     document.getElementById('mobileHomeGreeting').textContent = `${me.name}님, 오늘 확인할 종목부터 살펴보세요.`;
   }
 
-  const presentations = presentationResult.data || [];
+  await activatePresentationDraftCycle(activeMembers, turnData);
+  const completedIds = new Set((turnData.completedIds || []).map(String));
+  const presentations = (presentationResult.data || [])
+    .map(item =>
+      completedIds.has(String(item.id)) ? { ...item, status: 'done' } : item
+    )
+    .filter(item =>
+      item.status !== 'planned' ||
+      !!item.schedule_id ||
+      isCurrentUnassignedPresentationDraft(item, presentationDraftEpoch)
+    );
   const codes = [...new Set([
     ...presentations.map(item => item.stock_code),
     ...picks.map(item => item.stock_code),
@@ -360,6 +390,25 @@ async function initMobileHome(now = new Date()) {
   renderDashboardPresentationOrder(activeMembers, turnData);
   renderMobileRecentPresentations(presentations.slice(0, 4));
   renderMobileActiveInvestments(picks.filter(item => item.status !== 'sold').slice(0, 4));
+}
+
+async function activatePresentationDraftCycle(memberRows, turnData) {
+  const orderedMembers = normalizePresentationOrder(
+    (memberRows || []).filter(Boolean),
+    turnData?.order || []
+  );
+  const draftCycleState = getPresentationDraftCycleState(
+    turnData?.schedules || [],
+    turnData?.presentations || [],
+    orderedMembers,
+    { fromDate: toDateStr(new Date()) }
+  );
+  const draftCycle = await ensurePresentationDraftCycle(
+    draftCycleState.cycleKey,
+    { cycleMarker: draftCycleState.cycleMarker }
+  );
+  presentationDraftEpoch = draftCycle.startedAt;
+  return draftCycle;
 }
 
 function mobilePresentationName(item) {
@@ -443,22 +492,53 @@ async function loadDashboardData() {
 }
 
 async function loadPresentationOrderData() {
-  const [presentationResult, scheduleResult, savedOrder] = await Promise.all([
+  const [presentationResult, scheduleResult, memberResult, savedOrder] = await Promise.all([
     sb.from('presentations')
-      .select('member_id, category, status, schedule_id, presented_at, created_at')
+      .select('id, member_id, category, status, schedule_id, presented_at, created_at')
       .order('presented_at', { ascending: true })
       .order('created_at', { ascending: true }),
     sb.from('schedules')
       .select('id, title, category, event_date, event_time')
       .order('event_date', { ascending: true }),
-    getConfig('pres_order'),
+    sb.from('members')
+      .select('id,name,is_active,joined_at')
+      .eq('is_active', true)
+      .order('joined_at', { ascending: true }),
+    getConfigStrict('pres_order'),
   ]);
-  if (presentationResult.error) console.error('발표 순서 데이터 로드 오류:', presentationResult.error);
-  if (scheduleResult.error) console.error('스터디 일정 데이터 로드 오류:', scheduleResult.error);
+  if (presentationResult.error) throw presentationResult.error;
+  if (scheduleResult.error) throw scheduleResult.error;
+  if (memberResult.error) throw memberResult.error;
+  let presentationRows = presentationResult.data || [];
+  let completedIds = [];
+  const orderedMembers = normalizePresentationOrder(
+    memberResult.data || [],
+    savedOrder
+  );
+  const completion = await syncPastScheduledPresentationsDone(
+    sb,
+    scheduleResult.data || [],
+    presentationRows,
+    { orderedMembers }
+  );
+  completedIds = completion.patches.map(patch => patch.id);
+  const completedIdSet = new Set(completedIds.map(String));
+  const carryoverIdSet = new Set(
+    completion.carryoverPatches.map(patch => String(patch.id))
+  );
+  presentationRows = presentationRows.map(row => {
+    if (completedIdSet.has(String(row.id))) return { ...row, status: 'done' };
+    if (carryoverIdSet.has(String(row.id))) {
+      return { ...row, schedule_id: null, presented_at: null };
+    }
+    return row;
+  });
   return {
-    presentations: presentationResult.data || [],
+    presentations: presentationRows,
     schedules: scheduleResult.data || [],
     order: Array.isArray(savedOrder) ? savedOrder : [],
+    completedIds,
+    carryoverIds: [...carryoverIdSet],
   };
 }
 
@@ -508,7 +588,9 @@ async function loadDashboardPicks(month) {
 async function loadMyDashboardData(memberId) {
   const [myPicksRes, myPresRes] = await Promise.all([
     sb.from('picks_with_trades').select('*').eq('member_id', memberId).order('month', { ascending: false }),
-    sb.from('presentations').select('*').eq('member_id', memberId).order('presented_at', { ascending: false }).limit(10),
+    sb.from('presentations').select('*').eq('member_id', memberId)
+      .order('presented_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false }),
   ]);
   return {
     picks: myPicksRes.data || [],
@@ -567,7 +649,9 @@ async function renderMySection() {
   document.getElementById('mySection').style.display = 'grid';
   const [myPicksRes, myPresRes] = await Promise.all([
     sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
-    sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10),
+    sb.from('presentations').select('*').eq('member_id', me.id)
+      .order('presented_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false }),
   ]);
   renderMyPicksData(me, myPicksRes.data || []);
   renderMyPresData(me, myPresRes.data || [], globalPriceMap);
@@ -692,7 +776,13 @@ function renderMyPicksData(me, picks) {
 }
 
 async function renderMyPresData(me, presData, priceMap) {
-  const planned   = presData.filter(p => p.status === 'planned');
+  const planned   = presData.filter(p =>
+    p.status === 'planned' &&
+    (
+      !!p.schedule_id ||
+      isCurrentUnassignedPresentationDraft(p, presentationDraftEpoch)
+    )
+  );
   const plannedEl = document.getElementById('myPresPlanned');
   if (planned.length) {
     plannedEl.style.display = 'block';
@@ -750,7 +840,9 @@ async function renderMyPicks(me) {
   renderMyPicksData(me, data || []);
 }
 async function renderMyPresentations(me) {
-  const { data } = await sb.from('presentations').select('*').eq('member_id', me.id).order('presented_at', { ascending: false }).limit(10);
+  const { data } = await sb.from('presentations').select('*').eq('member_id', me.id)
+    .order('presented_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false });
   await renderMyPresData(me, data || [], globalPriceMap);
 }
 

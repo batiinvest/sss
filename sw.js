@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sss-pwa-v20260724-3';
+const CACHE_NAME = 'sss-pwa-v20260725-1';
 
 const APP_SHELL = [
   './',

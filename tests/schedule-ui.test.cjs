@@ -142,11 +142,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260724.3',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.1',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260724.3',
+    'presentations.html?view=history&id=xyz&v=20260725.1',
   );
 });
 
@@ -180,17 +180,21 @@ test('schedule details reuse the complete in-memory presentation list', () => {
   assert.doesNotMatch(source, /\.or\('schedule_id\.eq\.' \+ scheduleId/);
 });
 
-test('changing a talk to a non-talk schedule only detaches planned rows', () => {
+test('changing a talk to dinner keeps a carry anchor and reconciles later rows', () => {
   const source = read('schedule-calendar.html');
   const saveSchedule = sourceSection(
     source,
     'async function saveSchedule',
     'async function confirmDelete',
   );
-  assert.match(saveSchedule, /if \(!\['industry', 'stock'\]\.includes\(category\) && editingScheduleId\)[\s\S]*?p\.status === 'planned'/);
-  assert.match(saveSchedule, /update\(\{ schedule_id: null, presented_at: null \}\)/);
+  assert.doesNotMatch(saveSchedule, /update\(\{ schedule_id: null, presented_at: null \}\)/);
   assert.match(saveSchedule, /reconcileAutomaticPresentationAssignments\(today\)/);
   assert.match(saveSchedule, /일정과 발표 순서가 자동으로 조정되었습니다/);
+  assert.match(saveSchedule, /select\('id'\)[\s\S]*?eq\('schedule_id', editingScheduleId\)[\s\S]*?eq\('status', 'done'\)/);
+  assert.match(saveSchedule, /registerPresentationDraftCarryoverIds\(reopenedDoneIds\)/);
+  assert.match(saveSchedule, /update\(\{ status: 'planned' \}\)[\s\S]*?updateSchedule/);
+  assert.match(saveSchedule, /update\(\{ status: 'done' \}\)[\s\S]*?rollbackError/);
+  assert.match(saveSchedule, /catch\(e\)[\s\S]*?lockScheduleData\(\)/);
   assert.match(saveSchedule, /previousCategory !== category[\s\S]*?update\(\{ category, topic \}\)/);
   assert.doesNotMatch(saveSchedule, /querySelectorAll\('\.pres-card'\)|presentationPayloads|retainedPresentationIds/);
 });
@@ -200,6 +204,10 @@ test('schedule deletion preserves presentation history and recovers failed delet
   assert.match(source, /select\('id,status,presented_at'\)[\s\S]*eq\('schedule_id', id\)/);
   assert.match(source, /연결된 발표를 확인하지 못해 일정을 삭제하지 않았습니다/);
   assert.match(source, /filter\(p => p\.status !== 'planned'\)/);
+  assert.ok(
+    source.indexOf('await registerPresentationDraftCarryoverIds(plannedIds)') <
+    source.indexOf('.update({ schedule_id: null, presented_at: null })'),
+  );
   assert.match(source, /update\(\{ schedule_id: null \}\)/);
   assert.match(source, /let scheduleDeleted = false/);
   assert.match(source, /let rollbackFailed = false/);
@@ -247,16 +255,64 @@ test('presentation preparation preserves pending input and uses each automatic s
   assert.match(memberPanel, /category: entry\.category/);
 });
 
+test('industry names persist independently and legacy topics stay outside the new cycle', () => {
+  const order = read('schedule-order.html');
+  const modal = read('js/modal-pres.js');
+  const shared = read('js/schedule-shared.js');
+
+  assert.match(order, /id="saveIndustryNameBtn"[\s\S]*saveTurnIndustryName\(\)/);
+  assert.match(order, /id="industryNameSaveStatus"[\s\S]*aria-live="polite"/);
+  assert.match(order, /await setConfig\(key, name\)/);
+  assert.match(order, /update\(\{ topic \}\)\.eq\('id', presentation\.id\)/);
+  assert.match(order, /findCurrentPresentationDraft\(/);
+  assert.match(order, /id="legacyDraftNotice"/);
+  assert.match(shared, /PRESENTATION_DRAFT_CYCLE_CONFIG_KEY/);
+  assert.match(shared, /PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX/);
+  assert.match(shared, /ensurePresentationDraftCycle/);
+  assert.match(shared, /registerPresentationDraftCarryoverIds/);
+  assert.match(shared, /syncPastScheduledPresentationsDone/);
+  assert.match(shared, /isCurrentUnassignedPresentationDraft/);
+  assert.match(modal, /findCurrentPresentationDraft\(/);
+  assert.match(modal, /getPresentationIndustryConfigKey\(/);
+  assert.match(modal, /return getPresentationTurnState\(allPresentations, orderedMembers\)/);
+  assert.doesNotMatch(
+    sourceSection(modal, 'function getModalTurnState', '// ── 팝업 HTML 마운트'),
+    /includePlanned|p\.status === 'planned'/,
+  );
+  assert.match(order, /industrySaveQueue/);
+  assert.match(order, /input\.dataset\.persisted/);
+  assert.match(modal, /if \(industryInput\) industryInput\.value = ''/);
+  assert.match(modal, /configKey: _industryConfigKey/);
+  assert.match(modal, /await _closePromise/);
+  assert.match(modal, /const openToken = \+\+_openToken/);
+  assert.match(modal, /setModalContextControlsDisabled\(true\)/);
+  assert.match(modal, /setModalContextControlsDisabled\(false\)[\s\S]*?renderPanel\(\)/);
+  assert.match(modal, /Promise\.allSettled\(\[\s*flushDraftSave\(\),\s*_industrySaveQueue/);
+  assert.doesNotMatch(modal, /_draftEpoch = PRESENTATION_DRAFT_MIGRATION_EPOCH/);
+  assert.match(order, /function lockPresentationSetup\(/);
+  assert.match(order, /reloadPresentations\(\{ strict: true \}\)/);
+  assert.match(order, /catch\(e\)[\s\S]*?lockPresentationSetup\(\)[\s\S]*?return;/);
+  assert.match(order, /getConfigStrict\(key\)/);
+  assert.match(shared, /ignoreDuplicates: true/);
+  assert.match(shared, /value->>cycle_marker\.lt\./);
+  assert.match(shared, /if \(!normalizedEpoch\) return false/);
+  assert.doesNotMatch(
+    sourceSection(read('index.html'), 'async function activatePresentationDraftCycle', 'function mobilePresentationName'),
+    /PRESENTATION_DRAFT_MIGRATION_EPOCH|catch \(/,
+  );
+});
+
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260724\.3/);
-  assert.match(read('app.html'), /params\.set\('v', '20260724\.3'\)/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.1/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.1'\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260724\.3/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.1/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260724\.1/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.1/);
   }
-  assert.match(read('sw.js'), /sss-pwa-v20260724-3/);
+  assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-1/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request, \{ ignoreSearch: true \}\)/g) || []).length,
     2,

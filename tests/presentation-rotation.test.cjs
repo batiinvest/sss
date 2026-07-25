@@ -740,7 +740,7 @@ test('legacy draft recovery is disabled outside the one initial migration cycle'
   );
 });
 
-test('initial recovery registers carryover before normalizing stale presentation dates and marking completion', async () => {
+test('initial recovery preserves required presentation dates while registering carryover before completion', async () => {
   const { recoverInitialPresentationDrafts } = loadHelpers();
   const schedules = [
     schedule('cycle-end', '2026-06-15', 'stock', '20:00:00'),
@@ -767,23 +767,8 @@ test('initial recovery registers carryover before normalizing stale presentation
   ];
   const events = [];
   const client = {
-    from(table) {
-      assert.equal(table, 'presentations');
-      return {
-        update(payload) {
-          return {
-            async in(column, ids) {
-              events.push({
-                type: 'normalize',
-                column,
-                ids: [...ids],
-                payload: plain(payload),
-              });
-              return { error: null };
-            },
-          };
-        },
-      };
+    from() {
+      throw new Error('recovery must not clear required presentation dates');
     },
   };
 
@@ -813,24 +798,17 @@ test('initial recovery registers carryover before normalizing stale presentation
   });
   assert.deepEqual(events.map(event => event.type), [
     'carryover',
-    'normalize',
     'complete',
   ]);
   assert.deepEqual(events[0].ids, ['A-recover']);
-  assert.deepEqual(events[1], {
-    type: 'normalize',
-    column: 'id',
-    ids: ['A-recover'],
-    payload: { schedule_id: null, presented_at: null },
-  });
-  assert.deepEqual(events[2].value, {
+  assert.deepEqual(events[1].value, {
     cycle_key: 'rotation:2026-06-15',
     cycle_marker: '2026-06-15',
     roster_member_ids: ['A', 'B', 'C'],
     recovered_ids: ['A-recover'],
     completed_at: '2026-07-25T04:00:00.000Z',
   });
-  assert.equal(rows[0].presented_at, null);
+  assert.equal(rows[0].presented_at, '2026-06-15');
   assert.equal(rows[1].presented_at, '2026-06-15');
 });
 
@@ -857,20 +835,12 @@ test('carryover registration failure leaves legacy drafts and recovery state unt
     '2026-07-01T01:00:00.000Z',
     { presented_at: '2026-06-15' }
   );
-  let normalizeCalls = 0;
+  let dataWriteCalls = 0;
   let completionCalls = 0;
   const client = {
     from() {
-      return {
-        update() {
-          normalizeCalls += 1;
-          return {
-            async in() {
-              return { error: null };
-            },
-          };
-        },
-      };
+      dataWriteCalls += 1;
+      throw new Error('must not write presentation rows');
     },
   };
 
@@ -895,7 +865,7 @@ test('carryover registration failure leaves legacy drafts and recovery state unt
     ),
     /carryover unavailable/
   );
-  assert.equal(normalizeCalls, 0);
+  assert.equal(dataWriteCalls, 0);
   assert.equal(completionCalls, 0);
   assert.equal(draft.presented_at, '2026-06-15');
 });
@@ -943,6 +913,47 @@ test('completed initial recovery is idempotent and performs no further writes', 
   });
   assert.equal(writes, 0);
   assert.equal(draft.presented_at, '2026-06-15');
+});
+
+test('a recovered draft with a required stale date moves to the next automatic schedule', () => {
+  const {
+    buildPresentationSchedulePlan,
+    buildPresentationAssignmentPatches,
+  } = loadHelpers();
+  const schedules = [
+    schedule('cycle-end', '2026-06-15'),
+    schedule('next-talk', '2026-07-27', 'industry'),
+  ];
+  const rows = [
+    presentation('A-recovered', null, 'A', '2026-06-15'),
+    presentation('G-done', 'cycle-end', 'G', '2026-06-15', 'done'),
+  ];
+  const plan = buildPresentationSchedulePlan(
+    schedules,
+    rows,
+    members,
+    { fromDate: '2026-07-25' }
+  );
+
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      schedules,
+      rows,
+      plan,
+      {
+        fromDate: '2026-07-25',
+        draftEpoch: '2026-07-25T02:37:00.000Z',
+        draftCarryoverIds: ['A-recovered'],
+      }
+    )),
+    [{
+      id: 'A-recovered',
+      payload: {
+        schedule_id: 'next-talk',
+        presented_at: '2026-07-27',
+      },
+    }]
+  );
 });
 
 test('an unavailable cycle fails closed for unassigned drafts', () => {

@@ -427,18 +427,6 @@ async function recoverInitialPresentationDrafts(
   );
   if (recoveredIds.length) {
     await registerCarryoverIds(recoveredIds);
-    const { error } = await client
-      .from('presentations')
-      .update({ schedule_id: null, presented_at: null })
-      .in('id', recoveredIds);
-    if (error) throw error;
-
-    const recoveredIdSet = new Set(recoveredIds.map(String));
-    for (const presentation of allPresentations || []) {
-      if (!recoveredIdSet.has(String(presentation?.id || ''))) continue;
-      presentation.schedule_id = null;
-      presentation.presented_at = null;
-    }
   }
 
   const completedAt = normalizePresentationDraftEpoch(opts.now) ||
@@ -1080,6 +1068,9 @@ function buildPresentationAssignmentPatches(
   const draftEpoch = opts.draftEpoch || presentationDraftEpoch;
   const draftCarryoverIds = opts.draftCarryoverIds ||
     presentationDraftCarryoverIds;
+  const normalizedDraftCarryoverIds = normalizePresentationDraftIds(
+    draftCarryoverIds
+  );
   if (!plan?.items?.length) return [];
   const scheduleById = new Map(
     (allSchedules || []).map(schedule => [String(schedule.id), schedule])
@@ -1105,11 +1096,15 @@ function buildPresentationAssignmentPatches(
       if (draftEpoch && !isCurrentUnassignedPresentationDraft(
         presentation,
         draftEpoch,
-        draftCarryoverIds
+        normalizedDraftCarryoverIds
       )) {
         return false;
       }
-      return !presentation.presented_at || presentation.presented_at >= fromDate;
+      return (
+        normalizedDraftCarryoverIds.has(String(presentation.id || '')) ||
+        !presentation.presented_at ||
+        presentation.presented_at >= fromDate
+      );
     }
     const schedule = scheduleById.get(String(presentation.schedule_id));
     if (schedule && !isPresentationSchedule(schedule)) return true;

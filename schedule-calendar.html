@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.7">
+  <link rel="stylesheet" href="css/style.css?v=20260725.8">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -28,7 +28,7 @@
   </div>
 
   <!-- 일정 추가/수정 폼 -->
-  <div id="scheduleForm" class="detail-overlay schedule-form-overlay" role="dialog" aria-modal="true" aria-labelledby="formTitle" hidden>
+  <div id="scheduleForm" class="detail-overlay schedule-form-overlay" role="dialog" aria-modal="true" aria-labelledby="formTitle" aria-describedby="scheduleFormGuide" hidden>
     <section class="detail-panel schedule-form-panel" onclick="event.stopPropagation()">
       <form id="scheduleFormElement" onsubmit="saveSchedule(event)" novalidate>
       <div class="detail-head schedule-form-head">
@@ -43,17 +43,30 @@
         <div id="scheduleFormError" class="field-error" role="alert" aria-live="polite"></div>
       <div class="form-row">
         <div class="form-group">
-          <label for="s-title">제목 *</label>
-          <input type="text" id="s-title" placeholder="예: 기업 분석, 스터디 회식" required autocomplete="off" />
-        </div>
-        <div class="form-group">
-          <label for="s-category">구분</label>
-          <select id="s-category" onchange="updateScheduleSeriesPreview(true)">
-            <option value="industry">산업 분석</option>
-            <option value="stock">종목 분석</option>
+          <label for="s-event-type">일정 종류 *</label>
+          <select id="s-event-type" required onchange="handleScheduleTypeChange()">
+            <option value="study">스터디</option>
             <option value="dinner">회식</option>
             <option value="other">기타</option>
           </select>
+          <small class="schedule-field-help">제목은 일정 종류에 맞춰 자동 저장됩니다.</small>
+        </div>
+        <div class="form-group" id="s-theme-group">
+          <label for="s-category">발표 테마 *</label>
+          <select id="s-category" required onchange="handleScheduleThemeChange()">
+            <option value="industry">산업 분석</option>
+            <option value="stock">종목 분석</option>
+          </select>
+        </div>
+        <div class="form-group" id="s-other-title-group" hidden>
+          <label for="s-title">기타 일정 이름 (선택)</label>
+          <input
+            type="text"
+            id="s-title"
+            value="기타 일정"
+            placeholder="예: 정기총회"
+            autocomplete="off"
+          />
         </div>
       </div>
       <div class="form-row">
@@ -77,7 +90,7 @@
           />
           <span>
             <strong>2주 간격으로 3회 자동 등록</strong>
-            <small id="scheduleSeriesHelp">입력한 제목·테마·시간·장소를 세 일정에 동일하게 적용합니다.</small>
+            <small id="scheduleSeriesHelp">자동 제목·테마·시간·장소를 세 일정에 동일하게 적용합니다.</small>
           </span>
         </label>
         <div id="scheduleSeriesPreview" class="schedule-series-preview" aria-live="polite"></div>
@@ -206,8 +219,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260725.7"></script>
-<script src="js/schedule-shared.js?v=20260725.7"></script>
+<script src="js/db.js?v=20260725.8"></script>
+<script src="js/schedule-shared.js?v=20260725.8"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -216,6 +229,8 @@ let formReturnFocus = null;
 let detailReturnFocus = null;
 let formInitialState = '';
 let formLegacyPresentationPrefix = '';
+let formOriginalScheduleType = null;
+let formOriginalScheduleTitle = '';
 let presOrder = [];
 let scheduleDataReady = false;
 
@@ -749,15 +764,64 @@ function showScheduleFormError(message, field) {
   }
 }
 
+function getSelectedScheduleEventType() {
+  return document.getElementById('s-event-type').value || 'study';
+}
+
+function getSelectedScheduleCategory() {
+  return getScheduleCategoryForEventType(
+    getSelectedScheduleEventType(),
+    document.getElementById('s-category').value
+  );
+}
+
+function getResolvedScheduleTitle() {
+  return resolveScheduleTitle({
+    eventType: getSelectedScheduleEventType(),
+    otherTitle: document.getElementById('s-title').value,
+    editing: Boolean(editingScheduleId),
+    originalEventType: formOriginalScheduleType,
+    originalTitle: formOriginalScheduleTitle,
+  });
+}
+
+function updateScheduleTypeFields(resetSeries = false) {
+  const eventType = getSelectedScheduleEventType();
+  const themeGroup = document.getElementById('s-theme-group');
+  const themeSelect = document.getElementById('s-category');
+  const otherTitleGroup = document.getElementById('s-other-title-group');
+  const otherTitleInput = document.getElementById('s-title');
+  const isStudy = eventType === 'study';
+  const isOther = eventType === 'other';
+
+  themeGroup.hidden = !isStudy;
+  themeSelect.disabled = !isStudy;
+  otherTitleGroup.hidden = !isOther;
+  otherTitleInput.disabled = !isOther;
+  if (isOther && !otherTitleInput.value.trim()) {
+    otherTitleInput.value = getAutomaticScheduleTitle('other');
+  }
+  updateScheduleSeriesPreview(resetSeries);
+}
+
+function handleScheduleTypeChange() {
+  updateScheduleTypeFields(true);
+}
+
+function handleScheduleThemeChange() {
+  updateScheduleSeriesPreview();
+}
+
 function isScheduleSeriesEnabled() {
-  const category = document.getElementById('s-category').value;
+  const category = getSelectedScheduleCategory();
   return !editingScheduleId &&
     isPresentationSchedule({ category }) &&
     document.getElementById('s-series').checked;
 }
 
 function updateScheduleSeriesPreview(resetSelection = false) {
-  const category = document.getElementById('s-category').value;
+  const eventType = getSelectedScheduleEventType();
+  const category = getSelectedScheduleCategory();
   const eligible = !editingScheduleId && isPresentationSchedule({ category });
   const section = document.getElementById('scheduleSeriesSection');
   const checkbox = document.getElementById('s-series');
@@ -772,7 +836,9 @@ function updateScheduleSeriesPreview(resetSelection = false) {
     ? '선택한 일정 한 건만 수정하며, 연결된 발표 순서는 저장 후 자동으로 다시 맞춰집니다.'
     : eligible
       ? '발표 테마와 시작일을 한 번만 입력하면 2주 간격의 3회 일정과 발표자가 자동 편성됩니다.'
-      : '회식·기타 일정은 선택한 날짜에 한 번만 등록됩니다.';
+      : eventType === 'dinner'
+        ? '회식은 선택한 날짜에 한 번 등록되며 제목은 자동으로 정해집니다.'
+        : '기타 일정은 선택한 날짜에 한 번만 등록됩니다.';
 
   if (!eligible) {
     preview.textContent = '';
@@ -803,7 +869,11 @@ function getScheduleFormState() {
     document.querySelectorAll('#scheduleFormElement input, #scheduleFormElement select, #scheduleFormElement textarea')
   ).map(field => [
     field.id || field.className,
-    field.type === 'checkbox' ? field.checked : field.value,
+    field.disabled
+      ? null
+      : field.type === 'checkbox'
+        ? field.checked
+        : field.value,
     field.dataset.presentationId || '',
   ]));
 }
@@ -821,9 +891,17 @@ function openForm(prefill={}) {
   editingScheduleId = prefill.id || null;
   document.getElementById('formTitle').textContent = editingScheduleId ? '일정 수정' : '일정 추가';
   showScheduleFormError('');
-  document.getElementById('s-title').value    = prefill.title       || '';
   const catVal = prefill.category || 'industry';
-  document.getElementById('s-category').value = catVal;
+  const eventType = getScheduleEventType(catVal);
+  formOriginalScheduleType = editingScheduleId ? eventType : null;
+  formOriginalScheduleTitle = editingScheduleId ? String(prefill.title || '') : '';
+  document.getElementById('s-event-type').value = eventType;
+  document.getElementById('s-category').value = isPresentationSchedule({ category: catVal })
+    ? catVal
+    : 'industry';
+  document.getElementById('s-title').value = eventType === 'other'
+    ? (prefill.title || getAutomaticScheduleTitle('other'))
+    : '';
   document.getElementById('s-date').value     = prefill.event_date  || '';
   document.getElementById('s-time').value     = prefill.event_time
     ? prefill.event_time.slice(0,5)
@@ -840,7 +918,7 @@ function openForm(prefill={}) {
     ? ''
     : descriptionParts.presentationPrefix;
   document.getElementById('s-desc').value = descriptionParts.memo;
-  updateScheduleSeriesPreview(true);
+  updateScheduleTypeFields(true);
 
   formInitialState = getScheduleFormState();
 
@@ -848,7 +926,7 @@ function openForm(prefill={}) {
   modal.hidden = false;
   requestAnimationFrame(() => modal.classList.add('open'));
   document.body.classList.add('sheet-open');
-  setTimeout(() => document.getElementById('s-title').focus(), 0);
+  setTimeout(() => document.getElementById('s-event-type').focus(), 0);
 }
 
 function closeForm(force = false) {
@@ -856,6 +934,8 @@ function closeForm(force = false) {
   editingScheduleId = null;
   formInitialState = '';
   formLegacyPresentationPrefix = '';
+  formOriginalScheduleType = null;
+  formOriginalScheduleTitle = '';
   const modal = document.getElementById('scheduleForm');
   modal.classList.remove('open');
   modal.hidden = true;
@@ -875,8 +955,8 @@ async function saveSchedule(event) {
     showScheduleFormError('일정 데이터를 모두 확인하지 못해 저장하지 않았습니다. 새로고침해 주세요.');
     return;
   }
-  const title    = document.getElementById('s-title').value.trim();
-  const category = document.getElementById('s-category').value;
+  const category = getSelectedScheduleCategory();
+  const title    = getResolvedScheduleTitle();
   const date     = document.getElementById('s-date').value;
   const time     = document.getElementById('s-time').value || null;
   const location = document.getElementById('s-location').value.trim() || null;
@@ -890,10 +970,6 @@ async function saveSchedule(event) {
 
   showScheduleFormError('');
 
-  if (!title) {
-    showScheduleFormError('일정 제목을 입력하세요.', document.getElementById('s-title'));
-    return;
-  }
   if (!date) {
     showScheduleFormError('일정 날짜를 선택하세요.', document.getElementById('s-date'));
     return;

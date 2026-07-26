@@ -61,14 +61,29 @@ test('schedule form previews and saves a three-session presentation series', () 
   assert.match(source, /2주 간격으로 3회 자동 등록/);
   assert.match(source, /id="scheduleSeriesPreview"[\s\S]*aria-live="polite"/);
   assert.match(source, /선택한 일정 한 건만 수정/);
-  assert.match(source, /회식·기타 일정은 선택한 날짜에 한 번만 등록/);
-  assert.match(source, /id="s-category" onchange="updateScheduleSeriesPreview\(true\)"/);
+  assert.match(source, /회식은 선택한 날짜에 한 번 등록/);
+  assert.match(source, /기타 일정은 선택한 날짜에 한 번만 등록/);
+  assert.match(source, /id="s-event-type"[\s\S]*value="study"[\s\S]*value="dinner"[\s\S]*value="other"/);
+  assert.match(source, /id="s-theme-group"/);
+  assert.match(source, /id="s-other-title-group" hidden/);
+  assert.match(source, /id="s-category" required onchange="handleScheduleThemeChange\(\)"/);
+  assert.match(source, /id="s-event-type" required onchange="handleScheduleTypeChange\(\)"/);
+  assert.match(source, /aria-describedby="scheduleFormGuide"/);
   assert.match(source, /id="s-date" required onchange="updateScheduleSeriesPreview\(\)"/);
   assert.match(seriesToggle, /!editingScheduleId/);
   assert.match(seriesToggle, /isPresentationSchedule\(\{ category \}\)/);
   assert.match(seriesToggle, /planBiweeklyPresentationSchedules\(\[\]/);
-  assert.match(source, /field\.type === 'checkbox' \? field\.checked : field\.value/);
+  assert.match(source, /field\.disabled[\s\S]*field\.type === 'checkbox'/);
+  assert.match(source, /function getSelectedScheduleCategory\(\)[\s\S]*getScheduleCategoryForEventType/);
+  assert.match(source, /themeSelect\.disabled = !isStudy/);
+  assert.match(source, /otherTitleInput\.disabled = !isOther/);
+  assert.match(source, /기타 일정 이름 \(선택\)/);
+  assert.doesNotMatch(source, /id="s-title-preview"|updateScheduleTitlePreview/);
+  assert.match(source, /setTimeout\(\(\) => document\.getElementById\('s-event-type'\)\.focus\(\), 0\)/);
   assert.match(saveSchedule, /else if \(saveAsSeries\)/);
+  assert.match(saveSchedule, /const category = getSelectedScheduleCategory\(\)/);
+  assert.match(saveSchedule, /const title\s+= getResolvedScheduleTitle\(\)/);
+  assert.doesNotMatch(saveSchedule, /일정 제목을 입력하세요/);
   assert.match(saveSchedule, /planBiweeklyPresentationSchedules\(latestSchedules, payload\)/);
   assert.match(saveSchedule, /seriesPlan\.conflicts\.length/);
   assert.match(saveSchedule, /await submitSchedules\(seriesPlan\.rowsToCreate\)/);
@@ -81,6 +96,74 @@ test('schedule form previews and saves a three-session presentation series', () 
   assert.match(saveSchedule, /중복 등록하지 말고 새로고침/);
   assert.match(saveSchedule, /seriesWriteAttempted && e\?\.code[\s\S]*3회 일정은 저장되지 않았습니다/);
   assert.match(saveSchedule, /keepFormLocked[\s\S]*btn\.textContent = '새로고침 후 확인'/);
+});
+
+test('schedule type controls switch fields and keep stored edit titles', () => {
+  const source = read('schedule-calendar.html');
+  const helperSource = sourceSection(
+    source,
+    'function getSelectedScheduleEventType',
+    'function isScheduleSeriesEnabled',
+  );
+  const elements = {
+    's-event-type': { value: 'study' },
+    's-category': { value: 'industry', disabled: false },
+    's-title': { value: '', disabled: false, required: false },
+    's-theme-group': { hidden: false },
+    's-other-title-group': { hidden: true },
+  };
+  const previewCalls = [];
+  const context = {
+    console,
+    Date,
+    Map,
+    Set,
+    document: {
+      getElementById(id) {
+        return elements[id];
+      },
+    },
+    formOriginalScheduleType: null,
+    formOriginalScheduleTitle: '',
+    updateScheduleSeriesPreview(reset) {
+      previewCalls.push(reset);
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(read('js/schedule-shared.js'), context);
+  vm.runInContext(helperSource, context);
+
+  context.updateScheduleTypeFields(true);
+  assert.equal(elements['s-theme-group'].hidden, false);
+  assert.equal(elements['s-category'].disabled, false);
+  assert.equal(elements['s-other-title-group'].hidden, true);
+  assert.equal(elements['s-title'].disabled, true);
+  assert.equal(context.getResolvedScheduleTitle(), '스터디');
+  assert.equal(context.getSelectedScheduleCategory(), 'industry');
+
+  elements['s-event-type'].value = 'dinner';
+  context.handleScheduleTypeChange();
+  assert.equal(elements['s-theme-group'].hidden, true);
+  assert.equal(elements['s-category'].disabled, true);
+  assert.equal(context.getResolvedScheduleTitle(), '회식');
+  assert.equal(context.getSelectedScheduleCategory(), 'dinner');
+
+  elements['s-event-type'].value = 'other';
+  elements['s-title'].value = '';
+  context.handleScheduleTypeChange();
+  assert.equal(elements['s-other-title-group'].hidden, false);
+  assert.equal(elements['s-title'].disabled, false);
+  assert.equal(elements['s-title'].value, '기타 일정');
+  assert.equal(context.getResolvedScheduleTitle(), '기타 일정');
+
+  vm.runInContext("editingScheduleId = 'stored-schedule'", context);
+  context.formOriginalScheduleType = 'study';
+  context.formOriginalScheduleTitle = '스마트글래스';
+  elements['s-event-type'].value = 'study';
+  context.updateScheduleTypeFields(true);
+  assert.equal(context.getResolvedScheduleTitle(), '스마트글래스');
+  context.handleScheduleThemeChange();
+  assert.equal(previewCalls.at(-1), undefined);
 });
 
 test('three schedules are inserted with one database request and preserve errors', async () => {
@@ -243,11 +326,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.7',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.8',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.7',
+    'presentations.html?view=history&id=xyz&v=20260725.8',
   );
 });
 
@@ -432,19 +515,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.7/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.7/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.7'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.7/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.8/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.8/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.8'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.8/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.7/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.8/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.7/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.8/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-7/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-8/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,

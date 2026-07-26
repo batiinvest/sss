@@ -1914,6 +1914,14 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .schedule-form-panel { width: min(100%, 760px); }
 .schedule-form-head { margin-bottom: 8px; }
 .schedule-form-body { padding-right: 0; padding-left: 0; }
+.schedule-field-help {
+  display: block;
+  min-height: 18px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .schedule-series-card {
   margin: 2px 0 14px;
   padding: 13px 14px;
@@ -2062,6 +2070,10 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .schedule-mobile-card-actions { display: flex; gap: 7px; margin-top: 10px; }
 .schedule-mobile-card-actions .btn { flex: 1; justify-content: center; }
 .schedule-detail-panel { width: min(100%, 560px); }
+
+@media (max-width: 600px) {
+  .schedule-form-body .form-row { gap: 12px !important; }
+}
 
 @media (max-width: 768px) {
   .schedule-topbar-actions { width: 100%; }

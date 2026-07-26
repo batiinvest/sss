@@ -30,6 +30,48 @@ function addDaysToLocalDate(dateValue, days) {
   return toDateStr(date);
 }
 
+const SCHEDULE_AUTO_TITLES = {
+  study: '스터디',
+  dinner: '회식',
+  other: '기타 일정',
+};
+
+function getScheduleEventType(category) {
+  if (['industry', 'stock'].includes(category)) return 'study';
+  if (category === 'dinner') return 'dinner';
+  return 'other';
+}
+
+function getScheduleCategoryForEventType(eventType, presentationTheme = 'industry') {
+  if (eventType === 'study') {
+    return ['industry', 'stock'].includes(presentationTheme)
+      ? presentationTheme
+      : 'industry';
+  }
+  return eventType === 'dinner' ? 'dinner' : 'other';
+}
+
+function getAutomaticScheduleTitle(eventType) {
+  return SCHEDULE_AUTO_TITLES[eventType] || '일정';
+}
+
+function resolveScheduleTitle({
+  eventType,
+  otherTitle,
+  editing = false,
+  originalEventType,
+  originalTitle,
+} = {}) {
+  if (eventType === 'other') {
+    return String(otherTitle || '').trim() || getAutomaticScheduleTitle('other');
+  }
+  const storedTitle = String(originalTitle || '').trim();
+  if (editing && originalEventType === eventType && storedTitle) {
+    return storedTitle;
+  }
+  return getAutomaticScheduleTitle(eventType);
+}
+
 function normalizeScheduleSeriesField(key, value) {
   if (key === 'event_time') return String(value || '').slice(0, 5);
   return String(value ?? '').trim();

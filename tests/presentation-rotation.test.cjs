@@ -58,6 +58,47 @@ function orphanDraft(id, memberId, createdAt, overrides = {}) {
   };
 }
 
+test('schedule types derive presentation categories and automatic titles', () => {
+  const {
+    getScheduleEventType,
+    getScheduleCategoryForEventType,
+    getAutomaticScheduleTitle,
+    resolveScheduleTitle,
+  } = loadHelpers();
+
+  assert.equal(getScheduleEventType('industry'), 'study');
+  assert.equal(getScheduleEventType('stock'), 'study');
+  assert.equal(getScheduleEventType('dinner'), 'dinner');
+  assert.equal(getScheduleEventType('other'), 'other');
+  assert.equal(getScheduleCategoryForEventType('study', 'stock'), 'stock');
+  assert.equal(getScheduleCategoryForEventType('dinner', 'industry'), 'dinner');
+  assert.equal(getScheduleCategoryForEventType('other', 'stock'), 'other');
+  assert.equal(getAutomaticScheduleTitle('study'), '스터디');
+  assert.equal(getAutomaticScheduleTitle('dinner'), '회식');
+  assert.equal(getAutomaticScheduleTitle('other'), '기타 일정');
+
+  assert.equal(resolveScheduleTitle({
+    eventType: 'study',
+    editing: true,
+    originalEventType: 'study',
+    originalTitle: '스마트글래스',
+  }), '스마트글래스');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'dinner',
+    editing: true,
+    originalEventType: 'study',
+    originalTitle: '스마트글래스',
+  }), '회식');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'other',
+    otherTitle: '정기총회',
+  }), '정기총회');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'other',
+    otherTitle: '',
+  }), '기타 일정');
+});
+
 test('presentation theme creates three matching schedules at two-week intervals', () => {
   const { planBiweeklyPresentationSchedules } = loadHelpers();
   const base = {

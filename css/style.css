@@ -1914,6 +1914,56 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .schedule-form-panel { width: min(100%, 760px); }
 .schedule-form-head { margin-bottom: 8px; }
 .schedule-form-body { padding-right: 0; padding-left: 0; }
+.schedule-series-card {
+  margin: 2px 0 14px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.schedule-series-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.schedule-series-toggle input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.schedule-series-toggle span {
+  display: grid;
+  gap: 3px;
+}
+.schedule-series-toggle strong { font-size: 13px; }
+.schedule-series-toggle small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.schedule-series-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0 28px;
+  min-height: 24px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.schedule-series-date {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+}
 .schedule-form-actions { justify-content: flex-end; }
 .schedule-form-actions .btn { min-width: 112px; }
 .calendar-nav-button { min-width: 38px; min-height: 38px; padding: 4px 10px; font-size: 18px; justify-content: center; }

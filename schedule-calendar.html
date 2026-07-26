@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.6">
+  <link rel="stylesheet" href="css/style.css?v=20260725.7">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -35,7 +35,7 @@
         <div>
           <div class="presentation-order-eyebrow">스터디 운영</div>
           <h2 class="detail-title" id="formTitle">일정 추가</h2>
-          <p class="detail-subtitle">기본 시간은 오후 8시입니다. 발표자는 저장된 순서에 따라 자동 편성되며 종목은 나중에 입력할 수 있습니다.</p>
+          <p class="detail-subtitle" id="scheduleFormGuide">발표 테마와 시작일을 한 번만 입력하면 2주 간격의 3회 일정과 발표자가 자동 편성됩니다.</p>
         </div>
         <button type="button" class="detail-close" onclick="closeForm()" aria-label="일정 입력 닫기">×</button>
       </div>
@@ -48,7 +48,7 @@
         </div>
         <div class="form-group">
           <label for="s-category">구분</label>
-          <select id="s-category">
+          <select id="s-category" onchange="updateScheduleSeriesPreview(true)">
             <option value="industry">산업 분석</option>
             <option value="stock">종목 분석</option>
             <option value="dinner">회식</option>
@@ -59,12 +59,28 @@
       <div class="form-row">
         <div class="form-group">
           <label for="s-date">날짜 *</label>
-          <input type="date" id="s-date" required />
+          <input type="date" id="s-date" required onchange="updateScheduleSeriesPreview()" />
         </div>
         <div class="form-group">
           <label for="s-time">시간</label>
           <input type="time" id="s-time" />
         </div>
+      </div>
+      <div id="scheduleSeriesSection" class="schedule-series-card" hidden>
+        <label class="schedule-series-toggle" for="s-series">
+          <input
+            type="checkbox"
+            id="s-series"
+            checked
+            aria-describedby="scheduleSeriesHelp scheduleSeriesPreview"
+            onchange="updateScheduleSeriesPreview()"
+          />
+          <span>
+            <strong>2주 간격으로 3회 자동 등록</strong>
+            <small id="scheduleSeriesHelp">입력한 제목·테마·시간·장소를 세 일정에 동일하게 적용합니다.</small>
+          </span>
+        </label>
+        <div id="scheduleSeriesPreview" class="schedule-series-preview" aria-live="polite"></div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -190,8 +206,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260725.6"></script>
-<script src="js/schedule-shared.js?v=20260725.6"></script>
+<script src="js/db.js?v=20260725.7"></script>
+<script src="js/schedule-shared.js?v=20260725.7"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -733,10 +749,63 @@ function showScheduleFormError(message, field) {
   }
 }
 
+function isScheduleSeriesEnabled() {
+  const category = document.getElementById('s-category').value;
+  return !editingScheduleId &&
+    isPresentationSchedule({ category }) &&
+    document.getElementById('s-series').checked;
+}
+
+function updateScheduleSeriesPreview(resetSelection = false) {
+  const category = document.getElementById('s-category').value;
+  const eligible = !editingScheduleId && isPresentationSchedule({ category });
+  const section = document.getElementById('scheduleSeriesSection');
+  const checkbox = document.getElementById('s-series');
+  const preview = document.getElementById('scheduleSeriesPreview');
+  const saveButton = document.getElementById('saveScheduleBtn');
+  const guide = document.getElementById('scheduleFormGuide');
+
+  if (resetSelection) checkbox.checked = eligible;
+  checkbox.disabled = !eligible;
+  section.hidden = !eligible;
+  guide.textContent = editingScheduleId
+    ? '선택한 일정 한 건만 수정하며, 연결된 발표 순서는 저장 후 자동으로 다시 맞춰집니다.'
+    : eligible
+      ? '발표 테마와 시작일을 한 번만 입력하면 2주 간격의 3회 일정과 발표자가 자동 편성됩니다.'
+      : '회식·기타 일정은 선택한 날짜에 한 번만 등록됩니다.';
+
+  if (!eligible) {
+    preview.textContent = '';
+  } else if (!checkbox.checked) {
+    preview.textContent = '이번 일정만 1회 등록합니다.';
+  } else {
+    const startDate = document.getElementById('s-date').value;
+    if (!startDate) {
+      preview.textContent = '시작일을 선택하면 세 날짜를 미리 보여드립니다.';
+    } else {
+      const plan = planBiweeklyPresentationSchedules([], {
+        category,
+        event_date: startDate,
+      });
+      preview.innerHTML = plan.candidates.map((candidate, index) =>
+        `<span class="schedule-series-date">${index + 1}회 · ${escapeHtml(formatScheduleDate(candidate.event_date))}</span>`
+      ).join('');
+    }
+  }
+
+  if (!saveButton.disabled) {
+    saveButton.textContent = isScheduleSeriesEnabled() ? '3회 일정 저장' : '일정 저장';
+  }
+}
+
 function getScheduleFormState() {
   return JSON.stringify(Array.from(
     document.querySelectorAll('#scheduleFormElement input, #scheduleFormElement select, #scheduleFormElement textarea')
-  ).map(field => [field.id || field.className, field.value, field.dataset.presentationId || '']));
+  ).map(field => [
+    field.id || field.className,
+    field.type === 'checkbox' ? field.checked : field.value,
+    field.dataset.presentationId || '',
+  ]));
 }
 
 function isScheduleFormDirty() {
@@ -771,6 +840,7 @@ function openForm(prefill={}) {
     ? ''
     : descriptionParts.presentationPrefix;
   document.getElementById('s-desc').value = descriptionParts.memo;
+  updateScheduleSeriesPreview(true);
 
   formInitialState = getScheduleFormState();
 
@@ -829,11 +899,18 @@ async function saveSchedule(event) {
     return;
   }
 
+  const saveAsSeries = isScheduleSeriesEnabled();
   const btn = document.getElementById('saveScheduleBtn');
-  btn.textContent = '저장 중...'; btn.disabled = true;
+  btn.textContent = saveAsSeries ? '3회 일정 저장 중...' : '저장 중...';
+  btn.disabled = true;
 
   let reopenedDoneIds = [];
   let reopenedDoneRows = false;
+  let seriesPlan = null;
+  let seriesWriteAttempted = false;
+  let seriesRowsCommitted = false;
+  let seriesResponseMismatch = false;
+  let keepFormLocked = false;
   try {
     const payload = { title, category, event_date: date, event_time: time, location, created_by: memberId, description: desc };
     let savedSchedule = null;
@@ -876,7 +953,43 @@ async function saveSchedule(event) {
         }
         throw updateError;
       }
+    } else if (saveAsSeries) {
+      const latestSchedules = await fetchSchedules({ strict: true });
+      seriesPlan = planBiweeklyPresentationSchedules(latestSchedules, payload);
+      if (seriesPlan.conflicts.length) {
+        const conflictDates = seriesPlan.conflicts
+          .map(conflict => formatScheduleDate(conflict.event_date))
+          .join(', ');
+        showScheduleFormError(
+          `${conflictDates}에 이미 다른 일정이 있습니다. 시작일을 바꾸거나 3회 자동 등록을 해제하세요.`,
+          document.getElementById('s-date')
+        );
+        return;
+      }
+      if (seriesPlan.rowsToCreate.length) {
+        seriesWriteAttempted = true;
+        const createdRows = await submitSchedules(seriesPlan.rowsToCreate);
+        seriesRowsCommitted = true;
+        if (createdRows.length !== seriesPlan.rowsToCreate.length) {
+          seriesResponseMismatch = true;
+          throw new Error('자동 등록된 일정 수를 확인하지 못했습니다.');
+        }
+      }
     } else {
+      if (isPresentationSchedule(payload)) {
+        const latestSchedules = await fetchSchedules({ strict: true });
+        const existingTalk = latestSchedules.find(schedule =>
+          schedule.event_date === payload.event_date &&
+          isPresentationSchedule(schedule)
+        );
+        if (existingTalk) {
+          showScheduleFormError(
+            `${formatScheduleDate(payload.event_date)}에 발표 일정이 이미 있습니다. 기존 일정을 수정하거나 다른 날짜를 선택하세요.`,
+            document.getElementById('s-date')
+          );
+          return;
+        }
+      }
       savedSchedule = await submitSchedule(payload);
       // 발표 저장이 실패해도 재시도 시 같은 일정을 수정하도록 새 ID를 즉시 보존한다.
       editingScheduleId = savedSchedule?.id || null;
@@ -911,16 +1024,47 @@ async function saveSchedule(event) {
     const today = toDateStr(new Date());
     await reconcileAutomaticPresentationAssignments(today);
     refreshSchedulePageViews();
-    toast(wasEditing
-      ? '일정과 발표 순서가 자동으로 조정되었습니다.'
-      : '일정이 추가되고 발표 순서가 자동 반영되었습니다!');
+    if (saveAsSeries) {
+      const reusedCount = seriesPlan?.reused.length || 0;
+      const createdCount = seriesPlan?.rowsToCreate.length || 0;
+      toast(reusedCount
+        ? `기존 ${reusedCount}회 유지 · 새 ${createdCount}회 등록 후 발표 순서를 반영했습니다.`
+        : '3회 일정이 2주 간격으로 등록되고 발표 순서가 자동 반영되었습니다.');
+    } else {
+      toast(wasEditing
+        ? '일정과 발표 순서가 자동으로 조정되었습니다.'
+        : '일정이 추가되고 발표 순서가 자동 반영되었습니다!');
+    }
     closeForm(true);
   } catch(e) {
-    lockScheduleData();
-    showScheduleFormError('저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도하세요.'));
+    if (saveAsSeries && seriesRowsCommitted) {
+      keepFormLocked = true;
+      lockScheduleData();
+      showScheduleFormError(seriesResponseMismatch
+        ? '일정 저장은 완료됐지만 저장된 건수를 확인하지 못했습니다. 중복 등록하지 말고 새로고침해 주세요.'
+        : '일정 저장은 완료됐지만 발표 순서를 반영하지 못했습니다. 중복 등록하지 말고 새로고침해 주세요.');
+    } else if (saveAsSeries && seriesWriteAttempted && e?.code) {
+      showScheduleFormError('3회 일정은 저장되지 않았습니다. ' + (e.message || '입력값과 권한을 확인해 주세요.'));
+    } else if (saveAsSeries && seriesWriteAttempted) {
+      keepFormLocked = true;
+      lockScheduleData();
+      showScheduleFormError('일정 저장 결과를 확정하지 못했습니다. 중복 등록을 피하려면 새로고침한 뒤 일정을 확인해 주세요.');
+    } else {
+      keepFormLocked = true;
+      lockScheduleData();
+      showScheduleFormError('저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도하세요.'));
+    }
     toast('오류: ' + e.message);
   }
-  finally { btn.textContent = '일정 저장'; btn.disabled = false; }
+  finally {
+    if (keepFormLocked) {
+      btn.disabled = true;
+      btn.textContent = '새로고침 후 확인';
+    } else {
+      btn.disabled = false;
+      updateScheduleSeriesPreview();
+    }
+  }
 }
 
 async function confirmDelete(id) {

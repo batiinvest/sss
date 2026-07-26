@@ -255,6 +255,15 @@ async function submitSchedule(payload) {
   return data;
 }
 
+async function submitSchedules(payloads) {
+  if (!Array.isArray(payloads) || !payloads.length) return [];
+  const { data, error } = await sb.from('schedules')
+    .insert(payloads)
+    .select('id,event_date');
+  if (error) throw error;
+  return data || [];
+}
+
 async function updateSchedule(id, payload) {
   const { data, error } = await sb.from('schedules').update(payload).eq('id', id).select().single();
   if (error) throw new Error(error.message);

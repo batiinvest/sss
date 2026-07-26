@@ -10,6 +10,96 @@ function toDateStr(date) {
     String(date.getDate()).padStart(2, '0');
 }
 
+function addDaysToLocalDate(dateValue, days) {
+  const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    12
+  );
+  if (
+    date.getFullYear() !== Number(match[1]) ||
+    date.getMonth() !== Number(match[2]) - 1 ||
+    date.getDate() !== Number(match[3])
+  ) {
+    return null;
+  }
+  date.setDate(date.getDate() + Number(days || 0));
+  return toDateStr(date);
+}
+
+function normalizeScheduleSeriesField(key, value) {
+  if (key === 'event_time') return String(value || '').slice(0, 5);
+  return String(value ?? '').trim();
+}
+
+function isSameScheduleSeriesEntry(existing, candidate) {
+  return [
+    'title',
+    'category',
+    'event_date',
+    'event_time',
+    'location',
+    'created_by',
+    'description',
+  ].every(key =>
+    normalizeScheduleSeriesField(key, existing?.[key]) ===
+    normalizeScheduleSeriesField(key, candidate?.[key])
+  );
+}
+
+function planBiweeklyPresentationSchedules(
+  existingSchedules = [],
+  basePayload = {},
+  opts = {}
+) {
+  const count = Math.max(1, Number(opts.count) || 3);
+  const intervalDays = Math.max(1, Number(opts.intervalDays) || 14);
+  if (!isPresentationSchedule(basePayload)) {
+    return {
+      candidates: [{ ...basePayload }],
+      rowsToCreate: [{ ...basePayload }],
+      reused: [],
+      conflicts: [],
+    };
+  }
+  const startDate = addDaysToLocalDate(basePayload.event_date, 0);
+  if (!startDate) throw new Error('자동 등록 시작일이 올바르지 않습니다.');
+
+  const candidates = Array.from({ length: count }, (_, index) => ({
+    ...basePayload,
+    event_date: addDaysToLocalDate(startDate, index * intervalDays),
+  }));
+  const rowsToCreate = [];
+  const reused = [];
+  const conflicts = [];
+
+  candidates.forEach(candidate => {
+    const sameDate = (existingSchedules || []).filter(schedule =>
+      String(schedule.event_date || '') === candidate.event_date
+    );
+    const exactRows = sameDate.filter(schedule =>
+      isSameScheduleSeriesEntry(schedule, candidate)
+    );
+    const otherRows = sameDate.filter(schedule =>
+      !isSameScheduleSeriesEntry(schedule, candidate)
+    );
+    if (otherRows.length || exactRows.length > 1) {
+      conflicts.push({
+        event_date: candidate.event_date,
+        schedules: sameDate,
+      });
+    } else if (exactRows.length) {
+      reused.push(exactRows[0]);
+    } else {
+      rowsToCreate.push(candidate);
+    }
+  });
+  return { candidates, rowsToCreate, reused, conflicts };
+}
+
 function normalizePresentationDate(value) {
   const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : null;

@@ -22,6 +22,13 @@ function sourceSection(source, startMarker, endMarker) {
   return source.slice(start, end);
 }
 
+function loadDbHelpers(overrides = {}) {
+  const context = { console, Date, Map, Set, ...overrides };
+  vm.createContext(context);
+  vm.runInContext(read('js/db.js'), context);
+  return context;
+}
+
 test('changed app pages keep valid inline JavaScript', () => {
   for (const file of ['app.html', 'index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
     inlineScripts(read(file)).forEach((code, index) => {
@@ -35,6 +42,100 @@ test('schedule creation uses the 20:00 default and local calendar dates', () => 
   assert.match(source, /editingScheduleId \? '' : '20:00'/);
   assert.doesNotMatch(source, /toISOString\(\)\.slice\(0,\s*10\)/);
   assert.match(source, /const today = toDateStr\(new Date\(\)\)/);
+});
+
+test('schedule form previews and saves a three-session presentation series', () => {
+  const source = read('schedule-calendar.html');
+  const seriesToggle = sourceSection(
+    source,
+    'function isScheduleSeriesEnabled',
+    'function getScheduleFormState',
+  );
+  const saveSchedule = sourceSection(
+    source,
+    'async function saveSchedule',
+    'async function confirmDelete',
+  );
+
+  assert.match(source, /id="s-series"[\s\S]*checked/);
+  assert.match(source, /2주 간격으로 3회 자동 등록/);
+  assert.match(source, /id="scheduleSeriesPreview"[\s\S]*aria-live="polite"/);
+  assert.match(source, /선택한 일정 한 건만 수정/);
+  assert.match(source, /회식·기타 일정은 선택한 날짜에 한 번만 등록/);
+  assert.match(source, /id="s-category" onchange="updateScheduleSeriesPreview\(true\)"/);
+  assert.match(source, /id="s-date" required onchange="updateScheduleSeriesPreview\(\)"/);
+  assert.match(seriesToggle, /!editingScheduleId/);
+  assert.match(seriesToggle, /isPresentationSchedule\(\{ category \}\)/);
+  assert.match(seriesToggle, /planBiweeklyPresentationSchedules\(\[\]/);
+  assert.match(source, /field\.type === 'checkbox' \? field\.checked : field\.value/);
+  assert.match(saveSchedule, /else if \(saveAsSeries\)/);
+  assert.match(saveSchedule, /planBiweeklyPresentationSchedules\(latestSchedules, payload\)/);
+  assert.match(saveSchedule, /seriesPlan\.conflicts\.length/);
+  assert.match(saveSchedule, /await submitSchedules\(seriesPlan\.rowsToCreate\)/);
+  assert.match(saveSchedule, /isPresentationSchedule\(payload\)[\s\S]*existingTalk[\s\S]*발표 일정이 이미 있습니다/);
+  assert.match(saveSchedule, /savedSchedule = await submitSchedule\(payload\)/);
+  assert.ok(
+    saveSchedule.indexOf('await submitSchedules(seriesPlan.rowsToCreate)') <
+    saveSchedule.indexOf('await reconcileAutomaticPresentationAssignments(today)'),
+  );
+  assert.match(saveSchedule, /중복 등록하지 말고 새로고침/);
+  assert.match(saveSchedule, /seriesWriteAttempted && e\?\.code[\s\S]*3회 일정은 저장되지 않았습니다/);
+  assert.match(saveSchedule, /keepFormLocked[\s\S]*btn\.textContent = '새로고침 후 확인'/);
+});
+
+test('three schedules are inserted with one database request and preserve errors', async () => {
+  const inserted = [];
+  let insertCalls = 0;
+  const rows = [
+    { event_date: '2026-08-03' },
+    { event_date: '2026-08-17' },
+    { event_date: '2026-08-31' },
+  ];
+  const success = loadDbHelpers({
+    sb: {
+      from(table) {
+        assert.equal(table, 'schedules');
+        return {
+          insert(payloads) {
+            insertCalls += 1;
+            inserted.push(...payloads);
+            return {
+              async select(columns) {
+                assert.equal(columns, 'id,event_date');
+                return { data: payloads, error: null };
+              },
+            };
+          },
+        };
+      },
+    },
+  });
+
+  const result = await success.submitSchedules(rows);
+  assert.equal(insertCalls, 1);
+  assert.deepEqual(inserted, rows);
+  assert.equal(result.length, 3);
+
+  const dbError = { message: 'bulk insert failed', code: '23505' };
+  const failure = loadDbHelpers({
+    sb: {
+      from() {
+        return {
+          insert() {
+            return {
+              async select() {
+                return { data: null, error: dbError };
+              },
+            };
+          },
+        };
+      },
+    },
+  });
+  await assert.rejects(
+    failure.submitSchedules(rows),
+    error => error === dbError,
+  );
 });
 
 test('schedule refresh never calls the order-page-only renderer', () => {
@@ -142,11 +243,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.6',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.7',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.6',
+    'presentations.html?view=history&id=xyz&v=20260725.7',
   );
 });
 
@@ -331,19 +432,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.6/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.6/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.6'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.6/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.7/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.7/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.7'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.7/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.6/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.7/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.6/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.7/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-6/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-7/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,

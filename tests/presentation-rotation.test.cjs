@@ -58,6 +58,155 @@ function orphanDraft(id, memberId, createdAt, overrides = {}) {
   };
 }
 
+test('presentation theme creates three matching schedules at two-week intervals', () => {
+  const { planBiweeklyPresentationSchedules } = loadHelpers();
+  const base = {
+    title: '반도체 산업 분석',
+    category: 'industry',
+    event_date: '2026-08-03',
+    event_time: '20:00',
+    location: '강남',
+    created_by: 'A',
+    description: '정규 스터디',
+  };
+  const plan = planBiweeklyPresentationSchedules([], base);
+
+  assert.deepEqual(
+    plain(plan.candidates.map(item => item.event_date)),
+    ['2026-08-03', '2026-08-17', '2026-08-31'],
+  );
+  assert.equal(plan.rowsToCreate.length, 3);
+  assert.ok(plan.rowsToCreate.every(item =>
+    item.title === base.title &&
+    item.category === base.category &&
+    item.event_time === base.event_time &&
+    item.location === base.location &&
+    item.created_by === base.created_by &&
+    item.description === base.description
+  ));
+});
+
+test('biweekly schedule planning crosses year boundaries with local dates', () => {
+  const { planBiweeklyPresentationSchedules } = loadHelpers();
+  const plan = planBiweeklyPresentationSchedules([], {
+    title: '연말 스터디',
+    category: 'stock',
+    event_date: '2026-12-21',
+    event_time: '20:00',
+  });
+
+  assert.deepEqual(
+    plain(plan.candidates.map(item => item.event_date)),
+    ['2026-12-21', '2027-01-04', '2027-01-18'],
+  );
+});
+
+test('biweekly schedule planning reuses exact rows and blocks conflicting dates', () => {
+  const { planBiweeklyPresentationSchedules } = loadHelpers();
+  const base = {
+    title: '종목 분석',
+    category: 'stock',
+    event_date: '2026-08-03',
+    event_time: '20:00',
+    location: null,
+    created_by: null,
+    description: null,
+  };
+  const existing = [
+    { id: 'same', ...base, event_time: '20:00:00' },
+    schedule('dinner', '2026-08-17', 'dinner'),
+  ];
+  const plan = planBiweeklyPresentationSchedules(existing, base);
+
+  assert.deepEqual(plain(plan.reused.map(item => item.id)), ['same']);
+  assert.deepEqual(
+    plain(plan.conflicts.map(item => item.event_date)),
+    ['2026-08-17'],
+  );
+  assert.deepEqual(
+    plain(plan.rowsToCreate.map(item => item.event_date)),
+    ['2026-08-31'],
+  );
+
+  const exactAndOther = planBiweeklyPresentationSchedules([
+    ...existing,
+    schedule('same-day-dinner', '2026-08-03', 'dinner'),
+  ], base);
+  assert.deepEqual(plain(exactAndOther.reused), []);
+  assert.deepEqual(
+    plain(exactAndOther.conflicts.map(item => item.event_date)),
+    ['2026-08-03', '2026-08-17'],
+  );
+
+  const duplicateExact = planBiweeklyPresentationSchedules([
+    { id: 'same-1', ...base, event_time: '20:00:00' },
+    { id: 'same-2', ...base, event_time: '20:00:00' },
+  ], base);
+  assert.deepEqual(plain(duplicateExact.reused), []);
+  assert.deepEqual(
+    plain(duplicateExact.conflicts.map(item => item.event_date)),
+    ['2026-08-03'],
+  );
+});
+
+test('non-presentation schedules remain single and an existing series is idempotent', () => {
+  const { planBiweeklyPresentationSchedules } = loadHelpers();
+  const dinner = planBiweeklyPresentationSchedules([], {
+    title: '회식',
+    category: 'dinner',
+    event_date: '2026-08-03',
+    event_time: '20:00',
+  });
+  assert.equal(dinner.candidates.length, 1);
+  assert.equal(dinner.rowsToCreate.length, 1);
+
+  const base = {
+    title: '산업 분석',
+    category: 'industry',
+    event_date: '2026-08-03',
+    event_time: '20:00',
+  };
+  const initial = planBiweeklyPresentationSchedules([], base);
+  const existing = initial.candidates.map((item, index) => ({
+    ...item,
+    id: `saved-${index + 1}`,
+    event_time: '20:00:00',
+  }));
+  const retry = planBiweeklyPresentationSchedules(existing, base);
+
+  assert.equal(retry.rowsToCreate.length, 0);
+  assert.equal(retry.reused.length, 3);
+  assert.equal(retry.conflicts.length, 0);
+});
+
+test('three generated schedules feed the existing 3, 3, 1 rotation', () => {
+  const {
+    planBiweeklyPresentationSchedules,
+    buildPresentationSchedulePlan,
+  } = loadHelpers();
+  const series = planBiweeklyPresentationSchedules([], {
+    title: '산업 분석',
+    category: 'industry',
+    event_date: '2026-08-03',
+    event_time: '20:00',
+  });
+  const generatedSchedules = series.candidates.map((item, index) => ({
+    ...item,
+    id: `series-${index + 1}`,
+  }));
+  const rotation = buildPresentationSchedulePlan(
+    generatedSchedules,
+    [],
+    members,
+    { fromDate: '2026-08-01' },
+  );
+
+  assert.deepEqual(
+    plain(rotation.items.map(item => item.memberIds)),
+    [['A', 'B', 'C'], ['D', 'E', 'F'], ['G']],
+  );
+});
+
 test('seven members rotate by 3, 3, 1 and restart on the next study date', () => {
   const { buildPresentationSchedulePlan } = loadHelpers();
   const schedules = [

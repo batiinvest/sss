@@ -647,15 +647,21 @@ const ModalPres = (() => {
     const { payload, key } = state;
 
     const existing = _drafts.find(p => p.member_id === _me.id);
+    const storagePayload = buildPresentationDraftStoragePayload(
+      payload,
+      { existingDate: existing?.presented_at }
+    );
     let savedDraft = existing || null;
     if (existing) {
       // 기존 draft 수정 (배정된 것 포함)
-      const { error } = await sb.from('presentations').update(payload).eq('id', existing.id);
+      const { error } = await sb.from('presentations')
+        .update(storagePayload)
+        .eq('id', existing.id);
       if (error) throw error;
-      Object.assign(existing, payload);
+      Object.assign(existing, storagePayload);
     } else {
       const { data, error } = await sb.from('presentations')
-        .insert({ member_id: _me.id, ...payload }).select().single();
+        .insert({ member_id: _me.id, ...storagePayload }).select().single();
       if (error) throw error;
       if (data) {
         _drafts.push(data);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.5">
+  <link rel="stylesheet" href="css/style.css?v=20260725.6">
   <script>
     (function () {
       if (window === window.parent) {
@@ -257,10 +257,10 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260725.5"></script>
-<script src="js/schedule-shared.js?v=20260725.5"></script>
+<script src="js/db.js?v=20260725.6"></script>
+<script src="js/schedule-shared.js?v=20260725.6"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260725.5"></script>
+<script src="js/modal-pres.js?v=20260725.6"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -448,12 +448,15 @@ function renderMobileRecentPresentations(items) {
     const rate = item.price_at && current ? (current - item.price_at) / item.price_at * 100 : null;
     const name = mobilePresentationName(item);
     const status = item.status === 'planned' ? '발표 예정' : '발표 완료';
+    const presentationDate = item.status === 'planned' && !item.schedule_id
+      ? '날짜 미정'
+      : (item.presented_at || '날짜 미정');
     const route = item.status === 'planned'
       ? 'presentations?view=prepare' + (item.schedule_id ? '&schedule=' + encodeURIComponent(item.schedule_id) : '')
       : 'presentations?view=history&id=' + encodeURIComponent(item.id);
     return `<button type="button" class="mobile-stock-card" onclick="navigateToAppRoute('${route}')">
       <span class="mobile-stock-card-head"><strong>${escapeHtml(name)}</strong><span class="badge ${item.status === 'planned' ? 'b-warn' : 'b-sold'}">${status}</span></span>
-      <span class="mobile-stock-card-meta">${escapeHtml(item.members?.name || '발표자 미정')} · ${escapeHtml(item.presented_at || '날짜 미정')}</span>
+      <span class="mobile-stock-card-meta">${escapeHtml(item.members?.name || '발표자 미정')} · ${escapeHtml(presentationDate)}</span>
       <span class="mobile-stock-card-metrics">
         <span>발표가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>현재가<strong>${current ? Number(current).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
@@ -809,9 +812,10 @@ async function renderMyPresData(me, presData, priceMap) {
     plannedEl.innerHTML = planned.map(p => {
       const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
       const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
+      const scheduleText = p.schedule_id ? (p.presented_at || '일정 미정') : '일정 미정';
       return `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px;">
         📋 ${catBadge} <strong style="color:var(--text);">${topicName}</strong>
-        <span style="color:var(--muted);">${p.presented_at || '일정 미정'} 예정</span>
+        <span style="color:var(--muted);">${scheduleText} 예정</span>
       </div>`;
     }).join('');
   } else {

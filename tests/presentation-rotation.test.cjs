@@ -660,6 +660,67 @@ test('the new draft epoch separates legacy orphan topics from the current cycle'
   );
 });
 
+test('an unassigned new draft keeps a required storage date and moves to the next schedule', () => {
+  const {
+    buildPresentationDraftStoragePayload,
+    isCurrentUnassignedPresentationDraft,
+    buildPresentationAssignmentPatches,
+  } = loadHelpers();
+  const payload = buildPresentationDraftStoragePayload(
+    {
+      member_id: 'A',
+      status: 'planned',
+      topic: 'new topic',
+      category: 'stock',
+      schedule_id: null,
+      presented_at: null,
+    },
+    { today: '2026-07-26' }
+  );
+  const draft = {
+    id: 'new-draft',
+    ...payload,
+    created_at: '2026-07-26T01:00:00.000Z',
+  };
+  const epoch = '2026-07-25T00:00:00.000Z';
+  const targetSchedule = schedule('next-talk', '2026-08-03');
+  const plan = {
+    fromDate: '2026-07-26',
+    items: [{
+      schedule: targetSchedule,
+      memberIds: ['A'],
+    }],
+  };
+
+  assert.equal(payload.presented_at, '2026-07-26');
+  assert.equal(
+    isCurrentUnassignedPresentationDraft(draft, epoch),
+    true
+  );
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      [targetSchedule],
+      [draft],
+      plan,
+      { fromDate: '2026-07-26', draftEpoch: epoch }
+    )),
+    [{
+      id: 'new-draft',
+      payload: {
+        schedule_id: 'next-talk',
+        presented_at: '2026-08-03',
+      },
+    }]
+  );
+  assert.equal(
+    buildPresentationDraftStoragePayload(
+      { topic: 'edited topic' },
+      { existingDate: '2026-07-20', today: '2026-07-26' }
+    ).presented_at,
+    '2026-07-20'
+  );
+});
+
 test('initial migration recovers only the latest post-cycle draft for each next-roster member', () => {
   const { selectInitialPresentationDraftRecoveryIds } = loadHelpers();
   const schedules = [

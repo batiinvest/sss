@@ -10,6 +10,22 @@ function toDateStr(date) {
     String(date.getDate()).padStart(2, '0');
 }
 
+function normalizePresentationDate(value) {
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+// 운영 DB의 presentations.presented_at은 필수다. 아직 일정이 없는 초안은
+// 오늘을 저장용 기준일로 사용하고, 일정이 생기면 자동 편성에서 실제 날짜로 바꾼다.
+function buildPresentationDraftStoragePayload(payload = {}, opts = {}) {
+  const presentedAt =
+    normalizePresentationDate(payload.presented_at) ||
+    normalizePresentationDate(opts.existingDate) ||
+    normalizePresentationDate(opts.today) ||
+    toDateStr(opts.now instanceof Date ? opts.now : new Date());
+  return { ...payload, presented_at: presentedAt };
+}
+
 // ── 공통 전역 변수
 let schedules     = [];
 let members       = [];
@@ -457,7 +473,6 @@ function isCurrentUnassignedPresentationDraft(
   if (presentation.id && normalizedCarryoverIds.has(String(presentation.id))) {
     return true;
   }
-  if (presentation.presented_at) return false;
   const normalizedEpoch = normalizePresentationDraftEpoch(draftEpoch);
   if (!normalizedEpoch) return false;
   const createdAt = Date.parse(presentation.created_at || '');
@@ -1093,14 +1108,16 @@ function buildPresentationAssignmentPatches(
   const eligibleRows = (allPresentations || []).filter(presentation => {
     if (presentation.status !== 'planned' || !presentation.member_id) return false;
     if (!presentation.schedule_id) {
-      if (draftEpoch && !isCurrentUnassignedPresentationDraft(
+      const isCurrentDraft = isCurrentUnassignedPresentationDraft(
         presentation,
         draftEpoch,
         normalizedDraftCarryoverIds
-      )) {
+      );
+      if (draftEpoch && !isCurrentDraft) {
         return false;
       }
       return (
+        isCurrentDraft ||
         normalizedDraftCarryoverIds.has(String(presentation.id || '')) ||
         !presentation.presented_at ||
         presentation.presented_at >= fromDate

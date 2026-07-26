@@ -346,6 +346,7 @@ async function renderMyPresentations() {
   try {
     const { data: pres, error } = await sb.from('presentations')
       .select('*').eq('member_id', myMember.id)
+      .eq('status', 'done')
       .order('presented_at', { ascending: false });
     if (error) throw error;
 

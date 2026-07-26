@@ -36,6 +36,11 @@ const SCHEDULE_AUTO_TITLES = {
   other: '기타 일정',
 };
 
+const PRESENTATION_SCHEDULE_AUTO_TITLES = {
+  industry: '산업 분석',
+  stock: '기업 분석',
+};
+
 function getScheduleEventType(category) {
   if (['industry', 'stock'].includes(category)) return 'study';
   if (category === 'dinner') return 'dinner';
@@ -51,25 +56,134 @@ function getScheduleCategoryForEventType(eventType, presentationTheme = 'industr
   return eventType === 'dinner' ? 'dinner' : 'other';
 }
 
-function getAutomaticScheduleTitle(eventType) {
+function getAutomaticScheduleTitle(eventType, category) {
+  if (eventType === 'study' && PRESENTATION_SCHEDULE_AUTO_TITLES[category]) {
+    return PRESENTATION_SCHEDULE_AUTO_TITLES[category];
+  }
   return SCHEDULE_AUTO_TITLES[eventType] || '일정';
 }
 
 function resolveScheduleTitle({
   eventType,
+  category,
   otherTitle,
   editing = false,
   originalEventType,
+  originalCategory,
   originalTitle,
 } = {}) {
   if (eventType === 'other') {
     return String(otherTitle || '').trim() || getAutomaticScheduleTitle('other');
   }
   const storedTitle = String(originalTitle || '').trim();
-  if (editing && originalEventType === eventType && storedTitle) {
+  const samePresentationTheme =
+    eventType !== 'study' || originalCategory === category;
+  const legacyGenericTitle = ['스터디', '종목 분석'].includes(storedTitle);
+  const categoryStampedTitle =
+    /^(기업 분석|종목 분석|산업 분석)\s*—\s*.+$/.test(storedTitle);
+  const customPresentationTitle =
+    eventType === 'study' &&
+    !isManagedPresentationScheduleTitle(storedTitle) &&
+    !categoryStampedTitle;
+  if (
+    editing &&
+    originalEventType === eventType &&
+    storedTitle &&
+    !legacyGenericTitle &&
+    (samePresentationTheme || customPresentationTitle)
+  ) {
     return storedTitle;
   }
-  return getAutomaticScheduleTitle(eventType);
+  return getAutomaticScheduleTitle(eventType, category);
+}
+
+function uniqueScheduleTitleParts(values = []) {
+  const seen = new Set();
+  return values.reduce((result, value) => {
+    const normalized = String(value || '').trim();
+    const key = normalized.toLocaleLowerCase();
+    if (!normalized || seen.has(key)) return result;
+    seen.add(key);
+    result.push(normalized);
+    return result;
+  }, []);
+}
+
+function getPresentationScheduleTopicParts(presentation) {
+  const topic = String(presentation?.topic || '').trim();
+  if (!topic) return { industry: '', subject: '' };
+  const parts = topic.split('>').map(part => part.trim()).filter(Boolean);
+  return {
+    industry:
+      presentation?.category === 'industry' && parts.length > 1
+        ? parts[0]
+        : '',
+    subject: parts[parts.length - 1] || '',
+  };
+}
+
+function getAutomaticPresentationScheduleTitle(
+  category,
+  linkedPresentations = [],
+  opts = {}
+) {
+  const baseTitle =
+    PRESENTATION_SCHEDULE_AUTO_TITLES[category] ||
+    getAutomaticScheduleTitle('study', category);
+  const configuredIndustryName = String(opts.industryName || '').trim();
+  const inferredIndustryNames = category === 'industry'
+    ? uniqueScheduleTitleParts(
+        linkedPresentations.map(presentation =>
+          getPresentationScheduleTopicParts(presentation).industry
+        )
+      )
+    : [];
+  const detailParts = category === 'industry'
+    ? configuredIndustryName
+      ? [configuredIndustryName]
+      : inferredIndustryNames.length === 1
+        ? inferredIndustryNames
+        : []
+    : category === 'stock'
+      ? uniqueScheduleTitleParts(
+          linkedPresentations
+            .filter(presentation => presentation?.category !== 'industry')
+            .map(presentation =>
+              getPresentationScheduleTopicParts(presentation).subject
+            )
+        )
+      : [];
+  return detailParts.length
+    ? `${baseTitle} — ${detailParts.join('·')}`
+    : baseTitle;
+}
+
+function isManagedPresentationScheduleTitle(title) {
+  const normalized = String(title || '').trim();
+  if (!normalized) return true;
+  return ['스터디', '기업 분석', '종목 분석', '산업 분석'].includes(normalized);
+}
+
+function getScheduleDisplayTitle(schedule, linkedPresentations = [], opts = {}) {
+  if (!schedule) return '일정';
+  const storedTitle = String(schedule.title || '').trim();
+  if (!isPresentationSchedule(schedule)) {
+    return storedTitle || getAutomaticScheduleTitle(
+      getScheduleEventType(schedule.category),
+      schedule.category
+    );
+  }
+  if (storedTitle && !isManagedPresentationScheduleTitle(storedTitle)) {
+    return storedTitle;
+  }
+
+  const automaticTitle = getAutomaticPresentationScheduleTitle(
+    schedule.category,
+    linkedPresentations,
+    opts
+  );
+  const baseTitle = PRESENTATION_SCHEDULE_AUTO_TITLES[schedule.category];
+  return automaticTitle;
 }
 
 function normalizeScheduleSeriesField(key, value) {
@@ -169,7 +283,7 @@ let calMonth = new Date().getMonth(); // 0-indexed
 let editingScheduleId = null;
 
 // ── 공통 상수
-const CAT_LABEL = { industry: '산업 분석', stock: '종목 분석', dinner: '회식', other: '기타' };
+const CAT_LABEL = { industry: '산업 분석', stock: '기업 분석', dinner: '회식', other: '기타' };
 const CAT_CLASS = { industry: 'ev-meeting', stock: 'ev-deadline', dinner: 'ev-dinner', other: 'ev-other' };
 const MONTH_KR  = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 const PRESENTATION_GROUP_SIZE = 3;

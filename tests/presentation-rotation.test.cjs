@@ -63,6 +63,8 @@ test('schedule types derive presentation categories and automatic titles', () =>
     getScheduleEventType,
     getScheduleCategoryForEventType,
     getAutomaticScheduleTitle,
+    getAutomaticPresentationScheduleTitle,
+    getScheduleDisplayTitle,
     resolveScheduleTitle,
   } = loadHelpers();
 
@@ -73,16 +75,52 @@ test('schedule types derive presentation categories and automatic titles', () =>
   assert.equal(getScheduleCategoryForEventType('study', 'stock'), 'stock');
   assert.equal(getScheduleCategoryForEventType('dinner', 'industry'), 'dinner');
   assert.equal(getScheduleCategoryForEventType('other', 'stock'), 'other');
+  assert.equal(getAutomaticScheduleTitle('study', 'industry'), '산업 분석');
+  assert.equal(getAutomaticScheduleTitle('study', 'stock'), '기업 분석');
   assert.equal(getAutomaticScheduleTitle('study'), '스터디');
   assert.equal(getAutomaticScheduleTitle('dinner'), '회식');
   assert.equal(getAutomaticScheduleTitle('other'), '기타 일정');
 
   assert.equal(resolveScheduleTitle({
     eventType: 'study',
+    category: 'industry',
     editing: true,
     originalEventType: 'study',
+    originalCategory: 'industry',
     originalTitle: '스마트글래스',
   }), '스마트글래스');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'study',
+    category: 'stock',
+    editing: true,
+    originalEventType: 'study',
+    originalCategory: 'industry',
+    originalTitle: '스마트글래스',
+  }), '스마트글래스');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'study',
+    category: 'stock',
+    editing: true,
+    originalEventType: 'study',
+    originalCategory: 'industry',
+    originalTitle: '산업 분석',
+  }), '기업 분석');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'study',
+    category: 'stock',
+    editing: true,
+    originalEventType: 'study',
+    originalCategory: 'industry',
+    originalTitle: '산업 분석 — HVAC',
+  }), '기업 분석');
+  assert.equal(resolveScheduleTitle({
+    eventType: 'study',
+    category: 'industry',
+    editing: true,
+    originalEventType: 'study',
+    originalCategory: 'industry',
+    originalTitle: '스터디',
+  }), '산업 분석');
   assert.equal(resolveScheduleTitle({
     eventType: 'dinner',
     editing: true,
@@ -97,6 +135,82 @@ test('schedule types derive presentation categories and automatic titles', () =>
     eventType: 'other',
     otherTitle: '',
   }), '기타 일정');
+
+  const stockRows = [
+    { category: 'stock', topic: 'Qualcomm' },
+    { category: 'stock', topic: 'LS' },
+    { category: 'stock', topic: 'Qualcomm' },
+    { category: 'stock', topic: null },
+  ];
+  assert.equal(
+    getAutomaticPresentationScheduleTitle('stock', stockRows),
+    '기업 분석 — Qualcomm·LS',
+  );
+  assert.equal(
+    getScheduleDisplayTitle(
+      { category: 'stock', title: '기업 분석' },
+      stockRows,
+    ),
+    '기업 분석 — Qualcomm·LS',
+  );
+
+  const industryRows = [
+    { category: 'industry', topic: '2차전지 > 대주전자재료' },
+    { category: 'industry', topic: '2차전지>이수스페셜티케미컬' },
+  ];
+  assert.equal(
+    getAutomaticPresentationScheduleTitle('industry', industryRows),
+    '산업 분석 — 2차전지',
+  );
+  assert.equal(
+    getAutomaticPresentationScheduleTitle('industry', [], {
+      industryName: '반도체전공정',
+    }),
+    '산업 분석 — 반도체전공정',
+  );
+  assert.equal(
+    getScheduleDisplayTitle(
+      { category: 'industry', title: '산업 분석' },
+      [],
+      { industryName: '반도체전공정' },
+    ),
+    '산업 분석 — 반도체전공정',
+  );
+  assert.equal(
+    getAutomaticPresentationScheduleTitle('industry', [
+      { category: 'industry', topic: '2차전지 > A' },
+      { category: 'industry', topic: 'HVAC > B' },
+    ]),
+    '산업 분석',
+  );
+  assert.equal(
+    getScheduleDisplayTitle(
+      { category: 'industry', title: '산업 분석' },
+      industryRows,
+    ),
+    '산업 분석 — 2차전지',
+  );
+  assert.equal(
+    getScheduleDisplayTitle(
+      { category: 'industry', title: '스마트글래스' },
+      industryRows,
+    ),
+    '스마트글래스',
+  );
+  assert.equal(
+    getScheduleDisplayTitle(
+      { category: 'stock', title: '기업 분석 & 산업 분석 — 스마트글래스' },
+      stockRows,
+    ),
+    '기업 분석 & 산업 분석 — 스마트글래스',
+  );
+  assert.equal(
+    getScheduleDisplayTitle(
+      { category: 'industry', title: '산업 분석 — HVAC' },
+      industryRows,
+    ),
+    '산업 분석 — HVAC',
+  );
 });
 
 test('presentation theme creates three matching schedules at two-week intervals', () => {

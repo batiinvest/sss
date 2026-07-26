@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.8">
+  <link rel="stylesheet" href="css/style.css?v=20260725.9">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -49,14 +49,15 @@
             <option value="dinner">회식</option>
             <option value="other">기타</option>
           </select>
-          <small class="schedule-field-help">제목은 일정 종류에 맞춰 자동 저장됩니다.</small>
+          <small class="schedule-field-help">기본 제목은 일정 종류와 발표 테마로 자동 정해집니다.</small>
         </div>
         <div class="form-group" id="s-theme-group">
           <label for="s-category">발표 테마 *</label>
           <select id="s-category" required onchange="handleScheduleThemeChange()">
             <option value="industry">산업 분석</option>
-            <option value="stock">종목 분석</option>
+            <option value="stock">기업 분석</option>
           </select>
+          <small class="schedule-field-help">발표 관리의 종목·산업명이 일정 제목에 자동 표시됩니다.</small>
         </div>
         <div class="form-group" id="s-other-title-group" hidden>
           <label for="s-title">기타 일정 이름 (선택)</label>
@@ -160,7 +161,7 @@
         <select id="filterCat" onchange="renderScheduleList()" aria-label="일정 구분 필터">
           <option value="">전체 구분</option>
           <option value="industry">산업 분석</option>
-          <option value="stock">종목 분석</option>
+          <option value="stock">기업 분석</option>
           <option value="dinner">회식</option>
           <option value="other">기타</option>
         </select>
@@ -219,8 +220,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260725.8"></script>
-<script src="js/schedule-shared.js?v=20260725.8"></script>
+<script src="js/db.js?v=20260725.9"></script>
+<script src="js/schedule-shared.js?v=20260725.9"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -230,14 +231,19 @@ let detailReturnFocus = null;
 let formInitialState = '';
 let formLegacyPresentationPrefix = '';
 let formOriginalScheduleType = null;
+let formOriginalScheduleCategory = null;
 let formOriginalScheduleTitle = '';
 let presOrder = [];
 let scheduleDataReady = false;
+let scheduleIndustryTitleContext = new Map();
+let currentPresentationIndustryTitle = '';
 
 function lockScheduleData() {
   scheduleDataReady = false;
   presentationDraftEpoch = null;
   presentationDraftCarryoverIds = new Set();
+  scheduleIndustryTitleContext = new Map();
+  currentPresentationIndustryTitle = '';
 }
 
 function refreshSchedulePageViews() {
@@ -291,6 +297,56 @@ function getPresentationTopicLabel(presentation) {
   if (!rawTopic) return '종목 미입력';
   const topic = rawTopic.includes('>') ? rawTopic.split('>').pop().trim() : rawTopic;
   return topic || '종목 미입력';
+}
+
+async function loadScheduleIndustryTitleContext(cycleKey) {
+  try {
+    const { data, error } = await sb
+      .from('app_config')
+      .select('key,value')
+      .like('key', PRESENTATION_INDUSTRY_CONFIG_PREFIX + '%');
+    if (error) throw error;
+    scheduleIndustryTitleContext = new Map(
+      (data || []).map(item => [String(item.key), String(item.value || '').trim()])
+    );
+    const currentCycleKey = getPresentationIndustryConfigKey(
+      null,
+      presentationDraftEpoch,
+      cycleKey
+    );
+    currentPresentationIndustryTitle = currentCycleKey
+      ? scheduleIndustryTitleContext.get(currentCycleKey) || ''
+      : '';
+  } catch (error) {
+    console.warn('일정 제목용 산업명 불러오기 오류:', error);
+    scheduleIndustryTitleContext = new Map();
+    currentPresentationIndustryTitle = '';
+  }
+}
+
+function getConfiguredScheduleIndustryTitle(schedule) {
+  if (schedule?.category !== 'industry') return '';
+  const scheduleKey = getPresentationIndustryConfigKey(schedule.id);
+  const savedForSchedule = scheduleKey
+    ? scheduleIndustryTitleContext.get(scheduleKey) || ''
+    : '';
+  if (savedForSchedule) return savedForSchedule;
+  return schedule.event_date >= toDateStr(new Date())
+    ? currentPresentationIndustryTitle
+    : '';
+}
+
+function getRenderedScheduleTitle(schedule, linkedPresentations) {
+  if (!isPresentationSchedule(schedule)) {
+    return getScheduleDisplayTitle(schedule, []);
+  }
+  const rows = linkedPresentations || getSchedulePresentations(
+    schedule.id,
+    schedule.event_date
+  );
+  return getScheduleDisplayTitle(schedule, rows, {
+    industryName: getConfiguredScheduleIndustryTitle(schedule),
+  });
 }
 
 async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(new Date())) {
@@ -348,7 +404,7 @@ function shareScheduleToKakao(scheduleId, e) {
   const url = getScheduleShareUrl(scheduleId);
   Kakao.Share.sendDefault({
     objectType: 'text',
-    text: `[SSS 스터디 일정]\n${s.title}\n${buildScheduleShareText(s)}`,
+    text: `[SSS 스터디 일정]\n${getRenderedScheduleTitle(s)}\n${buildScheduleShareText(s)}`,
     link: {
       mobileWebUrl: url,
       webUrl: url,
@@ -377,6 +433,7 @@ async function init() {
       draftCycle.cycleKey,
       { cycleMarker: draftCycle.cycleMarker }
     );
+    await loadScheduleIndustryTitleContext(draftCycle.cycleKey);
     await recoverInitialPresentationDrafts(
       sb,
       schedules,
@@ -482,17 +539,21 @@ function makeDay(date, otherMonth, isToday=false) {
   }
 
   dayEvents.slice(0,3).forEach(ev => {
+    const isPresentationEvent = ['stock', 'industry'].includes(ev.category);
+    const eventPresentations = isPresentationEvent
+      ? getSchedulePresentations(ev.id, dateStr)
+      : [];
     const evDiv = document.createElement('div');
     evDiv.className = 'cal-event ' + (CAT_CLASS[ev.category]||'ev-other');
-    evDiv.textContent = ev.title;
-    evDiv.title = `${ev.title} 상세 보기`;
+    const renderedTitle = getRenderedScheduleTitle(ev, eventPresentations);
+    evDiv.textContent = renderedTitle;
+    evDiv.title = `${renderedTitle} 상세 보기`;
     evDiv.addEventListener('click', e => { e.stopPropagation(); showDetail(ev.id, e); });
     cell.appendChild(evDiv);
 
     // 발표자+종목 표시 (산업/기업 분석 일정만)
-    if (ev.category === 'stock' || ev.category === 'industry') {
-      const pres = getSchedulePresentations(ev.id, dateStr);
-      pres.forEach(p => {
+    if (isPresentationEvent) {
+      eventPresentations.forEach(p => {
         const pDiv = document.createElement('div');
         pDiv.className = 'cal-presenter-line';
         const name  = p.members?.name?.slice(0,2) || '';
@@ -535,7 +596,7 @@ function showDayPanel(dateStr, { reveal = false } = {}) {
       ${dayEvents.length ? dayEvents.map(schedule => `
         <button type="button" class="selected-day-event" onclick="showDetail('${schedule.id}',event)">
           <span class="ev-badge ${CAT_CLASS[schedule.category] || 'ev-other'}">${escapeHtml(CAT_LABEL[schedule.category] || '기타')}</span>
-          <strong>${escapeHtml(schedule.title)}</strong>
+          <strong>${escapeHtml(getRenderedScheduleTitle(schedule))}</strong>
           <small>${escapeHtml(schedule.event_time ? schedule.event_time.slice(0, 5) : '시간 미정')}</small>
         </button>`).join('') : '<div class="selected-day-empty">등록된 일정이 없습니다. 위 버튼으로 바로 추가할 수 있습니다.</div>'}
     </div>`;
@@ -596,7 +657,8 @@ function renderUpcoming() {
     const dStr  = dDiff === 0 ? '오늘' : dDiff === 1 ? '내일' : `D-${dDiff}`;
 
     // 이 일정의 발표자·종목 목록
-    const pres = getSchedulePresentations(s.id, s.event_date).filter(p => p.status === 'planned');
+    const schedulePresentations = getSchedulePresentations(s.id, s.event_date);
+    const pres = schedulePresentations.filter(p => p.status === 'planned');
 
     const presHtml = pres.length
       ? `<div class="upcoming-presenters">
@@ -624,7 +686,7 @@ function renderUpcoming() {
             <span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${escapeHtml(CAT_LABEL[s.category]||'기타')}</span>
             <span style="font-size:11px;color:${dDiff<=3?'#a32d2d':'var(--muted)'};">${dStr}</span>
           </div>
-          <div class="upcoming-title">${escapeHtml(s.title)}</div>
+          <div class="upcoming-title">${escapeHtml(getRenderedScheduleTitle(s, schedulePresentations))}</div>
           <div class="upcoming-meta">${escapeHtml(s.event_time ? s.event_time.slice(0,5) : '시간 미정')}${s.location ? ' · ' + escapeHtml(s.location) : ''}</div>
           ${(s.category === 'stock' || s.category === 'industry') ? presHtml : ''}
         </div>
@@ -662,7 +724,7 @@ function renderScheduleList() {
     if (!query) return true;
     const presText = getListPresentations(s)
       .map(p => `${p.members?.name || ''} ${p.topic || ''}`).join(' ');
-    return [s.title, s.location, s.description, presText]
+    return [getRenderedScheduleTitle(s, getListPresentations(s)), s.location, s.description, presText]
       .filter(Boolean).join(' ').toLowerCase().includes(query);
   }).sort((a,b) => when === 'upcoming'
     ? a.event_date.localeCompare(b.event_date)
@@ -686,7 +748,7 @@ function renderScheduleList() {
       : `<span class="muted">${['industry', 'stock'].includes(s.category) ? '발표자·종목 미정' : '—'}</span>`;
     return `<tr style="${past?'opacity:0.55;':''}">
       <td style="white-space:nowrap;">${escapeHtml(s.event_date)}</td>
-      <td style="font-weight:500;">${escapeHtml(s.title)}</td>
+      <td style="font-weight:500;">${escapeHtml(getRenderedScheduleTitle(s, pres))}</td>
       <td><span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${escapeHtml(CAT_LABEL[s.category]||'기타')}</span></td>
       <td class="muted">${escapeHtml(s.event_time ? s.event_time.slice(0,5) : '-')}</td>
       <td class="muted">${escapeHtml(s.location||'-')}</td>
@@ -711,7 +773,7 @@ function renderScheduleList() {
       <div class="schedule-mobile-card-head">
         <div>
           <div class="schedule-mobile-card-date">${escapeHtml(formatScheduleDate(s.event_date))}</div>
-          <h3>${escapeHtml(s.title)}</h3>
+          <h3>${escapeHtml(getRenderedScheduleTitle(s, pres))}</h3>
         </div>
         <span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${escapeHtml(CAT_LABEL[s.category]||'기타')}</span>
       </div>
@@ -776,11 +838,14 @@ function getSelectedScheduleCategory() {
 }
 
 function getResolvedScheduleTitle() {
+  const category = getSelectedScheduleCategory();
   return resolveScheduleTitle({
     eventType: getSelectedScheduleEventType(),
+    category,
     otherTitle: document.getElementById('s-title').value,
     editing: Boolean(editingScheduleId),
     originalEventType: formOriginalScheduleType,
+    originalCategory: formOriginalScheduleCategory,
     originalTitle: formOriginalScheduleTitle,
   });
 }
@@ -894,6 +959,7 @@ function openForm(prefill={}) {
   const catVal = prefill.category || 'industry';
   const eventType = getScheduleEventType(catVal);
   formOriginalScheduleType = editingScheduleId ? eventType : null;
+  formOriginalScheduleCategory = editingScheduleId ? catVal : null;
   formOriginalScheduleTitle = editingScheduleId ? String(prefill.title || '') : '';
   document.getElementById('s-event-type').value = eventType;
   document.getElementById('s-category').value = isPresentationSchedule({ category: catVal })
@@ -935,6 +1001,7 @@ function closeForm(force = false) {
   formInitialState = '';
   formLegacyPresentationPrefix = '';
   formOriginalScheduleType = null;
+  formOriginalScheduleCategory = null;
   formOriginalScheduleTitle = '';
   const modal = document.getElementById('scheduleForm');
   modal.classList.remove('open');
@@ -1149,7 +1216,7 @@ async function confirmDelete(id) {
     return;
   }
   const s = schedules.find(s => s.id === id);
-  if (!s || !confirm(`"${s.title}" 일정을 삭제할까요?`)) return;
+  if (!s || !confirm(`"${getRenderedScheduleTitle(s)}" 일정을 삭제할까요?`)) return;
   const { data: linkedRowsData, error: linkedRowsError } = await sb
     .from('presentations')
     .select('id,status,presented_at')
@@ -1247,7 +1314,7 @@ async function showDetail(id, e) {
   }
   if (!s) { console.warn('일정을 찾을 수 없음:', id); return; }
 
-  document.getElementById('detailTitle').textContent = s.title;
+  document.getElementById('detailTitle').textContent = getRenderedScheduleTitle(s);
   document.getElementById('detailBody').innerHTML = [
     '<div><span>날짜</span><strong>' + escapeHtml(formatScheduleDate(s.event_date)) + '</strong></div>',
     '<div><span>시간</span><strong>' + escapeHtml(s.event_time ? s.event_time.slice(0,5) : '미정') + '</strong></div>',

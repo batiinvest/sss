@@ -77,6 +77,8 @@ test('schedule form previews and saves a three-session presentation series', () 
   assert.match(source, /function getSelectedScheduleCategory\(\)[\s\S]*getScheduleCategoryForEventType/);
   assert.match(source, /themeSelect\.disabled = !isStudy/);
   assert.match(source, /otherTitleInput\.disabled = !isOther/);
+  assert.match(source, /발표 관리의 종목·산업명이 일정 제목에 자동 표시됩니다/);
+  assert.match(source, /<option value="stock">기업 분석<\/option>/);
   assert.match(source, /기타 일정 이름 \(선택\)/);
   assert.doesNotMatch(source, /id="s-title-preview"|updateScheduleTitlePreview/);
   assert.match(source, /setTimeout\(\(\) => document\.getElementById\('s-event-type'\)\.focus\(\), 0\)/);
@@ -124,6 +126,7 @@ test('schedule type controls switch fields and keep stored edit titles', () => {
       },
     },
     formOriginalScheduleType: null,
+    formOriginalScheduleCategory: null,
     formOriginalScheduleTitle: '',
     updateScheduleSeriesPreview(reset) {
       previewCalls.push(reset);
@@ -138,8 +141,13 @@ test('schedule type controls switch fields and keep stored edit titles', () => {
   assert.equal(elements['s-category'].disabled, false);
   assert.equal(elements['s-other-title-group'].hidden, true);
   assert.equal(elements['s-title'].disabled, true);
-  assert.equal(context.getResolvedScheduleTitle(), '스터디');
+  assert.equal(context.getResolvedScheduleTitle(), '산업 분석');
   assert.equal(context.getSelectedScheduleCategory(), 'industry');
+
+  elements['s-category'].value = 'stock';
+  context.handleScheduleThemeChange();
+  assert.equal(context.getResolvedScheduleTitle(), '기업 분석');
+  assert.equal(context.getSelectedScheduleCategory(), 'stock');
 
   elements['s-event-type'].value = 'dinner';
   context.handleScheduleTypeChange();
@@ -158,8 +166,10 @@ test('schedule type controls switch fields and keep stored edit titles', () => {
 
   vm.runInContext("editingScheduleId = 'stored-schedule'", context);
   context.formOriginalScheduleType = 'study';
+  context.formOriginalScheduleCategory = 'industry';
   context.formOriginalScheduleTitle = '스마트글래스';
   elements['s-event-type'].value = 'study';
+  elements['s-category'].value = 'industry';
   context.updateScheduleTypeFields(true);
   assert.equal(context.getResolvedScheduleTitle(), '스마트글래스');
   context.handleScheduleThemeChange();
@@ -326,11 +336,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.8',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.9',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.8',
+    'presentations.html?view=history&id=xyz&v=20260725.9',
   );
 });
 
@@ -515,19 +525,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.8/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.8/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.8'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.8/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.9/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.9/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.9'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.9/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.8/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.9/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.8/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.9/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-8/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-9/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,
@@ -577,7 +587,10 @@ test('schedule table shows escaped presentation topics from the effective roster
   assert.match(tableRenderer, /class="schedule-table-presentations"/);
   assert.match(tableRenderer, /escapeHtml\(p\.members\?\.name \|\| '발표자 미정'\)/);
   assert.match(tableRenderer, /escapeHtml\(getPresentationTopicLabel\(p\)\)/);
+  assert.match(tableRenderer, /escapeHtml\(getRenderedScheduleTitle\(s, pres\)\)/);
   assert.match(tableRenderer, /if \(!\['industry', 'stock'\]\.includes\(schedule\.category\)\) return \[\]/);
+  assert.match(source, /function getRenderedScheduleTitle\(schedule, linkedPresentations\)[\s\S]*getScheduleDisplayTitle\(schedule, rows, \{/);
+  assert.doesNotMatch(source, /escapeHtml\(s\.title\)|escapeHtml\(schedule\.title\)/);
   assert.equal(context.getPresentationTopicLabel({ topic: '반도체 > 삼성전자' }), '삼성전자');
   assert.equal(context.getPresentationTopicLabel({ topic: null }), '종목 미입력');
 });

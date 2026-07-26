@@ -142,11 +142,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.4',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.5',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.4',
+    'presentations.html?view=history&id=xyz&v=20260725.5',
   );
 });
 
@@ -201,14 +201,20 @@ test('changing a talk to dinner keeps a carry anchor and reconciles later rows',
 
 test('schedule deletion preserves presentation history and recovers failed deletes', () => {
   const source = read('schedule-calendar.html');
+  const confirmDelete = sourceSection(
+    source,
+    'async function confirmDelete',
+    'async function showDetail',
+  );
   assert.match(source, /select\('id,status,presented_at'\)[\s\S]*eq\('schedule_id', id\)/);
   assert.match(source, /연결된 발표를 확인하지 못해 일정을 삭제하지 않았습니다/);
   assert.match(source, /filter\(p => p\.status !== 'planned'\)/);
   assert.ok(
-    source.indexOf('await registerPresentationDraftCarryoverIds(plannedIds)') <
-    source.indexOf('.update({ schedule_id: null, presented_at: null })'),
+    confirmDelete.indexOf('await registerPresentationDraftCarryoverIds(plannedIds)') <
+    confirmDelete.indexOf('.update({ schedule_id: null })'),
   );
-  assert.match(source, /update\(\{ schedule_id: null \}\)/);
+  assert.match(confirmDelete, /update\(\{ schedule_id: null \}\)/);
+  assert.doesNotMatch(confirmDelete, /update\(\{[^}]*presented_at:\s*null[^}]*\}\)/);
   assert.match(source, /let scheduleDeleted = false/);
   assert.match(source, /let rollbackFailed = false/);
   assert.match(source, /if \(!scheduleDeleted && \(plannedDetached \|\| historyDetached\)\)/);
@@ -300,6 +306,10 @@ test('industry names persist independently and legacy topics stay outside the ne
   assert.match(shared, /ignoreDuplicates: true/);
   assert.match(shared, /value->>cycle_marker\.lt\./);
   assert.match(shared, /if \(!normalizedEpoch\) return false/);
+  assert.doesNotMatch(shared, /payload:\s*\{\s*schedule_id:\s*null,\s*presented_at:\s*null\s*\}/);
+  assert.doesNotMatch(read('index.html'), /created_at,\s*updated_at/);
+  assert.doesNotMatch(modal, /created_at,updated_at/);
+  assert.match(read('index.html'), /formatDataLoadError\(error\), error/);
   assert.doesNotMatch(
     sourceSection(read('index.html'), 'async function activatePresentationDraftCycle', 'function mobilePresentationName'),
     /PRESENTATION_DRAFT_MIGRATION_EPOCH|catch \(/,
@@ -307,19 +317,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.4/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.4/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.4'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.4/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.5/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.5/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.5'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.5/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.4/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.5/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.4/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.5/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-4/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-5/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,

@@ -155,13 +155,13 @@ const ModalPres = (() => {
           .select('*').eq('status','planned').eq('member_id',_me.id)
           .order('created_at', { ascending: true }),
         sb.from('presentations')
-          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at,updated_at')
+          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at')
           .eq('status','planned').is('schedule_id',null)
           .order('created_at', { ascending: false }).limit(10),
         sb.from('members').select('*').eq('is_active', true).order('joined_at'),
         getConfigStrict('pres_order'),
         sb.from('presentations')
-          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at,updated_at'),
+          .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at'),
         sb.from('schedules')
           .select('id,title,category,event_date,event_time')
           .order('event_date', { ascending: true }),
@@ -204,7 +204,7 @@ const ModalPres = (() => {
           completedIds.has(String(row.id))
             ? { ...row, status: 'done' }
             : carryoverIds.has(String(row.id))
-              ? { ...row, schedule_id: null, presented_at: null }
+              ? { ...row, schedule_id: null }
               : row
         );
       }
@@ -272,7 +272,7 @@ const ModalPres = (() => {
       .filter(row => !completedIds.has(String(row.id)))
       .map(row =>
         presentationDraftCarryoverIds.has(String(row.id))
-          ? { ...row, schedule_id: null, presented_at: null }
+          ? { ...row, schedule_id: null }
           : row
       );
     const currentDraft = findCurrentPresentationDraft(

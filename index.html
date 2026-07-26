@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.4">
+  <link rel="stylesheet" href="css/style.css?v=20260725.5">
   <script>
     (function () {
       if (window === window.parent) {
@@ -257,10 +257,10 @@
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260725.4"></script>
-<script src="js/schedule-shared.js?v=20260725.4"></script>
+<script src="js/db.js?v=20260725.5"></script>
+<script src="js/schedule-shared.js?v=20260725.5"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260725.4"></script>
+<script src="js/modal-pres.js?v=20260725.5"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -268,6 +268,16 @@ let allCurrentPicks = [];
 let globalPriceMap = {};   // 현재가 캐시 (내 섹션에서도 재사용)
 let topPresentationReturnScope = 'all';
 const mobileHomeQuery = window.matchMedia('(max-width: 768px)');
+
+function formatDataLoadError(error) {
+  const details = [
+    error?.code,
+    error?.message,
+    error?.details,
+    error?.hint,
+  ].filter(Boolean);
+  return details.length ? details.join(' · ') : String(error || '알 수 없는 오류');
+}
 
 // ── 팝업: modal-pick.js + modal-pres.js 참조
 // 콜백 등록: 제출/닫기 후 내 섹션 갱신
@@ -299,7 +309,7 @@ async function init() {
     try {
       await initMobileHome(now);
     } catch (error) {
-      console.error('모바일 홈 데이터 로드 오류:', error);
+      console.error('모바일 홈 데이터 로드 오류:', formatDataLoadError(error), error);
       toast('발표 데이터를 불러오지 못했습니다. 새로고침해 주세요.');
     }
     return;
@@ -312,7 +322,7 @@ async function init() {
   try {
     dashboardData = await loadDashboardData();
   } catch (error) {
-    console.error('대시보드 데이터 로드 오류:', error);
+    console.error('대시보드 데이터 로드 오류:', formatDataLoadError(error), error);
     toast('대시보드 데이터를 불러오지 못했습니다. 새로고침해 주세요.');
     return;
   }
@@ -504,7 +514,7 @@ async function loadDashboardData() {
 async function loadPresentationOrderData() {
   const [presentationResult, scheduleResult, memberResult, savedOrder] = await Promise.all([
     sb.from('presentations')
-      .select('id, member_id, category, topic, status, schedule_id, presented_at, created_at, updated_at')
+      .select('id, member_id, category, topic, status, schedule_id, presented_at, created_at')
       .order('presented_at', { ascending: true })
       .order('created_at', { ascending: true }),
     sb.from('schedules')
@@ -539,7 +549,7 @@ async function loadPresentationOrderData() {
   presentationRows = presentationRows.map(row => {
     if (completedIdSet.has(String(row.id))) return { ...row, status: 'done' };
     if (carryoverIdSet.has(String(row.id))) {
-      return { ...row, schedule_id: null, presented_at: null };
+      return { ...row, schedule_id: null };
     }
     return row;
   });

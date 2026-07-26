@@ -551,10 +551,70 @@ test('past schedule overflow is carried forward before expected rows are complet
       })),
       carryoverPatches: [{
         id: 'pD',
-        payload: { schedule_id: null, presented_at: null },
+        payload: { schedule_id: null },
       }],
     }
   );
+});
+
+test('past overflow sync preserves the required presentation date', async () => {
+  const registered = [];
+  const { syncPastScheduledPresentationsDone } = loadHelpers({
+    sb: {
+      from(table) {
+        assert.equal(table, 'app_config');
+        return {
+          async upsert(rows) {
+            registered.push(...plain(rows));
+            return { error: null };
+          },
+        };
+      },
+    },
+  });
+  const schedules = [schedule('past-talk', '2026-07-01', 'industry')];
+  const rows = ['A', 'B', 'C', 'D'].map(memberId => ({
+    ...presentation(`p${memberId}`, 'past-talk', memberId, '2026-07-01'),
+    category: 'industry',
+  }));
+  const updates = [];
+  const client = {
+    from(table) {
+      assert.equal(table, 'presentations');
+      return {
+        update(payload) {
+          assert.notEqual(payload.presented_at, null);
+          return {
+            async in(column, ids) {
+              assert.equal(column, 'id');
+              updates.push({ payload: plain(payload), ids: plain(ids) });
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const result = await syncPastScheduledPresentationsDone(
+    client,
+    schedules,
+    rows,
+    { today: '2026-07-25', orderedMembers: members }
+  );
+
+  assert.deepEqual(registered, [{
+    key: 'presentation_draft_carryover_v1:pD',
+    value: true,
+  }]);
+  assert.deepEqual(updates, [
+    { payload: { schedule_id: null }, ids: ['pD'] },
+    { payload: { status: 'done' }, ids: ['pA', 'pB', 'pC'] },
+  ]);
+  assert.deepEqual(plain(result.carryoverPatches), [{
+    id: 'pD',
+    payload: { schedule_id: null },
+  }]);
 });
 
 test('the new draft epoch separates legacy orphan topics from the current cycle', () => {
@@ -1563,7 +1623,6 @@ test('a dinner change shifts later rows and safely unassigns overflow content', 
   for (const memberId of ['A', 'B', 'C']) {
     assert.deepEqual(patchById.get(`${memberId}2`), {
       schedule_id: null,
-      presented_at: null,
     });
   }
 });

@@ -569,7 +569,7 @@ function classifyPastScheduledPresentationRows(
       } else {
         carryoverPatches.push({
           id: presentation.id,
-          payload: { schedule_id: null, presented_at: null },
+          payload: { schedule_id: null },
         });
       }
     }
@@ -586,7 +586,7 @@ function classifyPastScheduledPresentationRows(
     }
     carryoverPatches.push({
       id: presentation.id,
-      payload: { schedule_id: null, presented_at: null },
+      payload: { schedule_id: null },
     });
   }
   return { completionPatches, carryoverPatches };
@@ -620,7 +620,7 @@ async function syncPastScheduledPresentationsDone(
     await registerPresentationDraftCarryoverIds(carryoverIds);
     const { error } = await client
       .from('presentations')
-      .update({ schedule_id: null, presented_at: null })
+      .update({ schedule_id: null })
       .in('id', carryoverIds);
     if (error) throw error;
   }
@@ -1166,14 +1166,15 @@ function buildPresentationAssignmentPatches(
 
     // 회식·기타 일정은 다음 발표 일정이 생길 때까지 carry anchor로 보존한다.
     // 발표 일정에 남은 overflow는 과거 날짜에 잘못 완료되지 않도록 연결을
-    // 해제하고, 실제 쓰기 전에 carryover ID로 별도 보존한다.
+    // 해제하고, 실제 쓰기 전에 carryover ID로 별도 보존한다. presented_at은
+    // 운영 DB의 필수 컬럼이므로 기존 값을 유지한다.
     for (const row of remainingRows) {
       const linkedSchedule = scheduleById.get(String(row.schedule_id || ''));
       if (linkedSchedule && !isPresentationSchedule(linkedSchedule)) continue;
-      if (row.schedule_id || row.presented_at) {
+      if (row.schedule_id) {
         patches.push({
           id: row.id,
-          payload: { schedule_id: null, presented_at: null },
+          payload: { schedule_id: null },
         });
       }
     }
@@ -1219,10 +1220,7 @@ async function syncPlannedPresentationsToSchedulePlan(
     opts
   );
   const carryoverIds = patches
-    .filter(patch =>
-      patch.payload?.schedule_id === null &&
-      patch.payload?.presented_at === null
-    )
+    .filter(patch => patch.payload?.schedule_id === null)
     .map(patch => patch.id);
   if (carryoverIds.length) {
     await registerPresentationDraftCarryoverIds(carryoverIds);

@@ -1987,6 +1987,17 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .schedule-list-controls { flex-wrap: wrap; justify-content: flex-end; }
 .schedule-list-controls input { width: min(240px, 42vw); }
 .schedule-list-controls select { width: auto; min-width: 112px; }
+.schedule-table-presentations { min-width: 180px; font-size: 12px; vertical-align: top; }
+.schedule-table-presentation {
+  display: grid;
+  grid-template-columns: minmax(68px, auto) minmax(90px, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  line-height: 1.45;
+}
+.schedule-table-presentation + .schedule-table-presentation { margin-top: 4px; }
+.schedule-table-presenter { color: var(--muted); white-space: nowrap; }
+.schedule-table-topic { color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
 .schedule-mobile-list { display: none; }
 .schedule-mobile-card {
   padding: 14px 0;

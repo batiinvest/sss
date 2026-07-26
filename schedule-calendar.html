@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.3">
+  <link rel="stylesheet" href="css/style.css?v=20260725.4">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -141,10 +141,10 @@
     <div class="table-wrap schedule-desktop-table">
       <table>
         <thead><tr>
-          <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>메모</th><th style="width:150px;">작업</th>
+          <th>날짜</th><th>제목</th><th>구분</th><th>시간</th><th>장소</th><th>발표자·종목</th><th>메모</th><th style="width:150px;">작업</th>
         </tr></thead>
         <tbody id="scheduleListTbody">
-          <tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
+          <tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">불러오는 중...</td></tr>
         </tbody>
       </table>
     </div>
@@ -190,8 +190,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260725.3"></script>
-<script src="js/schedule-shared.js?v=20260725.3"></script>
+<script src="js/db.js?v=20260725.4"></script>
+<script src="js/schedule-shared.js?v=20260725.4"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -253,6 +253,13 @@ function getSchedulePresentations(scheduleId, date) {
     orderedMembers,
     plan
   ).filter(p => p.status === 'planned' || p.status === 'done');
+}
+
+function getPresentationTopicLabel(presentation) {
+  const rawTopic = String(presentation?.topic || '').trim();
+  if (!rawTopic) return '종목 미입력';
+  const topic = rawTopic.includes('>') ? rawTopic.split('>').pop().trim() : rawTopic;
+  return topic || '종목 미입력';
 }
 
 async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(new Date())) {
@@ -605,12 +612,24 @@ function renderScheduleList() {
   const when = document.getElementById('filterWhen').value;
   const query = document.getElementById('filterQuery').value.trim().toLowerCase();
   const today = toDateStr(new Date());
+  const listPresentationsByScheduleId = new Map();
+  const getListPresentations = (schedule) => {
+    if (!['industry', 'stock'].includes(schedule.category)) return [];
+    const key = String(schedule.id);
+    if (!listPresentationsByScheduleId.has(key)) {
+      listPresentationsByScheduleId.set(
+        key,
+        getSchedulePresentations(schedule.id, schedule.event_date),
+      );
+    }
+    return listPresentationsByScheduleId.get(key);
+  };
   const list = schedules.filter(s => {
     if (cat && s.category !== cat) return false;
     if (when === 'upcoming' && s.event_date < today) return false;
     if (when === 'past' && s.event_date >= today) return false;
     if (!query) return true;
-    const presText = getSchedulePresentations(s.id, s.event_date)
+    const presText = getListPresentations(s)
       .map(p => `${p.members?.name || ''} ${p.topic || ''}`).join(' ');
     return [s.title, s.location, s.description, presText]
       .filter(Boolean).join(' ').toLowerCase().includes(query);
@@ -620,19 +639,27 @@ function renderScheduleList() {
   const tbody = document.getElementById('scheduleListTbody');
   const mobileList = document.getElementById('scheduleMobileList');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="muted" style="text-align:center;padding:1.5rem;">조건에 맞는 일정이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">조건에 맞는 일정이 없습니다</td></tr>';
     mobileList.innerHTML = '<div class="mobile-empty-state"><strong>조건에 맞는 일정이 없습니다.</strong><span>검색어나 필터를 바꿔보세요.</span></div>';
     return;
   }
   tbody.innerHTML = list.map(s => {
     const past = s.event_date < today;
     const memo = extractScheduleMemo(s.description);
+    const pres = getListPresentations(s);
+    const presHtml = pres.length
+      ? pres.map((p, index) => `<div class="schedule-table-presentation">
+          <span class="schedule-table-presenter">${index + 1}. ${escapeHtml(p.members?.name || '발표자 미정')}</span>
+          <span class="schedule-table-topic">${escapeHtml(getPresentationTopicLabel(p))}</span>
+        </div>`).join('')
+      : `<span class="muted">${['industry', 'stock'].includes(s.category) ? '발표자·종목 미정' : '—'}</span>`;
     return `<tr style="${past?'opacity:0.55;':''}">
       <td style="white-space:nowrap;">${escapeHtml(s.event_date)}</td>
       <td style="font-weight:500;">${escapeHtml(s.title)}</td>
       <td><span class="ev-badge ${CAT_CLASS[s.category]||'ev-other'}">${escapeHtml(CAT_LABEL[s.category]||'기타')}</span></td>
       <td class="muted">${escapeHtml(s.event_time ? s.event_time.slice(0,5) : '-')}</td>
       <td class="muted">${escapeHtml(s.location||'-')}</td>
+      <td class="schedule-table-presentations">${presHtml}</td>
       <td class="muted" style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(memo || '-')}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -645,12 +672,9 @@ function renderScheduleList() {
   }).join('');
 
   mobileList.innerHTML = list.map(s => {
-    const pres = ['industry', 'stock'].includes(s.category)
-      ? getSchedulePresentations(s.id, s.event_date)
-      : [];
+    const pres = getListPresentations(s);
     const presHtml = pres.length ? pres.map((p, index) => {
-      const topic = p.topic?.includes('>') ? p.topic.split('>').pop().trim() : (p.topic || '종목 미정');
-      return `${index + 1}. ${escapeHtml(p.members?.name || '발표자 미정')} · ${escapeHtml(topic)}`;
+      return `${index + 1}. ${escapeHtml(p.members?.name || '발표자 미정')} · ${escapeHtml(getPresentationTopicLabel(p))}`;
     }).join('<br>') : '';
     return `<article class="schedule-mobile-card">
       <div class="schedule-mobile-card-head">

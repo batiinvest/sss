@@ -142,11 +142,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.3',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.4',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.3',
+    'presentations.html?view=history&id=xyz&v=20260725.4',
   );
 });
 
@@ -307,19 +307,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.3/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.3/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.3'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.3/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.4/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.4/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.4'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.4/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.3/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.4/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.3/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.4/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-3/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-4/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,
@@ -344,5 +344,32 @@ test('schedule form protects unsaved input and selected mobile dates are reveale
 test('generated presentation text is not repeated as memo or shown on non-talk cards', () => {
   const source = read('schedule-calendar.html');
   assert.match(source, /const memo = extractScheduleMemo\(s\.description\)/);
-  assert.match(source, /const pres = \['industry', 'stock'\]\.includes\(s\.category\)/);
+  assert.match(source, /if \(!\['industry', 'stock'\]\.includes\(schedule\.category\)\) return \[\]/);
+});
+
+test('schedule table shows escaped presentation topics from the effective roster', () => {
+  const source = read('schedule-calendar.html');
+  const tableRenderer = sourceSection(
+    source,
+    'function renderScheduleList',
+    '// ── 폼',
+  );
+  const topicHelper = sourceSection(
+    source,
+    'function getPresentationTopicLabel',
+    'async function reconcileAutomaticPresentationAssignments',
+  );
+  const context = {};
+  vm.createContext(context);
+  vm.runInContext(topicHelper, context);
+
+  assert.match(source, /<th>발표자·종목<\/th>/);
+  assert.equal((source.match(/colspan="8"/g) || []).length, 2);
+  assert.match(tableRenderer, /getSchedulePresentations\(schedule\.id, schedule\.event_date\)/);
+  assert.match(tableRenderer, /class="schedule-table-presentations"/);
+  assert.match(tableRenderer, /escapeHtml\(p\.members\?\.name \|\| '발표자 미정'\)/);
+  assert.match(tableRenderer, /escapeHtml\(getPresentationTopicLabel\(p\)\)/);
+  assert.match(tableRenderer, /if \(!\['industry', 'stock'\]\.includes\(schedule\.category\)\) return \[\]/);
+  assert.equal(context.getPresentationTopicLabel({ topic: '반도체 > 삼성전자' }), '삼성전자');
+  assert.equal(context.getPresentationTopicLabel({ topic: null }), '종목 미입력');
 });

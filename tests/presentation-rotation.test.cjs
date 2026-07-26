@@ -466,6 +466,72 @@ test('the latest completed last member anchors the next cycle at the first three
   assert.deepEqual(plain(plan.items[0].memberIds), ['A', 'B', 'C']);
 });
 
+test('the authoritative cycle marker survives moving the former last member to the front', () => {
+  const context = loadHelpers();
+  vm.runInContext(
+    "presentationDraftCycleMarker = '2026-06-15';",
+    context
+  );
+  const reorderedMembers = ['G', 'A', 'B', 'C', 'D', 'E', 'F']
+    .map(id => members.find(member => member.id === id));
+  const schedules = [
+    schedule('cycle-end', '2026-06-15'),
+    schedule('next', '2026-07-27'),
+  ];
+  const rows = [
+    presentation('pG', 'cycle-end', 'G', '2026-06-15', 'done'),
+  ];
+  const plan = context.buildPresentationSchedulePlan(
+    schedules,
+    rows,
+    reorderedMembers,
+    { fromDate: '2026-07-23' }
+  );
+
+  assert.equal(plan.nextSchedule.id, 'next');
+  assert.deepEqual(plain(plan.nextMemberIds), ['G', 'A', 'B']);
+});
+
+test('cold loading anchors cycle inference to the saved marker before using the new order', async () => {
+  const savedState = {
+    cycle_key: 'rotation:2026-06-01',
+    cycle_marker: '2026-06-01',
+    started_at: '2026-06-02T00:00:00.000Z',
+  };
+  const context = loadHelpers({
+    async getConfigStrict(key) {
+      assert.equal(key, 'presentation_draft_cycle_v1');
+      return savedState;
+    },
+  });
+  const reorderedMembers = ['G', 'A', 'B', 'C', 'D', 'E', 'F']
+    .map(id => members.find(member => member.id === id));
+  const schedules = [
+    schedule('cycle-end', '2026-06-01'),
+    schedule('first', '2026-06-15'),
+    schedule('second', '2026-06-29'),
+    schedule('next', '2026-07-13'),
+  ];
+  const rows = [
+    ...['A', 'B', 'C'].map(memberId =>
+      presentation(`${memberId}-first`, 'first', memberId, '2026-06-15', 'done')
+    ),
+    ...['D', 'E', 'F'].map(memberId =>
+      presentation(`${memberId}-second`, 'second', memberId, '2026-06-29', 'done')
+    ),
+  ];
+
+  const state = await context.getPresentationDraftCycleStateFromSavedMarker(
+    schedules,
+    rows,
+    reorderedMembers,
+    { fromDate: '2026-07-01' }
+  );
+
+  assert.equal(state.cycleMarker, '2026-06-01');
+  assert.equal(state.cursor, 6);
+});
+
 test('a past study consumes its automatic group even when topics were never entered', () => {
   const { buildPresentationSchedulePlan } = loadHelpers();
   const schedules = [
@@ -627,6 +693,116 @@ test('order normalization removes stale, duplicate and inactive members', () => 
   const normalized = normalizePresentationOrder(allMembers, ['C', 'B', 'C', 'missing']);
 
   assert.deepEqual(plain(normalized.map(member => member.id)), ['C', 'A']);
+});
+
+test('moving a presenter across groups updates assignments and schedule rosters', () => {
+  const {
+    buildPresentationSchedulePlan,
+    buildPresentationAssignmentPatches,
+    getEffectiveScheduleRoster,
+  } = loadHelpers();
+  const reorderedMembers = ['A', 'B', 'D', 'C', 'E', 'F', 'G']
+    .map(id => members.find(member => member.id === id));
+  const schedules = [
+    schedule('s1', '2026-08-03'),
+    schedule('s2', '2026-08-17'),
+    schedule('s3', '2026-08-31'),
+  ];
+  const rows = [
+    ...['A', 'B', 'C'].map(memberId =>
+      presentation(`p${memberId}`, 's1', memberId, '2026-08-03')
+    ),
+    ...['D', 'E', 'F'].map(memberId =>
+      presentation(`p${memberId}`, 's2', memberId, '2026-08-17')
+    ),
+    presentation('pG', 's3', 'G', '2026-08-31'),
+  ];
+  const plan = buildPresentationSchedulePlan(
+    schedules,
+    rows,
+    reorderedMembers,
+    { fromDate: '2026-08-01' }
+  );
+  const patches = buildPresentationAssignmentPatches(
+    schedules,
+    rows,
+    plan,
+    { fromDate: '2026-08-01' }
+  );
+  const patchById = new Map(
+    patches.map(patch => [patch.id, plain(patch.payload)])
+  );
+
+  assert.deepEqual(patchById.get('pC'), {
+    schedule_id: 's2',
+    presented_at: '2026-08-17',
+  });
+  assert.deepEqual(patchById.get('pD'), {
+    schedule_id: 's1',
+    presented_at: '2026-08-03',
+  });
+  assert.equal(patches.length, 2);
+
+  const patchedRows = rows.map(row => {
+    const patch = patches.find(item => item.id === row.id);
+    return patch ? { ...row, ...patch.payload } : row;
+  });
+  assert.deepEqual(
+    plain(schedules.map(item =>
+      getEffectiveScheduleRoster(
+        item,
+        schedules,
+        patchedRows,
+        reorderedMembers,
+        plan
+      ).map(row => row.member_id)
+    )),
+    [
+      ['A', 'B', 'D'],
+      ['C', 'E', 'F'],
+      ['G'],
+    ]
+  );
+});
+
+test('moving presenters within one group refreshes roster order without assignment patches', () => {
+  const {
+    buildPresentationSchedulePlan,
+    buildPresentationAssignmentPatches,
+    getEffectiveScheduleRoster,
+  } = loadHelpers();
+  const reorderedMembers = ['B', 'A', 'C', 'D', 'E', 'F', 'G']
+    .map(id => members.find(member => member.id === id));
+  const schedules = [schedule('s1', '2026-08-03')];
+  const rows = ['A', 'B', 'C'].map(memberId =>
+    presentation(`p${memberId}`, 's1', memberId, '2026-08-03')
+  );
+  const plan = buildPresentationSchedulePlan(
+    schedules,
+    rows,
+    reorderedMembers,
+    { fromDate: '2026-08-01' }
+  );
+
+  assert.deepEqual(
+    plain(buildPresentationAssignmentPatches(
+      schedules,
+      rows,
+      plan,
+      { fromDate: '2026-08-01' }
+    )),
+    []
+  );
+  assert.deepEqual(
+    plain(getEffectiveScheduleRoster(
+      schedules[0],
+      schedules,
+      rows,
+      reorderedMembers,
+      plan
+    ).map(row => row.member_id)),
+    ['B', 'A', 'C']
+  );
 });
 
 test('automatic roster shows members even before they enter a topic', () => {

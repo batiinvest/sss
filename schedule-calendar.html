@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.9">
+  <link rel="stylesheet" href="css/style.css?v=20260725.10">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -220,8 +220,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
-<script src="js/db.js?v=20260725.9"></script>
-<script src="js/schedule-shared.js?v=20260725.9"></script>
+<script src="js/db.js?v=20260725.10"></script>
+<script src="js/schedule-shared.js?v=20260725.10"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -237,10 +237,14 @@ let presOrder = [];
 let scheduleDataReady = false;
 let scheduleIndustryTitleContext = new Map();
 let currentPresentationIndustryTitle = '';
+let schedulePresentationOrderSyncPromise = null;
+let schedulePresentationOrderSyncPending = false;
 
 function lockScheduleData() {
   scheduleDataReady = false;
   presentationDraftEpoch = null;
+  presentationDraftCycleKey = null;
+  presentationDraftCycleMarker = null;
   presentationDraftCarryoverIds = new Set();
   scheduleIndustryTitleContext = new Map();
   currentPresentationIndustryTitle = '';
@@ -251,6 +255,83 @@ function refreshSchedulePageViews() {
   renderUpcoming();
   renderScheduleList();
   if (selectedCalendarDate) showDayPanel(selectedCalendarDate);
+}
+
+async function syncSchedulePresentationOrder(opts = {}) {
+  if (!scheduleDataReady) {
+    if (opts.force === true) schedulePresentationOrderSyncPending = true;
+    return false;
+  }
+  if (schedulePresentationOrderSyncPromise) {
+    if (opts.force === true) schedulePresentationOrderSyncPending = true;
+    return schedulePresentationOrderSyncPromise;
+  }
+
+  const force = opts.force === true;
+  schedulePresentationOrderSyncPromise = (async () => {
+    const savedOrder = await getConfigStrict('pres_order');
+    const nextOrder = normalizePresentationOrder(members, savedOrder)
+      .map(member => member.id);
+    const orderChanged =
+      nextOrder.map(String).join('|') !== presOrder.map(String).join('|');
+    if (!orderChanged && !force) return false;
+
+    await loadSharedData();
+    presOrder = normalizePresentationOrder(members, savedOrder)
+      .map(member => member.id);
+    const orderedMembers = normalizePresentationOrder(members, presOrder);
+    await syncLoadedPastPresentations(orderedMembers);
+    const inferredDraftCycle = await getPresentationDraftCycleStateFromSavedMarker(
+      schedules,
+      presentations,
+      orderedMembers,
+      { fromDate: toDateStr(new Date()) }
+    );
+    const draftCycle = await ensurePresentationDraftCycle(
+      inferredDraftCycle.cycleKey,
+      { cycleMarker: inferredDraftCycle.cycleMarker }
+    );
+    await loadScheduleIndustryTitleContext(draftCycle.cycleKey);
+    await reconcileAutomaticPresentationAssignments();
+    refreshSchedulePageViews();
+    if (orderChanged && opts.announce !== false) {
+      toast('변경된 발표 순서를 일정에 반영했습니다.');
+    }
+    return orderChanged;
+  })().catch(error => {
+    console.error('발표 순서 일정 동기화 오류:', error);
+    if (opts.announce !== false) {
+      toast('발표 순서를 다시 불러오지 못했습니다. 화면을 새로고침해 주세요.');
+    }
+    return false;
+  }).finally(() => {
+    schedulePresentationOrderSyncPromise = null;
+    if (schedulePresentationOrderSyncPending && scheduleDataReady) {
+      schedulePresentationOrderSyncPending = false;
+      void syncSchedulePresentationOrder({ force: true, announce: false });
+    }
+  });
+  return schedulePresentationOrderSyncPromise;
+}
+
+if (typeof window.addEventListener === 'function') {
+  window.addEventListener('storage', event => {
+    if (event.key !== PRESENTATION_ORDER_SYNC_STORAGE_KEY) return;
+    void syncSchedulePresentationOrder({ force: true });
+  });
+  window.addEventListener(PRESENTATION_ORDER_SYNC_EVENT, () => {
+    void syncSchedulePresentationOrder({ force: true });
+  });
+  window.addEventListener('focus', () => {
+    void syncSchedulePresentationOrder();
+  });
+}
+if (typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      void syncSchedulePresentationOrder();
+    }
+  });
 }
 
 function formatScheduleDate(dateString) {
@@ -423,15 +504,15 @@ async function init() {
     presOrder = normalizePresentationOrder(members, savedOrder).map(member => member.id);
     const orderedMembers = normalizePresentationOrder(members, presOrder);
     await syncLoadedPastPresentations(orderedMembers);
-    const draftCycle = getPresentationDraftCycleState(
+    const inferredDraftCycle = await getPresentationDraftCycleStateFromSavedMarker(
       schedules,
       presentations,
       orderedMembers,
       { fromDate: toDateStr(new Date()) }
     );
-    await ensurePresentationDraftCycle(
-      draftCycle.cycleKey,
-      { cycleMarker: draftCycle.cycleMarker }
+    const draftCycle = await ensurePresentationDraftCycle(
+      inferredDraftCycle.cycleKey,
+      { cycleMarker: inferredDraftCycle.cycleMarker }
     );
     await loadScheduleIndustryTitleContext(draftCycle.cycleKey);
     await recoverInitialPresentationDrafts(
@@ -446,6 +527,10 @@ async function init() {
     );
     await reconcileAutomaticPresentationAssignments();
     scheduleDataReady = true;
+    if (schedulePresentationOrderSyncPending) {
+      schedulePresentationOrderSyncPending = false;
+      void syncSchedulePresentationOrder({ force: true, announce: false });
+    }
   } catch(e) {
     console.error('일정 데이터 로드 오류:', e.message);
     lockScheduleData();

@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.9">
+  <link rel="stylesheet" href="css/style.css?v=20260725.10">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -212,11 +212,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="js/db.js?v=20260711.2"></script>
-<script src="js/pwa.js?v=20260725.9"></script>
+<script src="js/pwa.js?v=20260725.10"></script>
 <script>
 (function reloadAfterServiceWorkerUpgrade() {
   if (!('serviceWorker' in navigator)) return;
-  const refreshKey = 'sss-sw-refresh-20260725.9';
+  const refreshKey = 'sss-sw-refresh-20260725.10';
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (refreshing || sessionStorage.getItem(refreshKey) === 'done') return;
@@ -287,7 +287,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260725.9');
+  params.set('v', '20260725.10');
   const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
     ? 'schedule-order'
     : parsed.page;

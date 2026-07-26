@@ -291,12 +291,38 @@ const PRESENTATION_DRAFT_CYCLE_CONFIG_KEY = 'presentation_draft_cycle_v1';
 const PRESENTATION_DRAFT_CARRYOVER_CONFIG_PREFIX = 'presentation_draft_carryover_v1:';
 const PRESENTATION_DRAFT_RECOVERY_CONFIG_KEY = 'presentation_draft_recovery_v1';
 const PRESENTATION_INDUSTRY_CONFIG_PREFIX = 'presentation_industry_v1:';
+const PRESENTATION_ORDER_SYNC_STORAGE_KEY = 'sss:presentation-order-sync';
+const PRESENTATION_ORDER_SYNC_EVENT = 'sss:presentation-order-changed';
 // 최초 배포 전에 일정 연결 없이 남은 planned 행만 이전 사이클로 분리한다.
 const PRESENTATION_DRAFT_MIGRATION_EPOCH = '2026-07-25T02:37:00.000Z';
 const PRESENTATION_DEFAULT_EVENT_TIME = '20:00:00';
 let presentationDraftEpoch = null;
 let presentationDraftCycleKey = null;
+let presentationDraftCycleMarker = null;
 let presentationDraftCarryoverIds = new Set();
+
+function notifyPresentationOrderChanged(orderedMemberIds = []) {
+  const detail = {
+    order: [...new Set((orderedMemberIds || []).filter(Boolean).map(String))],
+    changedAt: new Date().toISOString(),
+    revision: Date.now() + '-' + Math.random().toString(36).slice(2),
+  };
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(PRESENTATION_ORDER_SYNC_STORAGE_KEY, JSON.stringify(detail));
+    }
+  } catch (error) {
+    console.warn('발표 순서 변경 알림 저장 오류:', error);
+  }
+  try {
+    if (typeof window !== 'undefined' && typeof CustomEvent === 'function') {
+      window.dispatchEvent(new CustomEvent(PRESENTATION_ORDER_SYNC_EVENT, { detail }));
+    }
+  } catch (error) {
+    console.warn('발표 순서 변경 알림 전송 오류:', error);
+  }
+  return detail;
+}
 
 function isPresentationSchedule(schedule) {
   return !!schedule && ['industry', 'stock'].includes(schedule.category);
@@ -454,6 +480,7 @@ async function ensurePresentationDraftCycle(cycleKey, opts = {}) {
   if (!resolved) throw new Error('발표 사이클을 확인하지 못했습니다.');
   const authoritative = await persistPresentationDraftCycleMonotonic(resolved);
   presentationDraftCycleKey = authoritative.cycleKey;
+  presentationDraftCycleMarker = authoritative.cycleMarker;
   presentationDraftEpoch = authoritative.startedAt;
   presentationDraftCarryoverIds = savedCarryoverIds;
   return {
@@ -955,7 +982,8 @@ function inferPresentationCyclePosition(
   allPresentations,
   orderedMembers,
   fromDate,
-  groupSize = PRESENTATION_GROUP_SIZE
+  groupSize = PRESENTATION_GROUP_SIZE,
+  opts = {}
 ) {
   const orderedIds = (orderedMembers || []).map(member => String(member.id));
   if (!orderedIds.length) {
@@ -983,11 +1011,26 @@ function inferPresentationCyclePosition(
         : presentation.presented_at;
     })
     .filter(date => date && date < fromDate);
+  // 저장된 기준일은 당시의 마지막 발표자를 옮겨도 바뀌지 않는
+  // 사이클 경계다. 순서에서 새 마지막 멤버를 다시 찾는 것은 fallback뿐이다.
+  const configuredCycleMarker = String(opts.cycleMarker || '').trim();
+  const hasConfiguredCycleMarker =
+    configuredCycleMarker === 'initial' ||
+    (
+      /^\d{4}-\d{2}-\d{2}$/.test(configuredCycleMarker) &&
+      configuredCycleMarker < fromDate
+    );
   const historyDates = [...new Set([
     ...sortPresentationSchedules(allSchedules)
       .filter(schedule => schedule.event_date < fromDate)
       .map(schedule => schedule.event_date),
     ...completedHistoryDates,
+    ...(
+      hasConfiguredCycleMarker &&
+      configuredCycleMarker !== 'initial'
+        ? [configuredCycleMarker]
+        : []
+    ),
   ])].sort();
 
   let anchorIndex = -1;
@@ -1021,14 +1064,21 @@ function inferPresentationCyclePosition(
     memberIdsByDate.set(date, memberIds);
   }
 
-  const lastMemberId = orderedIds[orderedIds.length - 1];
-  for (let index = historyDates.length - 1; index >= 0; index -= 1) {
-    const memberIds = memberIdsByDate.get(historyDates[index]) || [];
-    if (!memberIds.includes(lastMemberId)) continue;
-    cursor = 0;
-    anchorIndex = index;
-    cycleMarker = historyDates[index];
-    break;
+  if (hasConfiguredCycleMarker) {
+    cycleMarker = configuredCycleMarker;
+    anchorIndex = configuredCycleMarker === 'initial'
+      ? -1
+      : historyDates.lastIndexOf(configuredCycleMarker);
+  } else {
+    const lastMemberId = orderedIds[orderedIds.length - 1];
+    for (let index = historyDates.length - 1; index >= 0; index -= 1) {
+      const memberIds = memberIdsByDate.get(historyDates[index]) || [];
+      if (!memberIds.includes(lastMemberId)) continue;
+      cursor = 0;
+      anchorIndex = index;
+      cycleMarker = historyDates[index];
+      break;
+    }
   }
   // 자동 슬롯은 발표종목 행이 없어도 실제 스터디 날짜가 지나면 순서를 소비한다.
   for (let index = anchorIndex + 1; index < historyDates.length; index += 1) {
@@ -1051,14 +1101,16 @@ function inferPresentationCursor(
   allPresentations,
   orderedMembers,
   fromDate,
-  groupSize = PRESENTATION_GROUP_SIZE
+  groupSize = PRESENTATION_GROUP_SIZE,
+  opts = {}
 ) {
   return inferPresentationCyclePosition(
     allSchedules,
     allPresentations,
     orderedMembers,
     fromDate,
-    groupSize
+    groupSize,
+    opts
   ).cursor;
 }
 
@@ -1069,18 +1121,45 @@ function getPresentationDraftCycleState(
   opts = {}
 ) {
   const requestedFromDate = opts.fromDate || toDateStr(new Date());
+  const cycleMarker = Object.prototype.hasOwnProperty.call(opts, 'cycleMarker')
+    ? opts.cycleMarker
+    : presentationDraftCycleMarker;
+  const cycleOpts = cycleMarker === null || cycleMarker === undefined
+    ? opts
+    : { ...opts, cycleMarker };
   const plan = buildPresentationSchedulePlan(
     allSchedules,
     allPresentations,
     orderedMembers,
-    { ...opts, fromDate: requestedFromDate }
+    { ...cycleOpts, fromDate: requestedFromDate }
   );
   return inferPresentationCyclePosition(
     allSchedules,
     allPresentations,
     orderedMembers,
     plan.fromDate || requestedFromDate,
-    Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE)
+    Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE),
+    cycleOpts
+  );
+}
+
+async function getPresentationDraftCycleStateFromSavedMarker(
+  allSchedules = [],
+  allPresentations = [],
+  orderedMembers = [],
+  opts = {}
+) {
+  const savedState = normalizePresentationDraftCycleState(
+    await getConfigStrict(PRESENTATION_DRAFT_CYCLE_CONFIG_KEY)
+  );
+  const cycleOpts = savedState
+    ? { ...opts, cycleMarker: savedState.cycleMarker }
+    : opts;
+  return getPresentationDraftCycleState(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    cycleOpts
   );
 }
 
@@ -1111,6 +1190,12 @@ function buildPresentationSchedulePlan(
 ) {
   const requestedFromDate = opts.fromDate || toDateStr(new Date());
   const groupSize = Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE);
+  const cycleMarker = Object.prototype.hasOwnProperty.call(opts, 'cycleMarker')
+    ? opts.cycleMarker
+    : presentationDraftCycleMarker;
+  const cycleOpts = cycleMarker === null || cycleMarker === undefined
+    ? opts
+    : { ...opts, cycleMarker };
   const ordered = (orderedMembers || []).filter(member => member?.id);
   const orderedIds = ordered.map(member => String(member.id));
   const requestedDaySchedules = sortPresentationSchedules(allSchedules).filter(schedule =>
@@ -1122,7 +1207,8 @@ function buildPresentationSchedulePlan(
     allPresentations,
     ordered,
     requestedFromDate,
-    groupSize
+    groupSize,
+    cycleOpts
   );
   const requestedDayTake = orderedIds.length
     ? Math.min(groupSize, orderedIds.length - requestedDayCursor)
@@ -1158,7 +1244,8 @@ function buildPresentationSchedulePlan(
     allPresentations,
     ordered,
     fromDate,
-    groupSize
+    groupSize,
+    cycleOpts
   );
 
   const futureSchedules = sortPresentationSchedules(allSchedules)

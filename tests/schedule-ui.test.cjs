@@ -277,9 +277,11 @@ test('generated presentation blocks are removed from editable memo text', () => 
   const context = {
     console,
     document: { addEventListener() {} },
-    window: {},
+    window: { addEventListener() {} },
     location: { search: '', origin: 'http://localhost', pathname: '/schedule-calendar.html', protocol: 'http:' },
     URLSearchParams,
+    PRESENTATION_ORDER_SYNC_EVENT: 'sss:presentation-order-changed',
+    PRESENTATION_ORDER_SYNC_STORAGE_KEY: 'sss:presentation-order-sync',
     setTimeout() {},
     requestAnimationFrame() {},
   };
@@ -336,11 +338,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.9',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260725.10',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.9',
+    'presentations.html?view=history&id=xyz&v=20260725.10',
   );
 });
 
@@ -417,7 +419,7 @@ test('schedule deletion preserves presentation history and recovers failed delet
   assert.match(source, /기존 발표 연결을 복구했습니다/);
 });
 
-test('presentation order changes reconcile only after the order is saved', () => {
+test('presentation order controls save, reconcile, then notify through one move flow', () => {
   const order = read('schedule-order.html');
   const db = read('js/db.js');
   const memberPanel = sourceSection(
@@ -425,12 +427,55 @@ test('presentation order changes reconcile only after the order is saved', () =>
     'function renderMemberPresPanel',
     '// 외부 클릭 시 드롭다운 닫기',
   );
+  const moveFlowStart = order.indexOf('async function movePresentationOrder');
+  const moveFlowEnd = order.indexOf('function guessNextTurn', moveFlowStart);
+  assert.notEqual(moveFlowStart, -1, 'missing movePresentationOrder');
+  assert.ok(moveFlowEnd > moveFlowStart, 'movePresentationOrder must be a complete flow');
+  const moveFlow = order.slice(moveFlowStart, moveFlowEnd);
+
   assert.match(db, /setConfig[\s\S]*if \(error\)[\s\S]*throw error/);
-  assert.equal(
-    [...memberPanel.matchAll(/await setConfig\('pres_order', presOrder\)[\s\S]*?await reconcileAutomaticPresentationPlan\(\)/g)].length,
-    2,
+  assert.match(
+    memberPanel,
+    /upBtn\.onclick\s*=\s*\(\)\s*=>\s*movePresentationOrder\(m\.id,\s*-1\)/,
   );
-  assert.equal((memberPanel.match(/presOrder = previousOrder/g) || []).length, 2);
+  assert.match(
+    memberPanel,
+    /dnBtn\.onclick\s*=\s*\(\)\s*=>\s*movePresentationOrder\(m\.id,\s*1\)/,
+  );
+  assert.equal((moveFlow.match(/await setConfig\('pres_order', presOrder\)/g) || []).length, 1);
+  assert.equal((moveFlow.match(/await reconcileAutomaticPresentationPlan\(\)/g) || []).length, 1);
+  assert.equal((moveFlow.match(/notifyPresentationOrderChanged\(/g) || []).length, 1);
+
+  const saveAt = moveFlow.indexOf("await setConfig('pres_order', presOrder)");
+  const reconcileAt = moveFlow.indexOf('await reconcileAutomaticPresentationPlan()');
+  const notifyAt = moveFlow.indexOf('notifyPresentationOrderChanged(');
+  assert.ok(
+    saveAt >= 0 && saveAt < reconcileAt && reconcileAt < notifyAt,
+    'order changes must be persisted and reconciled before other schedule pages are notified',
+  );
+  assert.match(moveFlow, /presOrder = previousOrder/);
+});
+
+test('schedule calendar reloads order and shared data on storage and focus synchronization', () => {
+  const calendar = read('schedule-calendar.html');
+  const shared = read('js/schedule-shared.js');
+
+  assert.match(
+    shared,
+    /function notifyPresentationOrderChanged\([^)]*\)[\s\S]*?localStorage\.setItem\(/,
+  );
+  assert.match(
+    calendar,
+    /async function syncSchedulePresentationOrder\([^)]*\)[\s\S]*?getConfigStrict\('pres_order'\)[\s\S]*?loadSharedData\(\)[\s\S]*?presOrder\s*=\s*normalizePresentationOrder\([^;]+\.map\(member => member\.id\)[\s\S]*?refreshSchedulePageViews\(\)/,
+  );
+  assert.match(
+    calendar,
+    /window\.addEventListener\('storage',[\s\S]*?syncSchedulePresentationOrder\(/,
+  );
+  assert.match(
+    calendar,
+    /window\.addEventListener\('focus',[\s\S]*?syncSchedulePresentationOrder\(/,
+  );
 });
 
 test('presentation preparation preserves pending input and uses each automatic schedule category', () => {
@@ -525,19 +570,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.9/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.9/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.9'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.9/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.10/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.10/);
+  assert.match(read('app.html'), /params\.set\('v', '20260725\.10'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260725\.10/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.9/);
+    assert.match(read(file), /css\/style\.css\?v=20260725\.10/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.9/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.10/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-9/);
+  assert.match(read('sw.js'), /sss-pwa-v20260725-10/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,

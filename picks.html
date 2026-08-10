@@ -231,10 +231,14 @@ function investmentCurrentPrice(pick) {
   return investmentPriceMap[pick.stock_code]?.price || null;
 }
 
+function investmentBuyPrice(pick) {
+  return Number(pick?.buy_price || pick?.price_at || pick?.buy_price_ref || 0) || null;
+}
+
 function investmentReturn(pick) {
   if (pick.status === 'sold' && pick.realized_return != null) return Number(pick.realized_return);
   const current = investmentCurrentPrice(pick);
-  const buy = Number(pick.buy_price || pick.price_at || 0);
+  const buy = investmentBuyPrice(pick);
   return current && buy ? (current - buy) / buy * 100 : null;
 }
 
@@ -254,7 +258,7 @@ function renderInvestmentCards(picks, containerId, emptyMessage) {
   container.innerHTML = picks.map(pick => {
     const state = investmentState(pick);
     const current = investmentCurrentPrice(pick);
-    const buy = Number(pick.buy_price || pick.price_at || 0) || null;
+    const buy = investmentBuyPrice(pick);
     const rate = investmentReturn(pick);
     const quantity = Number(pick.buy_quantity || 0);
     const profit = buy && current && quantity ? (current - buy) * quantity : null;
@@ -288,6 +292,7 @@ function renderMonthPicks(month) {
   renderInvestmentCards(picks, 'mobileMonthInvestments', '이번 달 투자종목이 없습니다.');
   tbody.innerHTML = picks.map((p, i) => {
     const r = p.realized_return;
+    const buy = investmentBuyPrice(p);
     const upside = p.target_cap && p.current_cap
       ? (((p.target_cap - p.current_cap) / p.current_cap) * 100).toFixed(1) : null;
     const badgeHtml = p.status==='sold'
@@ -296,7 +301,7 @@ function renderMonthPicks(month) {
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${escapeHtml((p.member_name||'').slice(0,2))}</div>${escapeHtml(p.member_name)}</div></td>
       <td style="font-weight:500;">${escapeHtml(p.stock_name)}<br><span style="font-size:11px;color:var(--muted);">${escapeHtml(p.stock_code||'')}${p._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(p))}` : p.carried_from ? ` · ${escapeHtml(p.carried_from.replace('-','년 '))}월 이월` : ''}</span></td>
       <td><span class="badge b-hold">${p.market||'KOSPI'}</span></td>
-      <td>${won(p.buy_price)}</td>
+      <td>${won(buy)}</td>
       <td>${won(p.sell_price)}</td>
       <td class="${rCls(r)}">${pct(r)}</td>
       <td style="color:var(--green);">${won(p.target_price)}</td>
@@ -459,7 +464,7 @@ async function openInvestmentDetail(id, displayMonth = '') {
   modal.querySelector('.detail-close').focus();
 
   const current = investmentCurrentPrice(pick);
-  const buy = Number(pick.buy_price || pick.price_at || 0) || null;
+  const buy = investmentBuyPrice(pick);
   const quantity = Number(pick.buy_quantity || 0);
   const rate = investmentReturn(pick);
   const profit = buy && current && quantity ? (current - buy) * quantity : null;

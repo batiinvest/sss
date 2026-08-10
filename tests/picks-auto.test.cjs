@@ -21,6 +21,14 @@ function plain(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function sourceSection(source, startMarker, endMarker) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  assert.notEqual(start, -1, `missing start marker: ${startMarker}`);
+  assert.notEqual(end, -1, `missing end marker: ${endMarker}`);
+  return source.slice(start, end);
+}
+
 test('latest held top pick automatically extends across multiple empty months', () => {
   const { buildCarryForwardPicks } = loadDbHelpers();
   const effective = plain(buildCarryForwardPicks('2026-07', [], [
@@ -34,6 +42,58 @@ test('latest held top pick automatically extends across multiple empty months', 
   assert.equal(effective[0].carried_from, '2026-04');
   assert.equal(effective[0].price_at, 120);
   assert.equal(effective[0]._isCarryFallback, true);
+});
+
+test('automatic extension renders preserved recommendation values in the monthly table', () => {
+  const elements = {
+    monthPicksTbody: { innerHTML: '' },
+    reasonCards: { innerHTML: '' },
+  };
+  const priorPick = {
+    id: 'apr',
+    member_id: 'a',
+    member_name: '추천자',
+    month: '2026-04',
+    stock_name: '자동연장 종목',
+    stock_code: '200710',
+    market: 'KOSDAQ',
+    status: 'hold',
+    buy_price: null,
+    price_at: 52400,
+    target_price: 81846,
+    current_cap: 7271,
+    target_cap: 11000,
+    reason: '기존 투자 의견',
+  };
+  const context = {
+    console,
+    members: [{ id: 'a' }],
+    allPicks: [priorPick],
+    investmentPriceMap: {},
+    document: { getElementById: id => elements[id] || null },
+    matchesInvestmentFilters: () => true,
+    statusBadge: () => '',
+    won: value => value != null ? Number(value).toLocaleString('ko-KR') + '원' : '-',
+    rCls: () => '',
+    pct: () => '-',
+    escapeHtml: value => String(value ?? ''),
+    avCls: ['av1'],
+  };
+  vm.createContext(context);
+  vm.runInContext(read('js/db.js'), context, { filename: 'js/db.js' });
+  const picksSource = read('picks.html');
+  vm.runInContext(
+    sourceSection(picksSource, 'function investmentState', 'function renderHistory'),
+    context,
+    { filename: 'picks.html#monthly-renderer' }
+  );
+  context.renderInvestmentCards = () => {};
+
+  context.renderMonthPicks('2026-08');
+
+  assert.match(elements.monthPicksTbody.innerHTML, /52,400원/);
+  assert.match(elements.monthPicksTbody.innerHTML, /81,846원/);
+  assert.match(elements.reasonCards.innerHTML, /기존 투자 의견/);
 });
 
 test('a direct pick for the month replaces the automatic extension', () => {

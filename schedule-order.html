@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20260725.10">
+  <link rel="stylesheet" href="css/style.css?v=20260810.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -110,8 +110,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260725.10"></script>
-<script src="js/schedule-shared.js?v=20260725.10"></script>
+<script src="js/db.js?v=20260810.1"></script>
+<script src="js/schedule-shared.js?v=20260810.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -622,6 +622,20 @@ function renderMemberPresPanel() {
   const orderedMembers = normalizePresentationOrder(members, presOrder);
   presOrder = orderedMembers.map(member => member.id);
   const automaticPlan = getAutomaticPresentationPlan();
+  const visiblePlanItem = getVisiblePresentationPlanItem(automaticPlan);
+  const cycleCategory = visiblePlanItem?.schedule?.category ||
+    getPresentationTurnState(presentations, orderedMembers).category;
+  const completedByMember = new Map(
+    getCurrentCycleCompletedPresentations(
+      schedules,
+      presentations,
+      orderedMembers,
+      {
+        fromDate: toDateStr(new Date()),
+        category: cycleCategory,
+      }
+    ).map(presentation => [String(presentation.member_id), presentation])
+  );
   const avColors = ['av1','av2','av3','av4','av1','av2'];
 
   panel.innerHTML = '';
@@ -675,16 +689,22 @@ function renderMemberPresPanel() {
         draftEpoch: presentationDraftEpoch,
       }
     );
+    const completed = completedByMember.get(String(m.id)) || null;
+    const displayRow = draft || completed;
+    const isCompleted = !draft && !!completed;
 
     const isAssigned   = draft && !!draft.schedule_id;
     const assignedDate = isAssigned
       ? (schedules.find(s => s.id === draft.schedule_id)?.event_date || draft.presented_at)
       : null;
+    const displayDate = isCompleted
+      ? getPresentationRotationDate(completed, schedules)
+      : assignedDate;
 
     // ── 우측 영역: 종목 입력 or 선택 칩
     const rightArea = document.createElement('div');
     rightArea.style.cssText = 'flex:1;min-width:0;display:flex;align-items:center;gap:6px;';
-    if (autoItem && !isAssigned) {
+    if (autoItem && !isAssigned && !isCompleted) {
       const autoBadge = document.createElement('span');
       autoBadge.style.cssText = 'font-size:10px;color:#185fa5;background:#e8f2fb;border-radius:4px;padding:2px 5px;white-space:nowrap;flex-shrink:0;';
       const shortCategory = autoItem.schedule.category === 'industry' ? '산업' : '기업';
@@ -692,26 +712,35 @@ function renderMemberPresPanel() {
       rightArea.appendChild(autoBadge);
     }
 
-    if (draft?.topic) {
+    if (displayRow?.topic) {
       // 종목 선택됨 → 칩으로 표시
-      const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
-      const upside    = draft.target_cap && draft.market_cap_at
-        ? ((draft.target_cap - draft.market_cap_at) / draft.market_cap_at * 100).toFixed(0) : null;
+      const topicName = displayRow.topic?.includes('>') ? displayRow.topic.split('>')[1].trim() : (displayRow.topic||'');
+      const upside    = displayRow.target_cap && displayRow.market_cap_at
+        ? ((displayRow.target_cap - displayRow.market_cap_at) / displayRow.market_cap_at * 100).toFixed(0) : null;
 
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'pres-stock-chip ' + (isAssigned ? 'chip-assigned' : 'chip-unassigned');
-      chip.title = '클릭하여 편집';
-      chip.setAttribute('aria-label', m.name + ' 발표종목 편집: ' + topicName);
-      chip.onclick = () => openPresEditModal(m, draft);
+      chip.className = 'pres-stock-chip ' + (
+        isCompleted ? 'chip-completed' : (isAssigned ? 'chip-assigned' : 'chip-unassigned')
+      );
+      chip.title = isCompleted ? '발표 기록 보기' : '클릭하여 편집';
+      chip.setAttribute(
+        'aria-label',
+        m.name + (isCompleted ? ' 완료 발표 보기: ' : ' 발표종목 편집: ') + topicName
+      );
+      chip.onclick = isCompleted
+        ? () => goToSchedulePage(
+            'presentations?view=history&id=' + encodeURIComponent(completed.id)
+          )
+        : () => openPresEditModal(m, draft);
       chip.innerHTML =
-        '<span class="chip-name">' + (isAssigned ? '📅 ' : '✅ ') + escapeHtml(topicName) + '</span>' +
-        (isAssigned && assignedDate ? '<span class="chip-date">' + escapeHtml(assignedDate) + '</span>' : '') +
-        (upside && !isAssigned ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
-        (draft.reason ? '<span class="chip-cap" title="' + escapeHtml(draft.reason) + '">📝</span>' : '');
+        '<span class="chip-name">' + (isCompleted ? '✓ ' : (isAssigned ? '📅 ' : '✅ ')) + escapeHtml(topicName) + '</span>' +
+        (displayDate ? '<span class="chip-date">' + escapeHtml(displayDate) + '</span>' : '') +
+        (upside && !isAssigned && !isCompleted ? '<span class="chip-cap">+' + upside + '%</span>' : '') +
+        (displayRow.reason ? '<span class="chip-cap" title="' + escapeHtml(displayRow.reason) + '">📝</span>' : '');
 
       // 지우기 버튼 (관리자 또는 본인만)
-      if (adminUser) {
+      if (adminUser && !isCompleted) {
         const clearBtn = document.createElement('button');
         clearBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0;flex-shrink:0;';
         clearBtn.textContent = '×';

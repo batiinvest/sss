@@ -662,6 +662,105 @@ test('a partially completed group today remains the current study', () => {
   assert.deepEqual(plain(plan.nextMemberIds), ['A', 'B', 'C']);
 });
 
+test('completed topics remain visible until the active rotation cycle finishes', () => {
+  const { getCurrentCycleCompletedPresentations } = loadHelpers();
+  const schedules = [
+    schedule('previous-end', '2026-06-15', 'stock'),
+    schedule('first', '2026-07-27', 'industry'),
+    schedule('second', '2026-08-10', 'industry'),
+    schedule('last', '2026-08-24', 'industry'),
+  ];
+  const oldRow = {
+    ...presentation('old-A', 'previous-end', 'A', '2026-06-15', 'done'),
+    category: 'industry',
+    topic: '이전 사이클 종목',
+  };
+  const firstGroup = ['A', 'B', 'C'].map(memberId => ({
+    ...presentation(`current-${memberId}`, 'first', memberId, '2026-07-27', 'done'),
+    category: 'industry',
+    topic: `반도체 > ${memberId} 종목`,
+  }));
+  const pendingRows = [
+    ...['D', 'E', 'F'].map(memberId => ({
+      ...presentation(`pending-${memberId}`, 'second', memberId, '2026-08-10'),
+      category: 'industry',
+    })),
+    {
+      ...presentation('pending-G', 'last', 'G', '2026-08-24'),
+      category: 'industry',
+    },
+  ];
+  const rows = [oldRow, ...firstGroup, ...pendingRows];
+
+  assert.deepEqual(
+    plain(getCurrentCycleCompletedPresentations(
+      schedules,
+      rows,
+      members,
+      {
+        fromDate: '2026-08-10',
+        cycleMarker: '2026-06-15',
+        category: 'industry',
+      }
+    ).map(row => [row.member_id, row.topic])),
+    [
+      ['A', '반도체 > A 종목'],
+      ['B', '반도체 > B 종목'],
+      ['C', '반도체 > C 종목'],
+    ]
+  );
+
+  const finishedRows = rows.map(row =>
+    row.id.startsWith('pending-') ? { ...row, status: 'done' } : row
+  );
+  assert.deepEqual(
+    plain(getCurrentCycleCompletedPresentations(
+      schedules,
+      finishedRows,
+      members,
+      {
+        fromDate: '2026-08-25',
+        cycleMarker: '2026-06-15',
+        category: 'industry',
+      }
+    )),
+    []
+  );
+});
+
+test('current-cycle display uses a linked study date and falls back after a dinner change', () => {
+  const { getCurrentCycleCompletedPresentations } = loadHelpers();
+  const row = {
+    ...presentation('moved-A', 'moved', 'A', '2026-06-20', 'done'),
+    category: 'industry',
+    topic: '반도체 > A 종목',
+  };
+  const opts = {
+    fromDate: '2026-07-20',
+    category: 'industry',
+    cycleState: { cycleMarker: '2026-07-01' },
+  };
+
+  assert.deepEqual(
+    plain(getCurrentCycleCompletedPresentations(
+      [schedule('moved', '2026-07-15', 'industry')],
+      [row],
+      members,
+      opts
+    ).map(item => item.id)),
+    ['moved-A']
+  );
+  assert.deepEqual(
+    plain(getCurrentCycleCompletedPresentations(
+      [schedule('moved', '2026-07-15', 'dinner')],
+      [row],
+      members,
+      opts
+    )),
+    []
+  );
+});
+
 test('a completed group today still advances after its schedule becomes dinner', () => {
   const { buildPresentationSchedulePlan } = loadHelpers();
   const schedules = [

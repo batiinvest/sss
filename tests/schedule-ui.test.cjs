@@ -338,11 +338,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260725.10',
+    'schedule-order.html?view=prepare&schedule=abc&v=20260810.1',
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260725.10',
+    'presentations.html?view=history&id=xyz&v=20260810.1',
   );
 });
 
@@ -495,6 +495,11 @@ test('presentation preparation preserves pending input and uses each automatic s
   assert.match(memberPanel, /panel\.querySelectorAll\('input\[data-member-id\]'\)/);
   assert.match(memberPanel, /const savedInput = saved\[String\(m\.id\)\]/);
   assert.match(memberPanel, /input\.value = savedInput\.v/);
+  assert.match(memberPanel, /getCurrentCycleCompletedPresentations\(/);
+  assert.match(memberPanel, /const displayRow = draft \|\| completed/);
+  assert.match(memberPanel, /chip\.onclick = isCompleted[\s\S]*?presentations\?view=history&id=/);
+  assert.match(memberPanel, /if \(adminUser && !isCompleted\)/);
+  assert.match(memberPanel, /: \(\) => openPresEditModal\(m, draft\)/);
   assert.match(entryBuilder, /const category = autoItem\?\.schedule\.category \|\| fallbackCategory/);
   assert.match(entryBuilder, /matchesVisibleContext/);
   assert.match(memberPanel, /topic: entry\.topic/);
@@ -570,19 +575,19 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260725\.10/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260725\.10/);
-  assert.match(read('app.html'), /params\.set\('v', '20260725\.10'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260725\.10/);
+  assert.match(read('app.html'), /css\/style\.css\?v=20260810\.1/);
+  assert.match(read('app.html'), /js\/pwa\.js\?v=20260810\.1/);
+  assert.match(read('app.html'), /params\.set\('v', '20260810\.1'\)/);
+  assert.match(read('app.html'), /sss-sw-refresh-20260810\.1/);
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260725\.10/);
+    assert.match(read(file), /css\/style\.css\?v=20260810\.1/);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260725\.10/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260810\.1/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260725-10/);
+  assert.match(read('sw.js'), /sss-pwa-v20260810-1/);
   assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
   assert.equal(
     (read('sw.js').match(/caches\.match\(request\)/g) || []).length,

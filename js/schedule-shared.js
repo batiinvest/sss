@@ -977,6 +977,18 @@ function getLinkedSchedulePresentations(schedule, allSchedules = [], allPresenta
   });
 }
 
+function getPresentationRotationDate(presentation, allSchedules = []) {
+  if (!presentation) return '';
+  const linkedSchedule = presentation.schedule_id
+    ? (allSchedules || []).find(schedule =>
+        String(schedule.id) === String(presentation.schedule_id)
+      )
+    : null;
+  return linkedSchedule && isPresentationSchedule(linkedSchedule)
+    ? linkedSchedule.event_date
+    : presentation.presented_at;
+}
+
 function inferPresentationCyclePosition(
   allSchedules,
   allPresentations,
@@ -1141,6 +1153,56 @@ function getPresentationDraftCycleState(
     Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE),
     cycleOpts
   );
+}
+
+function getCurrentCycleCompletedPresentations(
+  allSchedules = [],
+  allPresentations = [],
+  orderedMembers = [],
+  opts = {}
+) {
+  const orderedIds = new Set(
+    (orderedMembers || []).filter(member => member?.id).map(member => String(member.id))
+  );
+  if (!orderedIds.size) return [];
+
+  const fromDate = opts.fromDate || toDateStr(new Date());
+  const cycleState = opts.cycleState || getPresentationDraftCycleState(
+    allSchedules,
+    allPresentations,
+    orderedMembers,
+    opts
+  );
+  const cycleMarker = String(cycleState?.cycleMarker || 'initial');
+  const category = String(opts.category || '');
+  const eligibleRows = (allPresentations || [])
+    .filter(presentation => {
+      if (
+        presentation.status !== 'done' ||
+        !orderedIds.has(String(presentation.member_id || '')) ||
+        !['industry', 'stock'].includes(presentation.category)
+      ) {
+        return false;
+      }
+      if (category && presentation.category !== category) return false;
+      const date = getPresentationRotationDate(presentation, allSchedules);
+      return !!date &&
+        date <= fromDate &&
+        (cycleMarker === 'initial' || date > cycleMarker);
+    })
+    .sort((a, b) =>
+      String(getPresentationRotationDate(a, allSchedules) || '').localeCompare(
+        String(getPresentationRotationDate(b, allSchedules) || '')
+      ) ||
+      String(a.created_at || '').localeCompare(String(b.created_at || '')) ||
+      String(a.id || '').localeCompare(String(b.id || ''))
+    );
+
+  const latestByMember = new Map();
+  eligibleRows.forEach(presentation => {
+    latestByMember.set(String(presentation.member_id), presentation);
+  });
+  return [...latestByMember.values()];
 }
 
 async function getPresentationDraftCycleStateFromSavedMarker(

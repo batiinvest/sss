@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sss-pwa-v20260810-1';
+const CACHE_NAME = 'sss-pwa-v20260810-2';
 
 const APP_SHELL = [
   './',
@@ -29,6 +29,7 @@ const APP_SHELL = [
   './js/pwa.js',
   './js/services/price-service.js',
   './js/utils/presentation.js',
+  './js/utils/portfolio.js',
   './js/utils/returns.js'
 ];
 

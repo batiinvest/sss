@@ -4,153 +4,329 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 참여자 현황</title>
-  <link rel="stylesheet" href="css/style.css?v=20260427">
+  <link rel="stylesheet" href="css/style.css?v=20260811.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
-  <style>
-    .member-card { cursor:pointer; transition:box-shadow .15s; }
-    .member-card:hover { box-shadow:0 0 0 2px var(--accent); }
-    .member-card.expanded { box-shadow:0 0 0 2px var(--accent); }
-    .hist-wrap { display:none; margin-top:14px; padding-top:14px; border-top:0.5px solid var(--border); }
-    .member-card.expanded .hist-wrap { display:block; }
-    .hist-wrap table { width:100%; font-size:12px; border-collapse:collapse; }
-    .hist-wrap th { background:var(--bg); padding:6px 8px; font-weight:500; color:var(--muted); text-align:left; }
-    .hist-wrap td { padding:6px 8px; border-bottom:0.5px solid var(--border); }
-    .expand-hint { font-size:11px; color:var(--muted); margin-top:8px; text-align:right; }
-  </style>
 </head>
 <body>
 <div class="layout layout-page"><main class="main">
 
-  <div class="topbar">
+  <div class="topbar member-page-topbar">
     <div>
       <div class="page-title">참여자 현황</div>
-      <div class="updated">확정 결산 기준 누적 수익률 · 카드 클릭 시 종목 히스토리 표시</div>
+      <div class="updated">보유종목 현재가를 반영한 총자산 · 확정 종목 히스토리</div>
+    </div>
+    <div class="member-price-actions">
+      <span id="memberPriceStatus" class="member-price-status" role="status" aria-live="polite">현재가를 불러오는 중입니다.</span>
+      <button id="memberPriceRefreshBtn" class="btn" type="button" onclick="refreshMemberPrices({ announce: true })">현재가 새로고침</button>
     </div>
   </div>
 
-  <!-- 참여자 카드 그리드 -->
-  <div id="memberCards" class="grid-2 mb-card" style="grid-template-columns:repeat(2,minmax(0,1fr));"></div>
+  <div id="memberCards" class="member-cards-grid mb-card"></div>
 
 </main></div>
 
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260522"></script>
-<script src="js/db.js?v=20260427"></script>
+<script src="js/config.js?v=20260811.1"></script>
+<script src="js/utils/portfolio.js?v=20260811.1"></script>
+<script src="js/services/price-service.js?v=20260811.1"></script>
+<script src="js/db.js?v=20260811.1"></script>
 <script>
-let members = [], allTrades = [], allPicks = [], settlements = [];
-let expandedId = null;   // 현재 펼쳐진 멤버 ID
+let members = [];
+let allTrades = [];
+let allPicks = [];
+let settlements = [];
+let memberPriceMap = {};
+let expandedId = null;
 
 async function init() {
   await requireAuth();
   [members, allPicks, settlements, allTrades] = await Promise.all([
-    fetchMemberStats(), fetchAllPicks(), fetchSettlements(), fetchAllTrades()
+    fetchMembers(),
+    fetchAllPicks(),
+    fetchSettlements(),
+    fetchAllTrades(),
   ]);
   renderMemberCards();
+  await refreshMemberPrices();
 }
 
-function renderMemberCards() {
-  const totalInitial = members.length * (typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000);
-  document.getElementById('memberCards').innerHTML = members.map((m, i) => {
-    const picks      = allPicks.filter(p => p.member_id === m.id);
-    const mySettles  = settlements.filter(s => s.member_id === m.id);
-    const myBuy      = allTrades.filter(t => t.member_id === m.id && t.trade_type === 'buy')
-                         .reduce((s,t) => s + t.price * t.quantity, 0);
-    const mySell     = allTrades.filter(t => t.member_id === m.id && t.trade_type === 'sell')
-                         .reduce((s,t) => s + t.price * t.quantity, 0);
-    const myInvested = myBuy - mySell;
-    const myCash     = m.base_amount - myInvested;
-    const bestPick   = mySettles.reduce((best, s) =>
-      (s.return_rate > (best?.return_rate || -Infinity) ? s : best), null);
-    const winCount   = mySettles.filter(s => s.net_profit > 0).length;
-    const winRate    = mySettles.length ? Math.round(winCount / mySettles.length * 100) : 0;
-    const barW       = Math.min(Math.abs(m.return_rate) * 4, 100);
-    const barC       = m.return_rate >= 0 ? 'bar-up' : 'bar-dn';
-    const isExpanded = expandedId === m.id;
+function memberValuation(member, priceMap = memberPriceMap) {
+  const initialAmount = typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000;
+  return buildMemberPortfolioValuation(
+    member,
+    allPicks,
+    allTrades,
+    priceMap,
+    initialAmount
+  );
+}
 
-    // 히스토리 테이블 (펼쳐질 때 렌더)
-    const histRows = picks.length
-      ? (() => {
-          let runningBase = typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000;
-          return picks.map(p => {
-            const settle = mySettles.find(s => s.pick_id === p.pick_id);
-            if (settle) runningBase = settle.new_base_amount || runningBase + (settle.net_profit || 0);
-            const r = p.realized_return;
-            return `<tr>
-              <td class="muted">${(p.month||'').replace('-','년 ')}월</td>
-              <td style="font-weight:500;">${p.stock_name}</td>
-              <td>${won(p.buy_price)}</td>
-              <td>${won(p.sell_price)}</td>
-              <td class="${rCls(r)}">${pct(r)}</td>
-              <td class="${rCls(settle?.net_profit)}">${settle ? (settle.net_profit>=0?'+':'')+won(settle.net_profit) : '—'}</td>
-              <td>${statusBadge(p.status)}</td>
-            </tr>`;
-          }).join('');
-        })()
-      : `<tr><td colspan="7" class="empty-cell">종목 없음</td></tr>`;
+function getMemberPriceCodes() {
+  const codes = members.flatMap(member =>
+    memberValuation(member, {}).positions.map(position => position.stock_code)
+  );
+  return [...new Set(codes.filter(Boolean))];
+}
 
-    return `<div class="card member-card ${isExpanded ? 'expanded' : ''}" onclick="toggleHistory('${m.id}')">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-        <div class="avatar ${avCls[i%6]}" style="width:40px;height:40px;font-size:14px;">${m.name.slice(0,2)}</div>
-        <div>
-          <div style="font-size:15px;font-weight:500;">${m.name}</div>
-          <div style="font-size:12px;color:var(--muted);">참여일 ${m.joined_at}</div>
-        </div>
-        <div style="margin-left:auto;text-align:right;">
-          <div class="metric-value ${m.return_rate>=0?'up':'dn'}" style="font-size:20px;">${pct(m.return_rate)}</div>
-          <div style="font-size:11px;color:var(--muted);">누적 수익률</div>
-        </div>
-      </div>
-      <div style="height:5px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:14px;">
-        <div class="prog-bar ${barC}" style="width:${barW}%;"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
-        <div style="background:var(--bg);border-radius:var(--r-md);padding:8px 10px;">
-          <div style="font-size:11px;color:var(--muted);">기준금액</div>
-          <div style="font-size:13px;font-weight:500;">${won(m.base_amount)}</div>
-        </div>
-        <div style="background:var(--bg);border-radius:var(--r-md);padding:8px 10px;">
-          <div style="font-size:11px;color:var(--muted);">투자금</div>
-          <div style="font-size:13px;font-weight:500;">${won(myInvested)}</div>
-        </div>
-        <div style="background:var(--bg);border-radius:var(--r-md);padding:8px 10px;">
-          <div style="font-size:11px;color:var(--muted);">잔액</div>
-          <div style="font-size:13px;font-weight:500;${myCash<0?'color:var(--up)':''}">${won(myCash)}</div>
-        </div>
-        <div style="background:var(--bg);border-radius:var(--r-md);padding:8px 10px;">
-          <div style="font-size:11px;color:var(--muted);">승률</div>
-          <div style="font-size:13px;font-weight:500;">${winRate}%</div>
-        </div>
-      </div>
-      ${bestPick ? `<div style="margin-top:10px;font-size:12px;color:var(--muted);">최고 수익: <strong>${bestPick.picks?.stock_name||'—'}</strong> <span class="up">+${bestPick.return_rate}%</span></div>` : ''}
-      <!-- 인라인 히스토리 (클릭 시 토글) -->
-      <div class="hist-wrap" onclick="event.stopPropagation()">
-        <div style="font-size:13px;font-weight:500;margin-bottom:8px;">📋 종목 히스토리 (${picks.length}건)</div>
-        <div class="table-wrap" style="margin:0;">
-          <table>
-            <thead><tr>
-              <th>월</th><th>종목</th><th>매수가</th><th>매도가</th><th>수익률</th><th>확정 손익</th><th>상태</th>
-            </tr></thead>
-            <tbody>${histRows}</tbody>
-          </table>
-        </div>
-      </div>
-      <div class="expand-hint">${isExpanded ? '▲ 접기' : '▼ 히스토리 보기'}</div>
-    </div>`;
+function signedWon(value) {
+  if (value === null || value === undefined) return '—';
+  return `${Number(value) >= 0 ? '+' : ''}${won(value)}`;
+}
+
+function renderHoldingRows(valuation) {
+  if (!valuation.positions.length) {
+    return '<tr><td colspan="5" class="empty-cell">현재 보유 중인 종목이 없습니다.</td></tr>';
+  }
+
+  return valuation.positions.map(position => {
+    const stockName = escapeHtml(position.stock_name || '종목명 미정');
+    const stockCode = escapeHtml(position.stock_code || '종목코드 없음');
+    const quantity = Number(position.quantity).toLocaleString('ko-KR', { maximumFractionDigits: 4 });
+    const currentPrice = position.hasLivePrice
+      ? won(position.currentPrice)
+      : '<span class="member-valuation-pending">현재가 미확인</span>';
+    const marketValue = position.hasLivePrice
+      ? won(position.currentValue)
+      : '<span class="member-valuation-pending">평가 대기</span>';
+    const pnl = position.pnl === null
+      ? '<span class="member-valuation-pending">평가 대기</span>'
+      : `<span class="${rCls(position.pnl)}">${signedWon(position.pnl)}</span>
+         <span class="member-holding-rate ${rCls(position.returnRate)}">${pct(position.returnRate)}</span>`;
+
+    return `<tr>
+      <td>
+        <span class="member-holding-name">${stockName}</span>
+        <span class="member-holding-meta">${stockCode}</span>
+      </td>
+      <td class="member-number-cell">
+        <span>${quantity}주</span>
+        <span class="member-holding-meta">평균 ${won(position.buyPrice)}</span>
+      </td>
+      <td class="member-number-cell">${currentPrice}</td>
+      <td class="member-number-cell">${marketValue}</td>
+      <td class="member-number-cell">${pnl}</td>
+    </tr>`;
   }).join('');
 }
 
+function renderHistoryRows(picks, mySettles) {
+  if (!picks.length) {
+    return '<tr><td colspan="7" class="empty-cell">종목 없음</td></tr>';
+  }
+
+  return picks.map(pick => {
+    const pickSettlements = mySettles.filter(item =>
+      String(item.pick_id || '') === String(pick.pick_id || pick.id || '')
+    );
+    const settledProfit = pickSettlements.length
+      ? pickSettlements.reduce((sum, item) => sum + Number(item.net_profit || 0), 0)
+      : null;
+    const realizedReturn = pick.realized_return;
+    const month = escapeHtml((pick.month || '').replace('-', '년 '));
+    const stockName = escapeHtml(pick.stock_name || '종목명 미정');
+    return `<tr>
+      <td class="muted">${month}${month ? '월' : '—'}</td>
+      <td class="fw-500">${stockName}</td>
+      <td>${pick.buy_price ? won(pick.buy_price) : '—'}</td>
+      <td>${pick.sell_price ? won(pick.sell_price) : '—'}</td>
+      <td class="${rCls(realizedReturn)}">${realizedReturn == null ? '—' : pct(realizedReturn)}</td>
+      <td class="${rCls(settledProfit)}">${settledProfit === null ? '—' : signedWon(settledProfit)}</td>
+      <td>${statusBadge(pick.status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderMemberCards() {
+  const container = document.getElementById('memberCards');
+  if (!members.length) {
+    container.innerHTML = '<div class="card member-empty-state" role="status">표시할 참여자가 없습니다.</div>';
+    return [];
+  }
+
+  const valuations = members.map(member => memberValuation(member));
+  container.innerHTML = members.map((member, index) => {
+    const memberId = String(member.id);
+    const picks = allPicks.filter(pick => String(pick.member_id) === memberId);
+    const mySettles = settlements.filter(settle => String(settle.member_id) === memberId);
+    const valuation = valuations[index];
+    const initialAmount = valuation.initialAmount;
+    const hasCompletePricing = valuation.hasCompletePricing;
+    const isExpanded = expandedId === memberId;
+    const historyId = `member-history-${index}`;
+    const toggleId = `member-history-toggle-${index}`;
+    const cardId = `member-card-${index}`;
+    const titleId = `member-name-${index}`;
+    const missingPriceCount = valuation.holdingCount - valuation.priceMatchedCount;
+    const pricingLabel = valuation.holdingCount === 0
+      ? '보유종목 없음'
+      : hasCompletePricing
+        ? `현재가 ${valuation.priceMatchedCount}/${valuation.holdingCount}`
+        : `현재가 미확인 ${missingPriceCount}건`;
+    const totalAssetText = hasCompletePricing ? won(valuation.totalAsset) : '평가 대기';
+    const comparisonText = hasCompletePricing
+      ? `${signedWon(valuation.totalProfit)} (${pct(valuation.totalReturnRate)})`
+      : '현재가 확인 후 계산됩니다.';
+    const marketValueText = hasCompletePricing ? won(valuation.totalMarketValue) : '평가 대기';
+    const pnlText = hasCompletePricing ? signedWon(valuation.unrealizedPnl) : '평가 대기';
+    const returnRate = hasCompletePricing ? valuation.totalReturnRate : null;
+    const barWidth = returnRate === null ? 0 : Math.min(Math.abs(returnRate) * 4, 100);
+    const barClass = returnRate === null ? '' : (returnRate >= 0 ? 'bar-up' : 'bar-dn');
+    const bestPick = mySettles.reduce((best, settle) =>
+      settle.return_rate > (best?.return_rate ?? -Infinity) ? settle : best, null
+    );
+    const winCount = mySettles.filter(settle => settle.net_profit > 0).length;
+    const winRate = mySettles.length ? Math.round(winCount / mySettles.length * 100) : null;
+    const bestPickText = bestPick
+      ? `<div class="member-best-pick">최고 확정 수익: <strong>${escapeHtml(bestPick.picks?.stock_name || '—')}</strong> <span class="${rCls(bestPick.return_rate)}">${pct(bestPick.return_rate)}</span></div>`
+      : '';
+
+    return `<article id="${cardId}" class="card member-card" data-member-card-id="${escapeHtml(memberId)}" aria-labelledby="${titleId}">
+      <div class="member-card-header">
+        <div class="member-identity">
+          <div class="avatar ${avCls[index % 6]} member-avatar">${escapeHtml(String(member.name || '').slice(0, 2))}</div>
+          <div>
+            <h2 id="${titleId}" class="member-name">${escapeHtml(member.name)}</h2>
+            <div class="member-joined">참여일 ${escapeHtml(member.joined_at || '—')}</div>
+          </div>
+        </div>
+        <div class="member-asset-summary">
+          <span class="member-asset-label">현재 총자산</span>
+          <strong class="member-asset-value ${rCls(returnRate)}">${totalAssetText}</strong>
+          <span class="member-asset-comparison ${rCls(valuation.totalProfit)}">최초 ${won(initialAmount)} 대비 ${comparisonText}</span>
+          <span class="member-price-chip ${hasCompletePricing ? '' : 'is-pending'}">${pricingLabel}</span>
+        </div>
+      </div>
+
+      <div class="member-return-track" aria-hidden="true">
+        <div class="prog-bar ${barClass}" style="width:${barWidth}%;"></div>
+      </div>
+
+      <div class="member-stat-grid">
+        <div class="member-stat">
+          <span>기준금액</span>
+          <strong>${won(valuation.baseAmount)}</strong>
+        </div>
+        <div class="member-stat">
+          <span>투자원금</span>
+          <strong>${won(valuation.totalCost)}</strong>
+        </div>
+        <div class="member-stat">
+          <span>현금</span>
+          <strong class="${rCls(valuation.cash)}">${won(valuation.cash)}</strong>
+        </div>
+        <div class="member-stat">
+          <span>보유종목 평가금액</span>
+          <strong>${marketValueText}</strong>
+        </div>
+        <div class="member-stat">
+          <span>평가손익</span>
+          <strong class="${rCls(valuation.unrealizedPnl)}">${pnlText}</strong>
+        </div>
+        <div class="member-stat">
+          <span>확정 승률</span>
+          <strong>${winRate === null ? '—' : `${winRate}%`}</strong>
+        </div>
+      </div>
+
+      <section class="member-holdings-section" aria-labelledby="member-holdings-title-${index}">
+        <div class="member-section-head">
+          <h3 id="member-holdings-title-${index}">현재 보유종목</h3>
+          <span>${valuation.holdingCount}건</span>
+        </div>
+        <div class="member-table-scroll" role="region" aria-label="${escapeHtml(member.name || '참여자')}님의 현재 보유종목" tabindex="0">
+          <table class="member-holdings-table">
+            <caption class="sr-only">현재 보유종목의 수량, 평균매수가, 현재가, 평가금액과 평가손익</caption>
+            <thead><tr>
+              <th scope="col">종목</th>
+              <th scope="col">보유수량</th>
+              <th scope="col">현재가</th>
+              <th scope="col">평가금액</th>
+              <th scope="col">평가손익</th>
+            </tr></thead>
+            <tbody>${renderHoldingRows(valuation)}</tbody>
+          </table>
+        </div>
+      </section>
+
+      ${bestPickText}
+
+      <div id="${historyId}" class="hist-wrap" ${isExpanded ? '' : 'hidden'}>
+        <div class="member-section-head">
+          <h3>종목 히스토리</h3>
+          <span>${picks.length}건</span>
+        </div>
+        <div class="member-table-scroll" role="region" aria-label="${escapeHtml(member.name || '참여자')}님의 종목 히스토리" tabindex="0">
+          <table class="member-history-table">
+            <caption class="sr-only">종목별 매수가, 매도가, 수익률과 확정 손익 히스토리</caption>
+            <thead><tr>
+              <th scope="col">월</th><th scope="col">종목</th><th scope="col">매수가</th><th scope="col">매도가</th><th scope="col">수익률</th><th scope="col">확정 손익</th><th scope="col">상태</th>
+            </tr></thead>
+            <tbody>${renderHistoryRows(picks, mySettles)}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <button id="${toggleId}" class="member-history-toggle" type="button" aria-expanded="${isExpanded}" aria-controls="${historyId}" data-member-id="${escapeHtml(memberId)}" onclick="toggleHistory(this.dataset.memberId)">
+        ${isExpanded ? '▲ 종목 히스토리 접기' : '▼ 종목 히스토리 보기'}
+      </button>
+    </article>`;
+  }).join('');
+
+  return valuations;
+}
+
+async function refreshMemberPrices(options = {}) {
+  const status = document.getElementById('memberPriceStatus');
+  const button = document.getElementById('memberPriceRefreshBtn');
+  const announce = options.announce === true;
+  const codes = getMemberPriceCodes();
+
+  button.disabled = true;
+  button.textContent = '조회 중…';
+  status.textContent = codes.length ? '현재가 조회 중…' : '현재가 조회 대상이 없습니다.';
+
+  try {
+    memberPriceMap = codes.length ? await fetchPriceMapByCodes(codes) : {};
+    const valuations = renderMemberCards();
+    const holdingCount = valuations.reduce((sum, valuation) => sum + valuation.holdingCount, 0);
+    const matchedCount = valuations.reduce((sum, valuation) => sum + valuation.priceMatchedCount, 0);
+    const time = new Date();
+    const timeLabel = `${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
+    status.textContent = holdingCount
+      ? `현재가 ${matchedCount}/${holdingCount} · ${timeLabel} 조회`
+      : '현재 보유종목이 없습니다.';
+    if (announce) {
+      toast(holdingCount === 0
+        ? '현재 보유종목이 없습니다.'
+        : matchedCount === holdingCount
+          ? '저장된 최신 현재가를 불러왔습니다.'
+          : '일부 종목의 현재가를 확인하지 못했습니다.');
+    }
+  } catch (error) {
+    console.error('참여자 현재가 조회 오류:', error);
+    status.textContent = '현재가를 불러오지 못했습니다. 다시 시도해 주세요.';
+    if (announce) toast('현재가를 불러오지 못했습니다.');
+  } finally {
+    button.disabled = false;
+    button.textContent = '현재가 새로고침';
+  }
+}
+
 function toggleHistory(memberId) {
-  expandedId = (expandedId === memberId) ? null : memberId;
+  expandedId = expandedId === String(memberId) ? null : String(memberId);
   renderMemberCards();
-  // 펼쳐진 카드로 스크롤
+
+  const index = members.findIndex(member => String(member.id) === String(memberId));
+  if (index < 0) return;
+  const button = document.getElementById(`member-history-toggle-${index}`);
+  button?.focus({ preventScroll: true });
   if (expandedId) {
-    setTimeout(() => {
-      const cards = document.querySelectorAll('.member-card');
-      const idx   = members.findIndex(m => m.id === memberId);
-      if (cards[idx]) cards[idx].scrollIntoView({ behavior:'smooth', block:'nearest' });
-    }, 50);
+    document.getElementById(`member-card-${index}`)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
   }
 }
 

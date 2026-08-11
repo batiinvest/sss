@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260810.2">
+  <link rel="stylesheet" href="css/style.css?v=20260811.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -321,7 +321,7 @@
 <script src="js/config.js?v=20260711.2"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
-<script src="js/utils/portfolio.js?v=20260810.2"></script>
+<script src="js/utils/portfolio.js?v=20260811.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260810.2"></script>
 <script src="js/schedule-shared.js?v=20260810.2"></script>
@@ -691,7 +691,7 @@ async function loadMyDashboardData(memberId) {
 function renderDashboard({ members, picks, holdings, trades, allTradesData, turnData }) {
   currentPortfolioContext = { members, holdings: holdings || [], allTradesData };
   renderDashboardPresentationOrder(members, turnData);
-  renderMetrics(members, picks, allTradesData);
+  renderMetrics(members, picks, holdings, allTradesData);
   renderPortfolioOverview(currentPortfolioContext, {});
   renderPicksTable(picks, {});
   renderMemberBars(members);
@@ -730,7 +730,7 @@ function renderPortfolioOverview(context = currentPortfolioContext, prices = glo
   const investmentRatio = snapshot.totalAsset > 0
     ? snapshot.totalPositionValue / snapshot.totalAsset * 100
     : null;
-  totalAssetEl.textContent = won(snapshot.totalAsset);
+  totalAssetEl.textContent = snapshot.totalAsset === null ? '평가 대기' : won(snapshot.totalAsset);
   investmentRatioEl.textContent = investmentRatio === null ? '—' : `${investmentRatio.toFixed(1)}%`;
   cashEl.textContent = won(snapshot.cash);
   cashEl.className = rCls(snapshot.cash);
@@ -744,6 +744,22 @@ function renderPortfolioOverview(context = currentPortfolioContext, prices = glo
   coverageEl.textContent = snapshot.holdingCount
     ? `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount}`
     : '보유 종목 없음';
+
+  const fundAssetEl = document.getElementById('totalAsset');
+  const fundProfitEl = document.getElementById('totalProfit');
+  const initialFund = (context?.members || []).length * BASE_AMOUNT;
+  if (fundAssetEl && fundProfitEl) {
+    if (snapshot.totalAsset === null) {
+      fundAssetEl.textContent = '평가 대기';
+      fundAssetEl.className = 'metric-value';
+      fundProfitEl.textContent = `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount} 확인`;
+    } else {
+      const totalProfit = snapshot.totalAsset - initialFund;
+      fundAssetEl.textContent = won(snapshot.totalAsset);
+      fundAssetEl.className = `metric-value ${rCls(totalProfit)}`;
+      fundProfitEl.textContent = `초기 대비 ${totalProfit >= 0 ? '+' : ''}${won(totalProfit)}`;
+    }
+  }
 
   let cursor = 0;
   const segments = snapshot.allocations.map((allocation, index) => {
@@ -781,10 +797,10 @@ function renderPortfolioOverview(context = currentPortfolioContext, prices = glo
     const stockName = position.stock_name || '종목명 미정';
     const stockCode = position.stock_code || '종목코드 없음';
     const quantity = Number(position.quantity).toLocaleString('ko-KR', { maximumFractionDigits: 4 });
-    const valueText = position.hasLivePrice ? won(position.currentValue) : won(position.cost);
+    const valueText = position.hasLivePrice ? won(position.currentValue) : '평가 대기';
     const valueMeta = position.hasLivePrice
       ? `현재가 ${won(position.currentPrice)}`
-      : '매입가 기준 · 현재가 대기';
+      : `원가 ${won(position.cost)} · 현재가 대기`;
     const returnText = position.returnRate === null ? '—' : pct(position.returnRate);
     const pnlText = position.pnl === null
       ? '평가 대기'
@@ -1130,6 +1146,13 @@ async function refreshPrices() {
       return;
     }
 
+    if (!portfolioSnapshot.hasCompletePricing) {
+      pnlEl.textContent = '평가 대기';
+      pnlEl.className = 'metric-value';
+      rateEl.textContent = `현재가 ${portfolioSnapshot.priceMatchedCount}/${portfolioSnapshot.holdingCount}종목 확인`;
+      return;
+    }
+
     const pnl  = portfolioSnapshot.unrealizedPnl;
     const rate = portfolioSnapshot.unrealizedRate;
     const sign = pnl >= 0 ? '+' : '';
@@ -1235,28 +1258,20 @@ async function loadTopPresentationReturns(scope = topPresentationReturnScope) {
   }
 }
 
-function renderMetrics(members, picks, allTrades = []) {
+function renderMetrics(members, picks, holdings = [], allTrades = []) {
   const totalBase   = members.reduce((s,m) => s + m.base_amount, 0);
   const totalProfit = members.reduce((s,m) => s + m.net_profit, 0);
+  const snapshot = buildPortfolioSnapshot(members, holdings, allTrades, {});
 
   document.getElementById('totalAsset').textContent  = won(totalBase);
   document.getElementById('totalProfit').textContent = `초기 대비 ${totalProfit>=0?'+':''}${won(totalProfit)}`;
   document.getElementById('memberCount').textContent = members.length + '명';
 
-  const activeMemberIds = new Set(members.map(member => String(member.id)));
-  const portfolioTrades = activeMemberIds.size
-    ? allTrades.filter(trade => activeMemberIds.has(String(trade.member_id)))
-    : allTrades;
-  const totalBuyAmt   = portfolioTrades.filter(t => t.trade_type==='buy').reduce((s,t) => s+t.price*t.quantity, 0);
-  const totalSellAmt  = portfolioTrades.filter(t => t.trade_type==='sell').reduce((s,t) => s+t.price*t.quantity, 0);
-  const totalInvested = totalBuyAmt - totalSellAmt;
-  const totalCash     = totalBase - totalInvested;
-
-  document.getElementById('totalInvested').textContent = won(totalInvested);
-  document.getElementById('investedSub').textContent   = `매수 ${won(totalBuyAmt)} · 매도 -${won(totalSellAmt)}`;
-  document.getElementById('totalCash').textContent     = won(totalCash);
-  document.getElementById('totalCash').className       = 'metric-value ' + rCls(totalCash);
-  document.getElementById('cashSub').textContent       = `총자산 ${won(totalBase)} - 투자금 ${won(totalInvested)}`;
+  document.getElementById('totalInvested').textContent = won(snapshot.totalCost);
+  document.getElementById('investedSub').textContent   = `현재 보유 ${snapshot.holdingCount}건 · 평균매수가 기준`;
+  document.getElementById('totalCash').textContent     = won(snapshot.cash);
+  document.getElementById('totalCash').className       = 'metric-value ' + rCls(snapshot.cash);
+  document.getElementById('cashSub').textContent       = `결산 기준 ${won(totalBase)} - 보유원가`;
 
   document.getElementById('unrealizedPnl').textContent  = '계산 중...';
   document.getElementById('unrealizedRate').textContent = '현재가 로드 후 계산';

@@ -149,6 +149,54 @@ function buildCarryForwardPicks(month, currentPicks = [], priorPicks = [], opts 
   return [...visibleCurrentPicks, ...fallbackPicks];
 }
 
+function comparePickRecency(a, b) {
+  const fields = [
+    String(a?.month || ''),
+    String(a?.submitted_at || a?.created_at || a?.updated_at || ''),
+    String(a?.pick_id || a?.id || ''),
+  ];
+  const otherFields = [
+    String(b?.month || ''),
+    String(b?.submitted_at || b?.created_at || b?.updated_at || ''),
+    String(b?.pick_id || b?.id || ''),
+  ];
+  for (let index = 0; index < fields.length; index += 1) {
+    const compared = fields[index].localeCompare(otherFields[index]);
+    if (compared) return compared;
+  }
+  return 0;
+}
+
+// 홈 카드에서는 같은 자동 연장 계보의 최신 기록만 보인다.
+// 모든 상태를 먼저 접은 뒤 hold를 골라야 매도된 체인의 과거 원본이 다시 나타나지 않는다.
+function selectLatestHeldPickChains(picks = []) {
+  const latestByChain = new Map();
+
+  (picks || []).forEach((pick, index) => {
+    if (!pick) return;
+    const rowKey = String(pick.pick_id || pick.id || `row-${index}`);
+    const memberKey = pick.member_id ? String(pick.member_id) : `row:${rowKey}`;
+    const stockCode = String(pick.stock_code || '').trim().toUpperCase();
+    const stockName = String(pick.stock_name || '').trim().toLowerCase();
+    const stockKey = stockCode
+      ? `code:${stockCode}`
+      : stockName
+        ? `name:${stockName}`
+        : `row:${rowKey}`;
+    const originMonth = String(pick.carried_from || pick.month || rowKey);
+    const chainKey = JSON.stringify([memberKey, stockKey, originMonth]);
+    const current = latestByChain.get(chainKey);
+
+    if (!current || comparePickRecency(pick, current) > 0) {
+      latestByChain.set(chainKey, pick);
+    }
+  });
+
+  return [...latestByChain.values()]
+    .filter(pick => pick.status === 'hold')
+    .sort((a, b) => comparePickRecency(b, a));
+}
+
 async function fetchPicksByMonthWithCarryFallback(month, opts = {}) {
   const fields = opts.fields || '*';
   const activeOnly = opts.activeOnly !== false;

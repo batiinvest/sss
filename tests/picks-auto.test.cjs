@@ -106,6 +106,84 @@ test('a direct pick for the month replaces the automatic extension', () => {
   assert.deepEqual(effective, [current]);
 });
 
+test('home pick cards collapse an unchanged carry chain to its latest row', () => {
+  const { selectLatestHeldPickChains } = loadDbHelpers();
+  const visible = plain(selectLatestHeldPickChains([
+    { id: 'apr', member_id: 'a', month: '2026-04', stock_code: '327260', stock_name: 'RFHIC', status: 'hold' },
+    { id: 'jun', member_id: 'a', month: '2026-06', carried_from: '2026-04', stock_code: '327260', stock_name: 'RFHIC', status: 'hold' },
+    { id: 'may', member_id: 'a', month: '2026-05', carried_from: '2026-04', stock_code: '327260', stock_name: 'RFHIC', status: 'hold' },
+  ]));
+
+  assert.deepEqual(visible.map(pick => pick.id), ['jun']);
+});
+
+test('home renderer emits one card for an unchanged carried top pick', () => {
+  const elements = {
+    myPickBanner: { innerHTML: '', style: {} },
+    myPickCards: { innerHTML: '' },
+  };
+  const context = {
+    console,
+    document: { getElementById: id => elements[id] || null },
+    currentMonth: () => '2026-08',
+    globalPriceMap: {},
+    escapeHtml: value => String(value ?? ''),
+    calcReturnRate: () => null,
+    rCls: () => '',
+  };
+  vm.createContext(context);
+  vm.runInContext(read('js/db.js'), context, { filename: 'js/db.js' });
+  vm.runInContext(
+    sourceSection(read('index.html'), 'function renderMyPicksData', 'async function renderMyPresData'),
+    context,
+    { filename: 'index.html#my-picks-renderer' }
+  );
+
+  context.renderMyPicksData({ id: 'a', is_active: true }, [
+    {
+      id: 'may', member_id: 'a', month: '2026-05', carried_from: '2026-04',
+      stock_code: '327260', stock_name: 'RFHIC', status: 'hold',
+      price_at: 93_300, buy_price: 75_500, buy_quantity: 5, target_price: 117_725,
+    },
+    {
+      id: 'apr', member_id: 'a', month: '2026-04',
+      stock_code: '327260', stock_name: 'RFHIC', status: 'hold',
+      price_at: 75_500, buy_price: 75_500, buy_quantity: 5, target_price: 117_725,
+    },
+  ]);
+
+  assert.equal((elements.myPickCards.innerHTML.match(/RFHIC/g) || []).length, 1);
+  assert.match(elements.myPickCards.innerHTML, /93,300/);
+  assert.match(elements.myPickBanner.innerHTML, /RFHIC/);
+});
+
+test('a sold carry chain does not revive its older held source on the home page', () => {
+  const { selectLatestHeldPickChains } = loadDbHelpers();
+  const visible = plain(selectLatestHeldPickChains([
+    { id: 'apr', member_id: 'a', month: '2026-04', stock_code: '327260', status: 'hold' },
+    { id: 'may', member_id: 'a', month: '2026-05', carried_from: '2026-04', stock_code: '327260', status: 'sold' },
+  ]));
+
+  assert.deepEqual(visible, []);
+});
+
+test('direct re-recommendations and changed stocks remain separate home cards', () => {
+  const { selectLatestHeldPickChains } = loadDbHelpers();
+  const visible = plain(selectLatestHeldPickChains([
+    { id: 'apr-a', member_id: 'a', month: '2026-04', stock_code: '000001', stock_name: 'A', status: 'hold' },
+    { id: 'may-b', member_id: 'a', month: '2026-05', carried_from: '2026-04', stock_code: '000002', stock_name: 'B', status: 'hold' },
+    { id: 'jun-a', member_id: 'a', month: '2026-06', stock_code: '000001', stock_name: 'A', status: 'hold' },
+    { id: 'jun-a-other-member', member_id: 'b', month: '2026-06', stock_code: '000001', stock_name: 'A', status: 'hold' },
+  ]));
+
+  assert.deepEqual(visible.map(pick => pick.id), [
+    'jun-a-other-member',
+    'jun-a',
+    'may-b',
+    'apr-a',
+  ]);
+});
+
 test('a latest sold pick stops older held picks from returning', () => {
   const { buildCarryForwardPicks } = loadDbHelpers();
   const effective = plain(buildCarryForwardPicks('2026-07', [], [
@@ -137,7 +215,7 @@ test('automatic extension is shown consistently instead of as a missing submissi
   assert.match(index, /직접 \$\{directCount\}명 · 자동 연장 \$\{automatic\.length\}명/);
   assert.match(index, /automaticPickLabel\(p\)/);
   assert.match(index, /detailRoute = `picks\?id=.*&month=/);
-  assert.match(index, /const holdPicks = picks\.filter\(p => p\.status === 'hold'\)/);
+  assert.match(index, /const holdPicks = selectLatestHeldPickChains\(picks\)/);
   assert.match(index, /const isAutoSource = effectivePick\?\._isCarryFallback/);
   assert.match(mypage, /effectiveCurrentPick\?\._isCarryFallback/);
   assert.match(mypage, /월 자동 연장<\/span>/);

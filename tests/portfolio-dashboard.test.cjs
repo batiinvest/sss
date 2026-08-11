@@ -241,3 +241,17 @@ test('home dashboard places portfolio chart and holdings table above monthly pic
   assert.match(read('css/style.css'), /\.portfolio-overview-grid/);
   assert.match(read('sw.js'), /\.\/js\/utils\/portfolio\.js/);
 });
+
+test('portfolio chart keeps its smallest labels readable', () => {
+  const css = read('css/style.css');
+
+  assert.match(css, /\.portfolio-card-head \.card-title \{ font-size: 16px;/);
+  assert.match(css, /\.portfolio-card-eyebrow \{[\s\S]*?font-size: 11px;/);
+  assert.match(css, /\.portfolio-status-chip \{[\s\S]*?font-size: 12px;/);
+  assert.match(css, /\.portfolio-donut-center strong \{[\s\S]*?font-size: 18px;/);
+  assert.match(css, /\.portfolio-legend-name \{[\s\S]*?font-size: 13px;/);
+  assert.match(css, /\.portfolio-legend-value small \{[^}]*font-size: 11px;/);
+  assert.match(css, /\.portfolio-kpi span \{[\s\S]*?font-size: 11px;/);
+  assert.match(css, /\.portfolio-kpi strong \{[\s\S]*?font-size: 14px;/);
+  assert.match(css, /\.portfolio-cell-meta \{[\s\S]*?font-size: 11px;/);
+});

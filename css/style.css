@@ -159,50 +159,51 @@ html, body {
 
 .portfolio-overview-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 0.82fr) minmax(520px, 1.18fr);
+  grid-template-columns: minmax(340px, 0.9fr) minmax(520px, 1.1fr);
   gap: 12px;
   align-items: stretch;
   margin-bottom: 1.25rem;
 }
 .portfolio-overview-grid > .card { min-width: 0; }
 .portfolio-chart-card,
-.portfolio-holdings-card { min-height: 360px; }
+.portfolio-holdings-card { min-height: 430px; }
 .portfolio-chart-card { display: flex; flex-direction: column; }
 .portfolio-card-head { align-items: flex-start; }
+.portfolio-card-head .card-title { font-size: 16px; font-weight: 600; }
 .portfolio-card-eyebrow {
-  margin-bottom: 1px;
+  margin-bottom: 3px;
   color: var(--accent);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
 .portfolio-status-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 2px 8px;
+  min-height: 28px;
+  padding: 4px 10px;
   border: 0.5px solid var(--border);
   border-radius: 999px;
   background: var(--bg);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
 .portfolio-chart-content {
   display: grid;
-  grid-template-columns: 176px minmax(120px, 1fr);
+  grid-template-columns: 196px minmax(150px, 1fr);
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
-  min-height: 196px;
+  min-height: 252px;
 }
 .portfolio-donut-wrap { display: grid; place-items: center; }
 .portfolio-donut {
   position: relative;
   display: grid;
   place-items: center;
-  width: 176px;
+  width: 196px;
   aspect-ratio: 1;
   border-radius: 50%;
   background: var(--bg);
@@ -211,7 +212,7 @@ html, body {
 }
 .portfolio-donut-center {
   position: absolute;
-  inset: 31px;
+  inset: 34px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -225,13 +226,14 @@ html, body {
 }
 .portfolio-donut-center span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .portfolio-donut-center strong {
   max-width: 100%;
-  margin-top: 2px;
+  margin-top: 3px;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 18px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.3;
   text-overflow: ellipsis;
@@ -242,29 +244,29 @@ html, body {
   flex-direction: column;
   gap: 5px;
   min-width: 0;
-  max-height: 196px;
+  max-height: 252px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
 .portfolio-legend-row {
   display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  min-height: 29px;
-  padding: 4px 6px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 7px;
   border-radius: 6px;
 }
 .portfolio-legend-row:hover { background: var(--bg); }
 .portfolio-legend-swatch {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
 }
 .portfolio-legend-name {
   overflow: hidden;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -273,51 +275,53 @@ html, body {
   flex-direction: column;
   align-items: flex-end;
   color: var(--text);
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
 }
-.portfolio-legend-value small { color: var(--muted); font-size: 9px; }
+.portfolio-legend-value small { color: var(--muted); font-size: 11px; font-weight: 400; }
 .portfolio-empty {
   display: grid;
   place-items: center;
   min-height: 96px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
 }
 .portfolio-kpi-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 14px;
-  padding-top: 12px;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 0.5px solid var(--border);
 }
 .portfolio-kpi {
   min-width: 0;
-  padding: 7px 8px;
+  padding: 10px 11px;
   border-radius: 7px;
   background: var(--bg);
 }
 .portfolio-kpi span {
   display: block;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   white-space: nowrap;
 }
 .portfolio-kpi strong {
   display: block;
-  margin-top: 1px;
+  margin-top: 2px;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .portfolio-table-wrap {
-  max-height: 298px;
+  max-height: 368px;
   overflow: auto;
   border: 0.5px solid var(--border);
   border-radius: var(--r-md);
@@ -331,7 +335,8 @@ html, body {
   box-shadow: 0 1px 0 var(--border);
 }
 .portfolio-holdings-table th,
-.portfolio-holdings-table td { padding: 8px 10px; }
+.portfolio-holdings-table td { padding: 10px; }
+.portfolio-holdings-table th { font-size: 12px; }
 .portfolio-holdings-table th:first-child,
 .portfolio-holdings-table td:first-child { width: 31%; }
 .portfolio-holdings-table th:nth-child(2),
@@ -344,7 +349,7 @@ html, body {
 .portfolio-stock-name,
 .portfolio-cell-value,
 .portfolio-return {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
@@ -355,23 +360,23 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.portfolio-return { font-size: 13px; }
+.portfolio-return { font-size: 15px; }
 .portfolio-cell-meta {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
   white-space: nowrap;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1280px) {
   .portfolio-overview-grid { grid-template-columns: minmax(0, 1fr); }
   .portfolio-chart-card,
   .portfolio-holdings-card { min-height: 0; }
-  .portfolio-chart-content { grid-template-columns: 190px minmax(0, 1fr); }
-  .portfolio-donut { width: 190px; }
-  .portfolio-legend { max-height: 206px; }
+  .portfolio-chart-content { grid-template-columns: 204px minmax(0, 1fr); }
+  .portfolio-donut { width: 204px; }
+  .portfolio-legend { max-height: 252px; }
 }
 
 .performance-grid {

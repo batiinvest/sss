@@ -143,7 +143,29 @@
     });
 
     const automatic = [];
-    let template = null;
+    function templateFromActual(actual, month) {
+      const ordered = actual
+        .slice()
+        .sort((a, b) => String(a.spent_at).localeCompare(String(b.spent_at)));
+      const latest = ordered[ordered.length - 1];
+      const stopEntry = ordered.find(expense => Number(expense.amount) === 0);
+      return {
+        amount: stopEntry
+          ? 0
+          : ordered.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0),
+        spent_at: stopEntry?.spent_at || latest.spent_at,
+        note: stopEntry
+          ? cleanRoomNote(stopEntry.note) || '스터디룸 자동 반복 중지'
+          : (ordered.length === 1 ? cleanRoomNote(latest.note) : '스터디룸 월 이용료'),
+        source_month: month,
+      };
+    }
+
+    const priorRoomMonths = [...byMonth.keys()].filter(month => month < startMonth).sort();
+    const priorSourceMonth = priorRoomMonths[priorRoomMonths.length - 1];
+    let template = priorSourceMonth
+      ? templateFromActual(byMonth.get(priorSourceMonth), priorSourceMonth)
+      : null;
 
     monthRange(startMonth, throughMonth).forEach(month => {
       const actual = (byMonth.get(month) || [])
@@ -151,18 +173,7 @@
         .sort((a, b) => String(a.spent_at).localeCompare(String(b.spent_at)));
 
       if (actual.length) {
-        const latest = actual[actual.length - 1];
-        const stopEntry = actual.find(expense => Number(expense.amount) === 0);
-        template = {
-          amount: stopEntry
-            ? 0
-            : actual.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0),
-          spent_at: stopEntry?.spent_at || latest.spent_at,
-          note: stopEntry
-            ? cleanRoomNote(stopEntry.note) || '스터디룸 자동 반복 중지'
-            : (actual.length === 1 ? cleanRoomNote(latest.note) : '스터디룸 월 이용료'),
-          source_month: month,
-        };
+        template = templateFromActual(actual, month);
         return;
       }
 
@@ -181,6 +192,93 @@
     return stored.concat(automatic);
   }
 
+  function amountOf(record) {
+    const amount = Number(record?.amount);
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  function summarizeFundMonth(fees, expenses, members, month, options = {}) {
+    const targetMonth = normalizeMonth(month);
+    if (!targetMonth) {
+      return {
+        month: '', activeMembers: [], activeMemberCount: 0,
+        regularFees: [], extraFees: [], expenseEntries: [], roomExpenses: [], variableExpenses: [],
+        regularIncome: 0, extraIncome: 0, totalIncome: 0,
+        roomExpense: 0, variableExpense: 0, totalExpense: 0, net: 0,
+        expectedRegularIncome: 0, regularAdjustment: 0,
+      };
+    }
+
+    const startMonth = normalizeMonth(options.startMonth);
+    const monthlyFee = Number(options.monthlyFee) || 0;
+    const activeMembers = !startMonth || targetMonth >= startMonth
+      ? getMembersForMonth(members, targetMonth)
+      : [];
+    const monthFees = (fees || []).filter(fee => normalizeMonth(fee?.month) === targetMonth);
+    const regularFees = monthFees.filter(fee => fee?.fee_type === 'regular');
+    const extraFees = monthFees.filter(fee => fee?.fee_type === 'extra');
+    const expenseEntries = (expenses || []).filter(expense => normalizeMonth(expense?.spent_at) === targetMonth);
+    const roomExpenses = expenseEntries.filter(expense => expense?.category === 'room');
+    const variableExpenses = expenseEntries.filter(expense => expense?.category !== 'room');
+
+    const regularIncome = regularFees.reduce((sum, fee) => sum + amountOf(fee), 0);
+    const extraIncome = extraFees.reduce((sum, fee) => sum + amountOf(fee), 0);
+    const roomExpense = roomExpenses.reduce((sum, expense) => sum + amountOf(expense), 0);
+    const variableExpense = variableExpenses.reduce((sum, expense) => sum + amountOf(expense), 0);
+    const totalIncome = regularIncome + extraIncome;
+    const totalExpense = roomExpense + variableExpense;
+    const expectedRegularIncome = activeMembers.length * monthlyFee;
+
+    return {
+      month: targetMonth,
+      activeMembers,
+      activeMemberCount: activeMembers.length,
+      regularFees,
+      extraFees,
+      expenseEntries,
+      roomExpenses,
+      variableExpenses,
+      regularIncome,
+      extraIncome,
+      totalIncome,
+      roomExpense,
+      variableExpense,
+      totalExpense,
+      net: totalIncome - totalExpense,
+      expectedRegularIncome,
+      regularAdjustment: regularIncome - expectedRegularIncome,
+      automatedRegularCount: regularFees.filter(fee => fee?.is_auto).length,
+      manualRegularCount: regularFees.filter(fee => !fee?.is_auto).length,
+      extraCount: extraFees.length,
+      roomCount: roomExpenses.length,
+      variableCount: variableExpenses.length,
+    };
+  }
+
+  function summarizeFundBalance(fees, expenses, throughMonth) {
+    const cutoffMonth = normalizeMonth(throughMonth);
+    if (!cutoffMonth) return { totalFees: 0, totalExpenses: 0, balance: 0 };
+
+    const totalFees = (fees || [])
+      .filter(fee => {
+        const month = normalizeMonth(fee?.month);
+        return month && month <= cutoffMonth;
+      })
+      .reduce((sum, fee) => sum + amountOf(fee), 0);
+    const totalExpenses = (expenses || [])
+      .filter(expense => {
+        const month = normalizeMonth(expense?.spent_at);
+        return month && month <= cutoffMonth;
+      })
+      .reduce((sum, expense) => sum + amountOf(expense), 0);
+
+    return {
+      totalFees,
+      totalExpenses,
+      balance: totalFees - totalExpenses,
+    };
+  }
+
   return {
     AUTO_FEE_NOTE,
     AUTO_ROOM_PREFIX,
@@ -190,5 +288,7 @@
     compareFeeRecency,
     buildEffectiveFees,
     buildEffectiveExpenses,
+    summarizeFundMonth,
+    summarizeFundBalance,
   };
 });

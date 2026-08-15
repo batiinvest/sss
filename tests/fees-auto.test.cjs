@@ -6,6 +6,8 @@ const {
   getMembersForMonth,
   buildEffectiveFees,
   buildEffectiveExpenses,
+  summarizeFundBalance,
+  summarizeFundMonth,
 } = require('../js/fees-auto.js');
 
 test('monthRange handles year boundaries without timezone drift', () => {
@@ -150,6 +152,38 @@ test('room automation stays inactive until an actual room expense exists', () =>
   );
 });
 
+test('room automation carries the latest pre-start actual amount into the first automatic month', () => {
+  const effective = buildEffectiveExpenses([
+    { id: 'mar-room', category: 'room', amount: 125000, spent_at: '2026-03-31', note: '3월 이용료' },
+  ], {
+    startMonth: '2026-04',
+    throughMonth: '2026-05',
+  });
+  const automatic = effective.filter(expense => expense.is_auto);
+
+  assert.deepEqual(automatic.map(expense => ({
+    spent_at: expense.spent_at,
+    amount: expense.amount,
+    source: expense.source_month,
+  })), [
+    { spent_at: '2026-04-30', amount: 125000, source: '2026-03' },
+    { spent_at: '2026-05-31', amount: 125000, source: '2026-03' },
+  ]);
+});
+
+test('a pre-start zero-won room record keeps automatic repetition stopped', () => {
+  const stored = [
+    { id: 'feb-room', category: 'room', amount: 125000, spent_at: '2026-02-28' },
+    { id: 'mar-stop', category: 'room', amount: 0, spent_at: '2026-03-31', note: '스터디룸 자동 반복 중지' },
+  ];
+  const effective = buildEffectiveExpenses(stored, {
+    startMonth: '2026-04',
+    throughMonth: '2026-05',
+  });
+
+  assert.deepEqual(effective, stored);
+});
+
 test('current ledger scenario yields four months of seven fees and four room charges', () => {
   const members = Array.from({ length: 7 }, (_, index) => ({
     id: 'member-' + index,
@@ -188,4 +222,80 @@ test('current ledger scenario yields four months of seven fees and four room cha
   assert.equal(totalFees - totalRoom, 40000);
   assert.equal(effectiveFees.filter(fee => fee.month === '2026-07').length, 7);
   assert.equal(effectiveExpenses.filter(expense => expense.spent_at.startsWith('2026-07')).length, 1);
+});
+
+test('monthly summary aggregates automatic income, exceptions, fixed costs, and variable spending', () => {
+  const members = [
+    { id: 'a', name: 'A', is_active: true, joined_at: '2026-04-01' },
+    { id: 'b', name: 'B', is_active: true, joined_at: '2026-04-01' },
+  ];
+  const fees = [
+    { member_id: 'a', month: '2026-08', amount: '20000', fee_type: 'regular', is_auto: true },
+    { member_id: 'b', month: '2026-08', amount: 15000, fee_type: 'regular' },
+    { member_id: 'a', month: '2026-08', amount: '5000', fee_type: 'extra' },
+    { member_id: 'a', month: '2026-07', amount: 20000, fee_type: 'regular' },
+  ];
+  const expenses = [
+    { category: 'room', amount: '30000', spent_at: '2026-08-02', is_auto: true },
+    { category: 'drink', amount: 4000, spent_at: '2026-08-10' },
+    { category: 'other', amount: null, spent_at: '2026-08-11' },
+    { category: 'room', amount: 30000, spent_at: '2026-07-02' },
+  ];
+
+  const summary = summarizeFundMonth(fees, expenses, members, '2026-08', {
+    monthlyFee: 20000,
+    startMonth: '2026-04',
+  });
+
+  assert.equal(summary.activeMemberCount, 2);
+  assert.equal(summary.regularIncome, 35000);
+  assert.equal(summary.expectedRegularIncome, 40000);
+  assert.equal(summary.regularAdjustment, -5000);
+  assert.equal(summary.extraIncome, 5000);
+  assert.equal(summary.roomExpense, 30000);
+  assert.equal(summary.variableExpense, 4000);
+  assert.equal(summary.totalIncome, 40000);
+  assert.equal(summary.totalExpense, 34000);
+  assert.equal(summary.net, 6000);
+  assert.equal(summary.automatedRegularCount, 1);
+  assert.equal(summary.manualRegularCount, 1);
+});
+
+test('monthly summary handles automation start boundary and invalid month safely', () => {
+  const members = [
+    { id: 'a', name: 'A', is_active: true, joined_at: '2026-01-01' },
+  ];
+  const beforeStart = summarizeFundMonth([], [], members, '2026-03', {
+    monthlyFee: 20000,
+    startMonth: '2026-04',
+  });
+  const invalid = summarizeFundMonth([], [], members, 'not-a-month', {
+    monthlyFee: 20000,
+    startMonth: '2026-04',
+  });
+
+  assert.equal(beforeStart.activeMemberCount, 0);
+  assert.equal(beforeStart.expectedRegularIncome, 0);
+  assert.equal(beforeStart.net, 0);
+  assert.equal(invalid.month, '');
+  assert.deepEqual(invalid.activeMembers, []);
+});
+
+test('fund balance excludes future and invalid ledger rows', () => {
+  const balance = summarizeFundBalance([
+    { month: '2026-07', amount: '20000' },
+    { month: '2026-08', amount: 20000 },
+    { month: '2026-09', amount: 20000 },
+    { month: 'invalid', amount: 999999 },
+  ], [
+    { spent_at: '2026-08-02', amount: '13000' },
+    { spent_at: '2026-09-02', amount: 13000 },
+    { spent_at: null, amount: 999999 },
+  ], '2026-08');
+
+  assert.deepEqual(balance, {
+    totalFees: 40000,
+    totalExpenses: 13000,
+    balance: 27000,
+  });
 });

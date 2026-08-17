@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSS · 대시보드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260811.3">
+  <title>SSS · 홈</title>
+  <link rel="stylesheet" href="css/style.css?v=20260817.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -22,65 +22,79 @@
 <div class="layout layout-page"><main class="main">
   <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
-  <section id="mobileActionHome" class="mobile-only mobile-home" aria-labelledby="mobileHomeTitle">
-    <div class="mobile-home-intro">
-      <div>
-        <p id="mobileHomeDate" class="mobile-home-eyebrow"></p>
-        <h1 id="mobileHomeTitle">필요한 종목을 바로 확인하세요.</h1>
-        <p id="mobileHomeGreeting">발표종목과 투자현황을 빠르게 찾을 수 있습니다.</p>
-      </div>
-    </div>
-
-    <button type="button" class="mobile-home-search" onclick="window.parent.openGlobalSearch()">
-      <span aria-hidden="true">⌕</span><span>종목명 또는 종목코드 검색</span><span aria-hidden="true">›</span>
-    </button>
-
-    <div class="mobile-home-actions" aria-label="빠른 메뉴">
-      <button type="button" onclick="navigateToAppRoute('presentations?view=prepare')"><span class="home-action-icon blue" aria-hidden="true">▤</span><strong>발표 관리</strong><small>순서·종목·기록</small></button>
-      <button type="button" onclick="navigateToAppRoute('picks')"><span class="home-action-icon green" aria-hidden="true">◇</span><strong>투자종목</strong><small>보유와 평가손익</small></button>
-      <button type="button" onclick="window.parent.openQuickAdd()"><span class="home-action-icon amber" aria-hidden="true">＋</span><strong>종목 등록</strong><small>발표·투자 시작</small></button>
-    </div>
-
-    <section class="presentation-order-summary dashboard-presentation-order" aria-labelledby="mobilePresentationOrderTitle">
-      <div class="presentation-order-summary-head">
-        <div>
-          <div class="presentation-order-eyebrow">현재 발표 사이클</div>
-          <h2 id="mobilePresentationOrderTitle">발표 순서</h2>
-          <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
-        </div>
-        <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('presentations?view=prepare')" aria-label="발표 관리의 준비 중 화면 열기">발표 관리 <span aria-hidden="true">→</span></button>
-      </div>
-      <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
-    </section>
-
-    <section class="mobile-home-section" aria-labelledby="recentPresentationsTitle">
-      <div class="mobile-home-section-head"><h2 id="recentPresentationsTitle">최근 발표종목</h2><button type="button" onclick="navigateToAppRoute('presentations?view=history')">전체 보기</button></div>
-      <div id="mobileRecentPresentations" class="mobile-stock-list"><div class="mobile-list-skeleton"></div><div class="mobile-list-skeleton"></div></div>
-    </section>
-
-    <section class="mobile-home-section" aria-labelledby="activeInvestmentsTitle">
-      <div class="mobile-home-section-head"><h2 id="activeInvestmentsTitle">현재 투자종목</h2><button type="button" onclick="navigateToAppRoute('picks')">전체 보기</button></div>
-      <div id="mobileActiveInvestments" class="mobile-stock-list"><div class="mobile-list-skeleton"></div><div class="mobile-list-skeleton"></div></div>
-    </section>
-  </section>
-
   <div class="topbar desktop-home-dashboard">
     <div>
-      <div class="page-title">대시보드</div>
+      <h1 class="page-title">홈</h1>
       <div class="updated" id="updatedAt">불러오는 중...</div>
     </div>
-    <div class="btn-row">
+    <div class="btn-row topbar-actions">
       <a href="trade.html?type=sell" class="btn">매도 요청</a>
       <button class="btn" onclick="navigateToAppRoute('presentations?view=prepare')" style="font-size:13px;">발표 준비</button>
-      <button class="btn btn-primary" onclick="openPickModal()">투자종목 등록</button>
+      <button class="btn btn-primary" onclick="openPickModal()">아이디어 등록</button>
     </div>
   </div>
+
+  <section id="mobileActionHome" class="home-command-center" aria-labelledby="mobileHomeTitle">
+    <div class="home-command-head">
+      <div>
+        <p id="mobileHomeDate" class="home-command-eyebrow"></p>
+        <h2 id="mobileHomeTitle">오늘 확인할 것</h2>
+        <p id="mobileHomeGreeting">다음 일정과 필요한 행동을 한곳에서 확인하세요.</p>
+      </div>
+      <button type="button" class="home-command-search" onclick="window.parent.openGlobalSearch()">
+        <span aria-hidden="true">⌕</span><span>종목 검색</span>
+      </button>
+    </div>
+
+    <div class="home-priority-grid" aria-live="polite">
+      <article class="home-priority-card" data-home-action="next-study">
+        <div class="home-priority-card-head"><span class="home-priority-icon blue" aria-hidden="true">01</span><span id="homeNextStudyState" class="home-priority-state">확인 중</span></div>
+        <div class="home-priority-label">다음 스터디</div>
+        <strong id="homeNextStudyTitle">일정을 불러오는 중...</strong>
+        <p id="homeNextStudyMeta">발표 일정과 순서를 확인합니다.</p>
+        <button id="homeNextStudyLink" type="button" class="home-priority-link" onclick="navigateToAppRoute('schedule-calendar')">일정 보기 <span aria-hidden="true">→</span></button>
+      </article>
+
+      <article class="home-priority-card" data-home-action="next-presentation">
+        <div class="home-priority-card-head"><span class="home-priority-icon amber" aria-hidden="true">02</span><span id="homeNextPresentationState" class="home-priority-state">확인 중</span></div>
+        <div class="home-priority-label">내 다음 발표</div>
+        <strong id="homeNextPresentationTitle">발표 상태를 불러오는 중...</strong>
+        <p id="homeNextPresentationMeta">내 발표 종목과 일정을 확인합니다.</p>
+        <button type="button" class="home-priority-link" onclick="navigateToAppRoute('presentations?view=prepare')">발표 준비 <span aria-hidden="true">→</span></button>
+      </article>
+
+      <article class="home-priority-card" data-home-action="monthly-idea">
+        <div class="home-priority-card-head"><span class="home-priority-icon green" aria-hidden="true">03</span><span id="homeMonthlyIdeaState" class="home-priority-state">확인 중</span></div>
+        <div class="home-priority-label">이번 달 내 아이디어</div>
+        <strong id="homeMonthlyIdeaTitle">아이디어 상태를 불러오는 중...</strong>
+        <p id="homeMonthlyIdeaMeta">직접 등록 또는 자동 연장 상태를 확인합니다.</p>
+        <button id="homeMonthlyIdeaLink" type="button" class="home-priority-link" onclick="navigateToAppRoute('picks?view=ideas')">아이디어 보기 <span aria-hidden="true">→</span></button>
+      </article>
+
+      <article class="home-priority-card" data-home-action="fund-summary">
+        <div class="home-priority-card-head"><span class="home-priority-icon violet" aria-hidden="true">04</span><span id="homeFundState" class="home-priority-state">확인 중</span></div>
+        <div class="home-priority-label">펀드 자산</div>
+        <strong id="homeFundTitle">자산을 계산하는 중...</strong>
+        <p id="homeFundMeta">현금과 보유 종목의 평가 상태를 확인합니다.</p>
+        <button type="button" class="home-priority-link" onclick="navigateToAppRoute('picks?view=holding')">보유 현황 <span aria-hidden="true">→</span></button>
+      </article>
+    </div>
+
+    <div class="home-quick-actions" aria-label="빠른 메뉴">
+      <button type="button" onclick="navigateToAppRoute('presentations?view=prepare')"><span aria-hidden="true">▤</span> 발표 준비</button>
+      <button type="button" onclick="navigateToAppRoute('picks?view=ideas')"><span aria-hidden="true">◇</span> 투자 아이디어</button>
+      <button type="button" onclick="window.parent.openQuickAdd()"><span aria-hidden="true">＋</span> 새로 등록</button>
+    </div>
+
+    <div id="mobileRecentPresentations" hidden></div>
+    <div id="mobileActiveInvestments" hidden></div>
+  </section>
 
   <section class="presentation-order-summary dashboard-presentation-order desktop-home-dashboard" aria-labelledby="desktopPresentationOrderTitle">
     <div class="presentation-order-summary-head">
       <div>
         <div class="presentation-order-eyebrow">현재 발표 사이클</div>
-        <h2 id="desktopPresentationOrderTitle">발표 순서</h2>
+          <h2 id="desktopPresentationOrderTitle">발표 순서</h2>
         <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
       </div>
       <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('presentations?view=prepare')">발표 관리 <span aria-hidden="true">→</span></button>
@@ -88,14 +102,14 @@
     <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
   </section>
 
-  <!-- ── 내 탑픽 + 내 발표종목 ── -->
+  <!-- ── 내 투자 아이디어 + 내 발표종목 ── -->
   <div id="mySection" class="dashboard-my-grid desktop-home-dashboard" style="display:none;">
 
-    <!-- 내 탑픽 -->
+    <!-- 내 투자 아이디어 -->
     <div class="card">
       <div class="card-head">
-        <div class="card-title">내 탑픽</div>
-        <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+        <div class="card-title">내 투자 아이디어</div>
+        <a href="picks.html?view=ideas" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
       </div>
 
       <!-- 이번 달 제출 여부 배너 -->
@@ -127,7 +141,7 @@
 
   <!-- 로그인 멤버 없을 때 안내 -->
   <div id="myMemberNotice" style="display:none;" class="info-banner mb-card desktop-home-dashboard">
-    멤버 정보와 연동되지 않은 계정입니다. 관리자에게 이메일 등록을 요청하면 내 탑픽·발표종목이 표시됩니다.
+    멤버 정보와 연동되지 않은 계정입니다. 관리자에게 이메일 등록을 요청하면 내 투자 아이디어와 발표종목이 표시됩니다.
   </div>
 
   <!-- ── 전체 펀드 메트릭 ── -->
@@ -136,7 +150,7 @@
     <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
     <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
     <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
-    <div class="metric"><div class="metric-label">이번 달 탑픽 제출</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
+    <div class="metric"><div class="metric-label">이번 달 아이디어</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
     <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
   </div>
 
@@ -207,10 +221,10 @@
 
   <div class="card top-picks-card desktop-home-dashboard">
     <div class="card-head">
-      <div class="card-title">이번 달 탑픽 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
+      <div class="card-title">이번 달 아이디어 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
       <div style="display:flex;align-items:center;gap:8px;">
         <button class="btn" style="font-size:12px;padding:4px 10px;" id="priceRefreshBtn" onclick="triggerAndRefresh()">현재가 갱신</button>
-        <a href="picks.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+        <a href="picks.html?view=ideas" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
       </div>
     </div>
     <div class="table-wrap">
@@ -221,7 +235,9 @@
     </div>
   </div>
 
-  <div class="performance-grid desktop-home-dashboard">
+  <details class="home-secondary-details desktop-home-dashboard">
+    <summary><span>성과와 최근 기록</span><small>발표 수익률, 참여자 성과, 매매 내역</small></summary>
+  <div class="performance-grid">
     <div class="card top-return-card">
       <div class="card-head">
         <div class="card-title">발표종목 수익률 Top 5</div>
@@ -248,7 +264,7 @@
   </div>
 
   <!-- ── 최근 매매 내역 ── -->
-  <div class="card desktop-home-dashboard">
+  <div class="card">
     <div class="card-head">
       <div class="card-title">최근 매매 내역</div>
       <a href="trade.html" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
@@ -260,17 +276,18 @@
       </table>
     </div>
   </div>
+  </details>
 </main></div>
 
 
 <!-- ════════════════════════════════════════
-     탑픽 제출 팝업
+     투자 아이디어 등록 팝업
      ════════════════════════════════════════ -->
 <div id="pickModal" role="dialog" aria-modal="true" aria-labelledby="pick-modal-title" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:600;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem 1rem;">
   <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:520px;border:0.5px solid var(--border);margin:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
       <div>
-        <div id="pick-modal-title" style="font-size:15px;font-weight:500;">투자종목 등록</div>
+        <div id="pick-modal-title" style="font-size:15px;font-weight:500;">투자 아이디어 등록</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="pick-my-name">핵심 정보부터 먼저 저장하세요.</div>
       </div>
       <button class="btn" onclick="closePickModal()" style="font-size:12px;">닫기</button>
@@ -333,6 +350,8 @@ let currentMembers = [];
 let allCurrentPicks = [];
 let globalPriceMap = {};   // 현재가 캐시 (내 섹션에서도 재사용)
 let currentPortfolioContext = { members: [], holdings: [], allTradesData: [] };
+let currentHomeDashboardData = null;
+let currentHomeMyData = null;
 let topPresentationReturnScope = 'all';
 const mobileHomeQuery = window.matchMedia('(max-width: 768px)');
 
@@ -350,17 +369,10 @@ function formatDataLoadError(error) {
 // 콜백 등록: 제출/닫기 후 내 섹션 갱신
 document.addEventListener("DOMContentLoaded", () => {
   ModalPick.mount();
-  ModalPick._onSubmit = async () => {
-    if (mobileHomeQuery.matches) await initMobileHome();
-    else { const me = await getCurrentMember(); if (me) renderMyPicks(me); }
-  };
+  ModalPick._onSubmit = async () => { await reloadHomeDashboard(); };
   ModalPres.mount();
-  ModalPres._onClose = async () => {
-    if (mobileHomeQuery.matches) await initMobileHome();
-    else { const me = await getCurrentMember(); if (me) renderMyPresentations(me); }
-  };
+  ModalPres._onClose = async () => { await reloadHomeDashboard(); };
 });
-mobileHomeQuery.addEventListener?.('change', () => location.reload());
 
 // ── 초기화
 async function init() {
@@ -372,18 +384,11 @@ async function init() {
   document.getElementById('updatedAt').textContent =
     `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 체결가 기준`;
 
-  if (mobileHomeQuery.matches) {
-    try {
-      await initMobileHome(now);
-    } catch (error) {
-      console.error('모바일 홈 데이터 로드 오류:', formatDataLoadError(error), error);
-      toast('발표 데이터를 불러오지 못했습니다. 새로고침해 주세요.');
-    }
-    return;
-  }
+  await reloadHomeDashboard({ showSkeleton: true });
+}
 
-  // 내 섹션 스켈레톤 먼저 표시 (로딩 중 UI)
-  showMySectionSkeleton();
+async function reloadHomeDashboard({ showSkeleton = false } = {}) {
+  if (showSkeleton) showMySectionSkeleton();
 
   let dashboardData;
   try {
@@ -405,24 +410,31 @@ async function init() {
   currentMembers  = members;
   currentPicks    = picks;
   allCurrentPicks = allPicks;
+  currentHomeDashboardData = dashboardData;
+  currentHomeMyData = null;
 
   renderDashboard(dashboardData);
+  renderHomePriorities(dashboardData, null);
 
   if (me) {
     const myData = await loadMyDashboardData(me.id);
+    currentHomeMyData = myData;
     document.getElementById('mySection').style.display = 'grid';
+    document.getElementById('myMemberNotice').style.display = 'none';
     renderMyPicksData(me, myData.picks);
     await renderMyPresData(me, myData.presentations, {});
+    renderHomePriorities(dashboardData, myData);
 
-    refreshPrices().then(() => {
-      if (globalPriceMap && Object.keys(globalPriceMap).length) {
-        renderMyPicksData(me, myData.picks);
-        renderMyPresData(me, myData.presentations, globalPriceMap);
-      }
-    });
+    await refreshPrices();
+    if (globalPriceMap && Object.keys(globalPriceMap).length) {
+      renderMyPicksData(me, myData.picks);
+      await renderMyPresData(me, myData.presentations, globalPriceMap);
+    }
+    renderHomePriorities(dashboardData, myData);
   } else {
     document.getElementById('myMemberNotice').style.display = 'block';
-    refreshPrices();
+    await refreshPrices();
+    renderHomePriorities(dashboardData, null);
   }
 }
 
@@ -542,17 +554,17 @@ function automaticPickLabel(pick) {
 function renderMobileActiveInvestments(items) {
   const container = document.getElementById('mobileActiveInvestments');
   if (!items.length) {
-    container.innerHTML = '<div class="mobile-empty-state"><strong>현재 투자종목이 없습니다.</strong><span>투자 아이디어를 등록하면 여기에서 바로 확인할 수 있습니다.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'picks?action=new\')">투자종목 등록</button></div>';
+    container.innerHTML = '<div class="mobile-empty-state"><strong>현재 보유 종목이 없습니다.</strong><span>투자 아이디어를 등록하면 여기에서 바로 확인할 수 있습니다.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'picks?action=new\')">아이디어 등록</button></div>';
     return;
   }
   container.innerHTML = items.map(item => {
     const current = globalPriceMap[item.stock_code]?.price || null;
     const buyPrice = Number(item.buy_price || item.price_at || 0) || null;
     const rate = buyPrice && current ? (current - buyPrice) / buyPrice * 100 : null;
-    const state = Number(item.buy_quantity) > 0 || Number(item.buy_price) > 0 ? '투자 진행' : '매수 대기';
+    const state = Number(item.buy_quantity) > 0 || Number(item.buy_price) > 0 ? '보유 중' : '아이디어';
     const detailRoute = `picks?id=${encodeURIComponent(item.pick_id || item.id)}${item._isCarryFallback ? `&month=${encodeURIComponent(item.month)}` : ''}`;
     return `<button type="button" class="mobile-stock-card" onclick="navigateToAppRoute('${detailRoute}')">
-      <span class="mobile-stock-card-head"><strong>${escapeHtml(item.stock_name || '종목 미입력')}</strong><span class="badge ${state === '투자 진행' ? 'b-buy' : 'b-warn'}">${state}</span></span>
+      <span class="mobile-stock-card-head"><strong>${escapeHtml(item.stock_name || '종목 미입력')}</strong><span class="badge ${state === '보유 중' ? 'b-buy' : 'b-warn'}">${state}</span></span>
       <span class="mobile-stock-card-meta">${escapeHtml(item.member_name || '담당자 미정')} · ${escapeHtml(item.stock_code || '')}${item._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(item))}` : ''}</span>
       <span class="mobile-stock-card-metrics">
         <span>평균 매수가<strong>${buyPrice ? buyPrice.toLocaleString('ko-KR') + '원' : '—'}</strong></span>
@@ -671,6 +683,179 @@ function renderDashboardPresentationOrder(memberRows, turnData) {
   });
 }
 
+function setHomePriorityCard(action, { state, title, meta, tone = 'neutral' }) {
+  const card = document.querySelector(`[data-home-action="${action}"]`);
+  if (!card) return;
+  card.classList.remove('is-ready', 'needs-action', 'is-neutral');
+  card.classList.add(tone === 'ready' ? 'is-ready' : tone === 'attention' ? 'needs-action' : 'is-neutral');
+  const prefix = action === 'next-study'
+    ? 'homeNextStudy'
+    : action === 'next-presentation'
+      ? 'homeNextPresentation'
+      : action === 'monthly-idea'
+        ? 'homeMonthlyIdea'
+        : 'homeFund';
+  document.getElementById(`${prefix}State`).textContent = state;
+  document.getElementById(`${prefix}Title`).textContent = title;
+  document.getElementById(`${prefix}Meta`).textContent = meta;
+}
+
+function formatHomeScheduleDate(value) {
+  if (!value) return '날짜 미정';
+  const dateValue = String(value).slice(0, 10);
+  const date = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+function renderHomePriorities(dashboardData, myData) {
+  if (!dashboardData) return;
+  const now = new Date();
+  const { members = [], picks = [], holdings = [], allTradesData = [], turnData = {}, me = null } = dashboardData;
+  document.getElementById('mobileHomeDate').textContent = now.toLocaleDateString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+  });
+  document.getElementById('mobileHomeGreeting').textContent = me?.name
+    ? `${me.name}님, 필요한 행동부터 확인하세요.`
+    : '다음 일정과 펀드 상태를 한곳에서 확인하세요.';
+
+  const orderedMembers = normalizePresentationOrder(members.filter(Boolean), turnData.order || []);
+  const plan = buildPresentationSchedulePlan(
+    turnData.schedules || [],
+    turnData.presentations || [],
+    orderedMembers,
+    { fromDate: toDateStr(now) }
+  );
+  const nextSchedule = plan.nextSchedule;
+  const nextStudyTitle = nextSchedule
+    ? `${formatHomeScheduleDate(nextSchedule.event_date)} · ${nextSchedule.title || '스터디'}`
+    : '등록된 다음 스터디가 없습니다';
+  const nextStudyMeta = nextSchedule
+    ? [
+        nextSchedule.event_time ? String(nextSchedule.event_time).slice(0, 5) : '시간 미정',
+        plan.nextMembers.length ? `발표 ${plan.nextMembers.map(member => member.name).join(', ')}` : '발표자 확인 중',
+      ].join(' · ')
+    : '일정이 등록되면 발표 순서와 함께 표시됩니다.';
+  setHomePriorityCard('next-study', {
+    state: nextSchedule ? '예정' : '일정 없음',
+    title: nextStudyTitle,
+    meta: nextStudyMeta,
+    tone: nextSchedule ? 'ready' : 'attention',
+  });
+  const studyLink = document.getElementById('homeNextStudyLink');
+  studyLink.textContent = nextSchedule ? '일정 상세 →' : '일정 보기 →';
+  studyLink.onclick = () => navigateToAppRoute(
+    nextSchedule?.id
+      ? `schedule-calendar?schedule=${encodeURIComponent(nextSchedule.id)}`
+      : 'schedule-calendar'
+  );
+
+  if (!me) {
+    setHomePriorityCard('next-presentation', {
+      state: '연동 필요',
+      title: '멤버 정보가 연결되지 않았습니다',
+      meta: '관리자에게 계정 이메일 연결을 요청해 주세요.',
+      tone: 'attention',
+    });
+    setHomePriorityCard('monthly-idea', {
+      state: '연동 필요',
+      title: '내 아이디어 상태를 확인할 수 없습니다',
+      meta: '멤버 연결 후 직접 등록·자동 연장 상태가 표시됩니다.',
+      tone: 'attention',
+    });
+  } else if (!myData) {
+    setHomePriorityCard('next-presentation', {
+      state: '확인 중', title: '내 발표 상태를 불러오는 중...', meta: '잠시만 기다려 주세요.',
+    });
+    setHomePriorityCard('monthly-idea', {
+      state: '확인 중', title: '내 아이디어 상태를 불러오는 중...', meta: '잠시만 기다려 주세요.',
+    });
+  } else {
+    const planned = (myData.presentations || [])
+      .filter(presentation =>
+        presentation.status === 'planned' &&
+        (!!presentation.schedule_id || isCurrentUnassignedPresentationDraft(presentation, presentationDraftEpoch))
+      )
+      .sort((a, b) => String(a.presented_at || '9999-12-31').localeCompare(String(b.presented_at || '9999-12-31')));
+    const nextPresentation = planned[0];
+    const isMyTurn = plan.nextMemberIds.map(String).includes(String(me.id));
+    if (nextPresentation) {
+      const topic = mobilePresentationName(nextPresentation);
+      setHomePriorityCard('next-presentation', {
+        state: nextPresentation.schedule_id ? '준비 중' : isMyTurn ? '종목 입력 필요' : '초안',
+        title: topic || '발표 종목을 입력해 주세요',
+        meta: nextPresentation.schedule_id
+          ? `${formatHomeScheduleDate(nextPresentation.presented_at)} 발표 예정`
+          : '발표 관리에서 종목과 핵심 내용을 입력해 주세요.',
+        tone: topic && topic !== '종목 미입력' ? 'ready' : 'attention',
+      });
+    } else {
+      setHomePriorityCard('next-presentation', {
+        state: isMyTurn ? '준비 필요' : '예정 없음',
+        title: isMyTurn ? '다음 발표 종목을 입력해 주세요' : '예정된 내 발표가 없습니다',
+        meta: isMyTurn ? '이번 발표 사이클의 내 차례입니다.' : '새 발표 사이클이 시작되면 여기에 표시됩니다.',
+        tone: isMyTurn ? 'attention' : 'neutral',
+      });
+    }
+
+    const month = currentMonth();
+    const myPicks = myData.picks || [];
+    const directPick = myPicks.find(pick => pick.month === month);
+    const effectivePick = buildCarryForwardPicks(
+      month,
+      myPicks.filter(pick => pick.month === month),
+      myPicks,
+      { activeMemberIds: me.is_active === false ? new Set() : new Set([me.id]) }
+    ).find(pick => String(pick.member_id) === String(me.id));
+    const ideaLink = document.getElementById('homeMonthlyIdeaLink');
+    if (directPick) {
+      setHomePriorityCard('monthly-idea', {
+        state: '직접 등록',
+        title: directPick.stock_name || '이번 달 아이디어 등록 완료',
+        meta: `${month.replace('-', '년 ')}월 아이디어를 직접 등록했습니다.`,
+        tone: 'ready',
+      });
+      ideaLink.textContent = '아이디어 변경 →';
+      ideaLink.onclick = () => navigateToAppRoute('picks?action=new&view=ideas');
+    } else if (effectivePick?._isCarryFallback) {
+      setHomePriorityCard('monthly-idea', {
+        state: '자동 연장',
+        title: effectivePick.stock_name || '이전 아이디어 유지 중',
+        meta: `${automaticPickLabel(effectivePick)} · 변경이 있을 때만 새로 등록하세요.`,
+        tone: 'ready',
+      });
+      ideaLink.textContent = '아이디어 변경 →';
+      ideaLink.onclick = () => navigateToAppRoute('picks?action=new&view=ideas');
+    } else {
+      setHomePriorityCard('monthly-idea', {
+        state: '등록 필요',
+        title: '이번 달 투자 아이디어가 없습니다',
+        meta: '새 아이디어를 등록하면 이번 달 기준으로 저장됩니다.',
+        tone: 'attention',
+      });
+      ideaLink.textContent = '아이디어 등록 →';
+      ideaLink.onclick = () => navigateToAppRoute('picks?action=new&view=ideas');
+    }
+  }
+
+  const snapshot = buildPortfolioSnapshot(members, holdings, allTradesData, globalPriceMap || {});
+  const fundTitle = snapshot.totalAsset === null ? '평가 대기' : won(snapshot.totalAsset);
+  const pnl = snapshot.unrealizedPnl;
+  const fundMeta = [
+    `현금 ${won(snapshot.cash)}`,
+    `보유 ${snapshot.holdingCount}건`,
+    pnl === null ? `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount}` : `평가손익 ${pnl >= 0 ? '+' : ''}${won(pnl)}`,
+  ].join(' · ');
+  setHomePriorityCard('fund-summary', {
+    state: snapshot.holdingCount && !snapshot.hasCompletePricing
+      ? `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount}`
+      : '업데이트 완료',
+    title: fundTitle,
+    meta: fundMeta,
+    tone: snapshot.holdingCount && !snapshot.hasCompletePricing ? 'attention' : 'ready',
+  });
+}
+
 async function loadDashboardPicks(month) {
   return fetchPicksByMonthWithCarryFallback(month);
 }
@@ -697,7 +882,7 @@ function renderDashboard({ members, picks, holdings, trades, allTradesData, turn
   renderMemberBars(members);
   renderNotices(members, picks);
   renderTradesTable(trades);
-  loadTopPresentationReturns();
+  if (!mobileHomeQuery.matches) loadTopPresentationReturns();
 }
 
 const portfolioColors = [
@@ -858,7 +1043,7 @@ _shimmerStyle.textContent = '@keyframes shimmer{0%{background-position:200% 0}10
 document.head.appendChild(_shimmerStyle);
 
 // ════════════════════════════════════════
-// 내 탑픽 + 내 발표종목 (데이터 주입 방식)
+// 내 투자 아이디어 + 내 발표종목 (데이터 주입 방식)
 // ════════════════════════════════════════
 
 // 외부에서도 호출 가능하도록 유지 (팝업 갱신 등)
@@ -892,7 +1077,7 @@ function renderMyPicksData(me, picks) {
   if (submitted) {
     bannerEl.innerHTML =
       `<div style="background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--green);">
-        ✅ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 직접 제출 — ${escapeHtml(submitted.stock_name)}
+        <strong>${thisMonth.replace('-','년 ')}월</strong> 아이디어 직접 등록 — ${escapeHtml(submitted.stock_name)}
        </div>`;
   } else if (effectivePick?._isCarryFallback) {
     bannerEl.innerHTML =
@@ -903,8 +1088,8 @@ function renderMyPicksData(me, picks) {
   } else {
     bannerEl.innerHTML =
       `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;justify-content:space-between;align-items:center;">
-        <span>⚠️ <strong>${thisMonth.replace('-','년 ')}월</strong> 탑픽 미제출</span>
-        <a href="picks.html?action=new" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">제출하기 →</a>
+        <span><strong>${thisMonth.replace('-','년 ')}월</strong> 아이디어 등록 필요</span>
+        <a href="picks.html?action=new" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">등록하기 →</a>
        </div>`;
   }
 
@@ -912,7 +1097,7 @@ function renderMyPicksData(me, picks) {
   const cardsEl   = document.getElementById('myPickCards');
 
   if (!holdPicks.length) {
-    cardsEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">보유 중인 탑픽이 없습니다</div>`;
+    cardsEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">보유 중인 내 종목이 없습니다</div>`;
     return;
   }
 
@@ -959,7 +1144,7 @@ function renderMyPicksData(me, picks) {
             ? `<span style="font-size:10px;background:#e8f2fb;color:#185fa5;padding:1px 5px;border-radius:3px;margin-left:4px;">${thisMonth.replace('-','년 ')}월 자동 연장</span>`
             : isCarried ? '<span style="font-size:10px;background:var(--amberbg);color:var(--amber);padding:1px 5px;border-radius:3px;margin-left:4px;">이월</span>' : ''}
         </div>
-        <span class="badge b-hold">보유중</span>
+        <span class="badge b-hold">보유 중</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
         <div>
@@ -1165,6 +1350,10 @@ async function refreshPrices() {
     renderPortfolioOverview(currentPortfolioContext, globalPriceMap);
     if (pnlEl)  { pnlEl.textContent = '오류'; pnlEl.className = 'metric-value'; }
     if (rateEl) rateEl.textContent = e.message;
+  } finally {
+    if (currentHomeDashboardData) {
+      renderHomePriorities(currentHomeDashboardData, currentHomeMyData);
+    }
   }
 }
 
@@ -1282,16 +1471,16 @@ function renderMetrics(members, picks, holdings = [], allTrades = []) {
   const directCount = submitted - automatic.length;
   document.getElementById('pickStatus').textContent = `${submitted} / ${members.length}`;
   document.getElementById('pickMissing').innerHTML  = missing.length
-    ? `<span class="badge b-warn">${missing.map(m=>m.name).join(', ')} 미제출${automatic.length ? ` · 자동 연장 ${automatic.length}명` : ''}</span>`
+    ? `<span class="badge b-warn">${missing.map(m=>m.name).join(', ')} 등록 필요${automatic.length ? ` · 자동 연장 ${automatic.length}명` : ''}</span>`
     : automatic.length
       ? `<span class="badge b-hold">직접 ${directCount}명 · 자동 연장 ${automatic.length}명</span>`
-      : '<span class="badge b-sold">전원 직접 제출</span>';
+      : '<span class="badge b-sold">전원 직접 등록</span>';
 }
 
 function renderPicksTable(picks, prices) {
   const tbody = document.getElementById('picksTbody');
   if (!picks.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">이번 달 탑픽이 없습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="muted" style="text-align:center;padding:1.5rem;">이번 달 투자 아이디어가 없습니다</td></tr>';
     return;
   }
 
@@ -1429,8 +1618,8 @@ function renderNotices(members, picks) {
   const automaticMembers = members.filter(m =>
     picks.some(p => p.member_id === m.id && p._isCarryFallback)
   );
-  if (missing.length) items.push(`<div class="notice"><div class="nd nd-warn"></div>${missing.map(m=>m.name).join(', ')}님 탑픽 미제출</div>`);
-  if (automaticMembers.length) items.push(`<div class="notice"><div class="nd nd-info"></div>${automaticMembers.map(m=>m.name).join(', ')}님 탑픽 자동 연장 중</div>`);
+  if (missing.length) items.push(`<div class="notice"><div class="nd nd-warn"></div>${missing.map(m=>m.name).join(', ')}님 아이디어 등록 필요</div>`);
+  if (automaticMembers.length) items.push(`<div class="notice"><div class="nd nd-info"></div>${automaticMembers.map(m=>m.name).join(', ')}님 아이디어 자동 연장 중</div>`);
   members.filter(m => m.return_rate < 0).forEach(m =>
     items.push(`<div class="notice"><div class="nd nd-info"></div>${m.name}님 누적 ${pct(m.return_rate)} · 손실 중</div>`)
   );

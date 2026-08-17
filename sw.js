@@ -1,4 +1,6 @@
-const CACHE_NAME = 'sss-pwa-v20260811-3';
+const APP_VERSION = '20260817.1';
+const CACHE_NAME = `sss-pwa-v${APP_VERSION}`;
+const STYLE_URL = `./css/style.css?v=${APP_VERSION}`;
 
 const APP_SHELL = [
   './',
@@ -19,7 +21,7 @@ const APP_SHELL = [
   './assets/icon-180.png',
   './assets/icon-512.png',
   './assets/icon.svg',
-  './css/style.css',
+  STYLE_URL,
   './js/config.js',
   './js/db.js',
   './js/fees-auto.js',

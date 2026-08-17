@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260811.3">
+  <link rel="stylesheet" href="css/style.css?v=20260817.1">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -126,7 +126,7 @@
     <a href="#" onclick="loadPage('fees');return false;"          class="nav-item" data-page="fees"><div class="nav-dot a"></div>스터디 회비</a>
 
     <div class="nav-section-label">투자</div>
-    <a href="#" onclick="loadPage('picks');return false;"   class="nav-item" data-page="picks"><div class="nav-dot"></div>투자종목</a>
+    <a href="#" onclick="loadPage('picks');return false;"   class="nav-item" data-page="picks"><div class="nav-dot"></div>투자</a>
     <a href="#" onclick="loadPage('trade');return false;"   class="nav-item" data-page="trade"><div class="nav-dot r"></div>매수·매도 등록</a>
     <a href="#" onclick="loadPage('settle');return false;"  class="nav-item" data-page="settle"><div class="nav-dot a"></div>결산 관리</a>
     <a href="#" onclick="loadPage('members');return false;" class="nav-item" data-page="members"><div class="nav-dot"></div>참여자 현황</a>
@@ -147,7 +147,7 @@
     <button type="button" data-page="index" onclick="loadPage('index')"><span aria-hidden="true">⌂</span><span>홈</span></button>
     <button type="button" data-page="presentations" onclick="loadPage('presentations?view=prepare')"><span aria-hidden="true">▤</span><span>발표</span></button>
     <button type="button" data-page="schedule-calendar" onclick="loadPage('schedule-calendar')"><span aria-hidden="true">▦</span><span>일정</span></button>
-    <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>투자종목</span></button>
+    <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>투자</span></button>
     <button type="button" data-more-nav onclick="openMoreMenu()"><span aria-hidden="true">☰</span><span>내 메뉴</span></button>
   </nav>
 
@@ -181,7 +181,7 @@
     <div class="sheet-action-list">
       <button type="button" onclick="runQuickRoute('schedule-calendar?action=new')"><strong>스터디 일정 등록</strong><span>날짜·시간·장소를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('presentations?view=prepare')"><strong>발표 준비</strong><span>자동 배정된 순서와 발표종목을 확인합니다.</span></button>
-      <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>투자종목 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>아이디어 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=buy')"><strong>매수 등록</strong><span>보유를 시작하거나 추가 매수합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=sell')"><strong>매도 등록</strong><span>일부 또는 전량 매도를 기록합니다.</span></button>
     </div>
@@ -212,11 +212,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="js/db.js?v=20260711.2"></script>
-<script src="js/pwa.js?v=20260811.3"></script>
+  <script src="js/pwa.js?v=20260817.1"></script>
 <script>
 (function reloadAfterServiceWorkerUpgrade() {
   if (!('serviceWorker' in navigator)) return;
-  const refreshKey = 'sss-sw-refresh-20260811.3';
+  const refreshKey = 'sss-sw-refresh-20260817.1';
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (refreshing || sessionStorage.getItem(refreshKey) === 'done') return;
@@ -233,7 +233,7 @@ const APP_PAGES = new Set([
 const PAGE_LABELS = {
   index: '홈',
   presentations: '발표 관리',
-  picks: '투자종목',
+  picks: '투자',
   trade: '매수·매도',
   'schedule-calendar': '스터디 일정',
   fees: '스터디 회비',
@@ -287,7 +287,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260811.3');
+  params.set('v', '20260817.1');
   const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
     ? 'schedule-order'
     : parsed.page;
@@ -480,7 +480,7 @@ function renderRecentSearches() {
   const results = document.getElementById('globalSearchResults');
   const saved = recentSearches();
   if (!saved.length) {
-    results.innerHTML = '<div class="search-empty"><strong>종목을 빠르게 찾아보세요.</strong><span>발표종목과 투자종목을 한 번에 검색할 수 있습니다.</span></div>';
+    results.innerHTML = '<div class="search-empty"><strong>종목을 빠르게 찾아보세요.</strong><span>발표종목과 투자 아이디어를 한 번에 검색할 수 있습니다.</span></div>';
     return;
   }
   results.innerHTML = '<div class="search-section-title">최근 본 종목</div>' + saved.map(item =>
@@ -490,9 +490,9 @@ function renderRecentSearches() {
 }
 
 function investmentStateLabel(pick) {
-  if (pick.status === 'sold') return '매도 완료';
-  if (Number(pick.buy_quantity) > 0 || Number(pick.buy_price) > 0) return '투자 진행';
-  return '매수 대기';
+  if (pick.status === 'sold') return '완료';
+  if (Number(pick.buy_quantity) > 0 || Number(pick.buy_price) > 0) return '보유 중';
+  return '아이디어';
 }
 
 async function runGlobalSearch(rawQuery) {
@@ -538,7 +538,7 @@ async function runGlobalSearch(rawQuery) {
       }).join('');
     }
     if (picks.length) {
-      html += '<div class="search-section-title">투자종목</div>' + picks.map(item =>
+      html += '<div class="search-section-title">투자</div>' + picks.map(item =>
         `<button type="button" class="search-result-row" data-route="picks?id=${encodeURIComponent(item.pick_id)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon search-result-pick" aria-hidden="true">◇</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml([item.member_name, item.stock_code].filter(Boolean).join(' · '))}</small></span><span class="search-result-state">${investmentStateLabel(item)}</span></button>`
       ).join('');
     }

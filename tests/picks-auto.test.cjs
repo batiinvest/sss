@@ -211,7 +211,7 @@ test('automatic extension is shown consistently instead of as a missing submissi
   const mypage = read('mypage.html');
 
   assert.match(index, /effectivePick\?\._isCarryFallback/);
-  assert.match(index, /탑픽 자동 연장/);
+  assert.match(index, /아이디어 자동 연장/);
   assert.match(index, /직접 \$\{directCount\}명 · 자동 연장 \$\{automatic\.length\}명/);
   assert.match(index, /automaticPickLabel\(p\)/);
   assert.match(index, /detailRoute = `picks\?id=.*&month=/);

@@ -323,6 +323,7 @@ test('mobile shell exposes schedule and one integrated presentation section', ()
 
 test('legacy presentation routes normalize to the integrated canonical views', () => {
   const source = read('app.html');
+  const assetVersion = source.match(/href="css\/style\.css\?v=([^"]+)"/)?.[1];
   const helperSource = sourceSection(source, 'const APP_PAGES', 'function updateActiveNavigation');
   const context = { URLSearchParams };
   vm.createContext(context);
@@ -338,11 +339,11 @@ test('legacy presentation routes normalize to the integrated canonical views', (
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=prepare&schedule=abc'),
-    'schedule-order.html?view=prepare&schedule=abc&v=20260811.3',
+    `schedule-order.html?view=prepare&schedule=abc&v=${assetVersion}`,
   );
   assert.equal(
     context.routeFrameSrc('presentations?view=history&id=xyz'),
-    'presentations.html?view=history&id=xyz&v=20260811.3',
+    `presentations.html?view=history&id=xyz&v=${assetVersion}`,
   );
 });
 
@@ -575,22 +576,31 @@ test('industry names persist independently and legacy topics stay outside the ne
 });
 
 test('schedule UI cache versions stay aligned', () => {
-  assert.match(read('app.html'), /css\/style\.css\?v=20260811\.3/);
-  assert.match(read('app.html'), /js\/pwa\.js\?v=20260811\.3/);
-  assert.match(read('app.html'), /params\.set\('v', '20260811\.3'\)/);
-  assert.match(read('app.html'), /sss-sw-refresh-20260811\.3/);
+  const app = read('app.html');
+  const canonical = app.match(/href="css\/style\.css\?v=([^"]+)"/)?.[1];
+  assert.ok(canonical, 'app.html must declare the canonical CSS cache key');
+  assert.match(app, new RegExp(`js/pwa\\.js\\?v=${canonical.replaceAll('.', '\\.')}`));
+  assert.match(app, new RegExp(`params\\.set\\('v', '${canonical.replaceAll('.', '\\.')}'\\)`));
+  assert.match(app, new RegExp(`sss-sw-refresh-${canonical.replaceAll('.', '\\.')}`));
   assert.match(read('app.html'), /controllerchange[\s\S]*location\.reload\(\)/);
-  for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html', 'presentations.html']) {
-    assert.match(read(file), /css\/style\.css\?v=20260811\.3/);
+  const htmlFiles = fs.readdirSync(root).filter(file => file.endsWith('.html'));
+  for (const file of htmlFiles) {
+    const matches = [...read(file).matchAll(/href="css\/style\.css\?v=([^"]+)"/g)];
+    assert.equal(matches.length, 1, `${file}: stylesheet link`);
+    assert.equal(matches[0][1], canonical, `${file}: CSS cache key`);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
     assert.match(read(file), /js\/schedule-shared\.js\?v=20260810\.2/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
-  assert.match(read('sw.js'), /sss-pwa-v20260811-3/);
-  assert.doesNotMatch(read('sw.js'), /ignoreSearch\s*:\s*true/);
+  const serviceWorker = read('sw.js');
+  assert.match(serviceWorker, new RegExp(`APP_VERSION = '${canonical.replaceAll('.', '\\.')}'`));
+  assert.match(serviceWorker, /CACHE_NAME = `sss-pwa-v\$\{APP_VERSION\}`/);
+  assert.match(serviceWorker, /STYLE_URL = `\.\/css\/style\.css\?v=\$\{APP_VERSION\}`/);
+  assert.match(serviceWorker, /APP_SHELL = \[[\s\S]*STYLE_URL/);
+  assert.doesNotMatch(serviceWorker, /ignoreSearch\s*:\s*true/);
   assert.equal(
-    (read('sw.js').match(/caches\.match\(request\)/g) || []).length,
+    (serviceWorker.match(/caches\.match\(request\)/g) || []).length,
     2,
   );
 });

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 내 정보</title>
-  <link rel="stylesheet" href="css/style.css?v=20260428">
+  <link rel="stylesheet" href="css/style.css?v=20260817.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -72,7 +72,7 @@
     </div>
 
     <!-- 프로필 카드 -->
-    <div class="card" class="mb-card">
+    <div class="card mb-card">
       <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
         <div id="profileAvatar" class="avatar av1" style="width:52px;height:52px;font-size:18px;">—</div>
         <div style="flex:1;">
@@ -89,7 +89,7 @@
     </div>
 
     <!-- 핵심 지표 -->
-    <div class="metric-grid mb-card" style="grid-template-columns:repeat(3,minmax(0,1fr));" id="myMetricGrid">
+    <div class="metric-grid metric-grid-dashboard mb-card" id="myMetricGrid">
       <div class="metric">
         <div class="metric-label">기준금액</div>
         <div class="metric-value" id="myBaseAmount">—</div>
@@ -111,7 +111,7 @@
         <div class="metric-sub">기업 + 산업 분석</div>
       </div>
       <div class="metric">
-        <div class="metric-label">탑픽 제출 수</div>
+        <div class="metric-label">아이디어 등록 수</div>
         <div class="metric-value" id="myPickCount">—</div>
         <div class="metric-sub" id="myPickSub">—</div>
       </div>
@@ -122,10 +122,10 @@
       </div>
     </div>
 
-    <!-- 보유 탑픽 -->
-    <div class="card" class="mb-card">
+    <!-- 보유 종목 -->
+    <div class="card mb-card">
       <div class="card-head">
-        <div class="card-title">보유 탑픽</div>
+        <div class="card-title">보유 종목</div>
         <a href="picks.html" class="fs-12 color-accent" style="text-decoration:none;">전체 →</a>
       </div>
       <div class="table-wrap">
@@ -141,7 +141,7 @@
     </div>
 
     <!-- 발표 히스토리 -->
-    <div class="card" class="mb-card">
+    <div class="card mb-card">
       <div class="card-head">
         <div class="card-title">내 발표 히스토리</div>
         <div style="font-size:12px;color:var(--muted);" id="myPresAvg">—</div>
@@ -277,7 +277,7 @@ async function renderMetrics() {
   }
 }
 
-// ── 보유 탑픽
+// ── 보유 종목
 async function renderMyPicks() {
   const tbody = document.getElementById('myPicksTbody');
   try {
@@ -300,7 +300,7 @@ async function renderMyPicks() {
       : `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
 
     if (!picks || !picks.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">탑픽 없음</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">보유 종목 없음</td></tr>';
       return;
     }
 

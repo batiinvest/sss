@@ -208,7 +208,7 @@
     </div>
 
     <div class="detail-actions">
-      <button type="button" class="btn schedule-kakao-button" id="detailKakaoShareBtn">카톡 공유</button>
+      <button type="button" class="btn" id="detailScheduleCopyBtn">일정 복사</button>
       <button type="button" class="btn" id="detailEditBtn">수정</button>
       <button type="button" class="btn btn-danger" id="detailDeleteBtn">삭제</button>
     </div>
@@ -219,7 +219,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
-<script src="https://developers.kakao.com/sdk/js/kakao.min.js"></script>
 <script src="js/db.js?v=20260810.2"></script>
 <script src="js/schedule-shared.js?v=20260810.2"></script>
 <script>
@@ -340,20 +339,6 @@ function formatScheduleDate(dateString) {
 }
 
 
-function getScheduleShareUrl(scheduleId) {
-  if (window.APP_PUBLIC_URL) {
-    const configured = window.APP_PUBLIC_URL.replace(/\/$/, '');
-    const appUrl = /\.html$/i.test(configured) ? configured : configured + '/app.html';
-    return `${appUrl}#schedule-calendar?schedule=${encodeURIComponent(scheduleId || '')}`;
-  }
-  const origin = window.parent && window.parent !== window ? window.parent.location.origin : window.location.origin;
-  const rawPath = window.parent && window.parent !== window ? window.parent.location.pathname : window.location.pathname;
-  const path = rawPath.replace(/[^/]*$/, 'app.html');
-  const isLocalFile = !origin || origin === 'null' || window.location.protocol === 'file:';
-  if (isLocalFile) return 'https://github.com/batiinvest/sss';
-  return `${origin}${path}#schedule-calendar?schedule=${encodeURIComponent(scheduleId || '')}`;
-}
-
 function getSchedulePresentations(scheduleId, date) {
   const schedule = schedules.find(item => String(item.id) === String(scheduleId));
   if (!schedule) return [];
@@ -445,53 +430,73 @@ async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(ne
   return result.patches.length;
 }
 
-function buildScheduleShareText(s) {
-  const parts = [];
-  parts.push(`${s.event_date}${s.event_time ? ' ' + s.event_time.slice(0, 5) : ''}`);
-  if (s.location) parts.push(s.location);
-  parts.push(CAT_LABEL[s.category] || '일정');
-
+function buildScheduleClipboardText(s) {
+  const lines = [
+    '[SSS 스터디 일정]',
+    getRenderedScheduleTitle(s),
+    `일시: ${s.event_date} ${s.event_time ? s.event_time.slice(0, 5) : '시간 미정'}`,
+    `장소: ${s.location || '미정'}`,
+    `구분: ${CAT_LABEL[s.category] || '일정'}`,
+  ];
   const pres = getSchedulePresentations(s.id, s.event_date);
-  const presText = pres.length
-    ? '\n\n발표 순서\n' + pres.map((p, i) => {
-        const name = p.members?.name || '발표자';
-        const topic = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '종목 미입력');
-        return `${i + 1}. ${name} - ${topic}`;
-      }).join('\n')
-    : '';
-
-  return `${parts.join(' · ')}${presText}`;
+  if (pres.length) {
+    lines.push('', '발표 순서');
+    pres.forEach((p, index) => {
+      lines.push(`${index + 1}. ${p.members?.name || '발표자 미정'} - ${getPresentationTopicLabel(p)}`);
+    });
+  }
+  const memo = extractScheduleMemo(s.description);
+  if (memo) lines.push('', '메모', memo);
+  return lines.join('\n');
 }
 
-function ensureKakaoShareReady() {
-  const key = window.KAKAO_JS_KEY;
-  if (!key) {
-    toast('Kakao JavaScript 키를 js/config.js에 설정하면 공유할 수 있습니다.');
+function copyScheduleTextWithSelection(text) {
+  if (!document.body || typeof document.execCommand !== 'function') return false;
+  const previousFocus = document.activeElement;
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;';
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+  try {
+    return document.execCommand('copy');
+  } catch (error) {
+    console.warn('일정 내용 대체 복사 오류:', error);
     return false;
+  } finally {
+    textarea.remove();
+    previousFocus?.focus?.();
   }
-  if (!window.Kakao || !Kakao.Share) {
-    toast('카카오 공유 SDK를 불러오지 못했습니다.');
-    return false;
-  }
-  if (!Kakao.isInitialized()) Kakao.init(key);
-  return true;
 }
 
-function shareScheduleToKakao(scheduleId, e) {
+async function writeScheduleClipboardText(text) {
+  if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (error) {
+      console.warn('일정 내용 클립보드 복사 오류:', error);
+    }
+  }
+  return copyScheduleTextWithSelection(text);
+}
+
+async function copyScheduleToClipboard(scheduleId, e) {
   if (e) e.stopPropagation();
-  const s = schedules.find(item => item.id === scheduleId);
-  if (!s || !ensureKakaoShareReady()) return;
-
-  const url = getScheduleShareUrl(scheduleId);
-  Kakao.Share.sendDefault({
-    objectType: 'text',
-    text: `[SSS 스터디 일정]\n${getRenderedScheduleTitle(s)}\n${buildScheduleShareText(s)}`,
-    link: {
-      mobileWebUrl: url,
-      webUrl: url,
-    },
-    buttonTitle: '일정 보기',
-  });
+  const s = schedules.find(item => String(item.id) === String(scheduleId));
+  if (!s) {
+    toast('복사할 일정을 찾을 수 없습니다.');
+    return false;
+  }
+  const text = buildScheduleClipboardText(s);
+  if (await writeScheduleClipboardText(text)) {
+    toast('일정 내용을 복사했습니다. 오픈채팅방에 붙여넣어 주세요.');
+    return true;
+  }
+  window.prompt('자동으로 복사하지 못했습니다. 아래 내용을 복사해 오픈채팅방에 붙여넣으세요.', text);
+  return false;
 }
 async function init() {
   await requireAuth();
@@ -778,7 +783,7 @@ function renderUpcoming() {
       </div>
       <div class="upcoming-actions">
         <button type="button" class="btn btn-primary" onclick="showDetail('${s.id}',event)">상세 보기</button>
-        <button type="button" class="btn schedule-kakao-button" onclick="shareScheduleToKakao('${s.id}',event)">공유</button>
+        <button type="button" class="btn" onclick="copyScheduleToClipboard('${s.id}',event)">일정 복사</button>
       </div>
     </article>`;
   }).join('');
@@ -841,7 +846,7 @@ function renderScheduleList() {
       <td class="muted" style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(memo || '-')}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
-          <button type="button" class="btn schedule-kakao-button" onclick="shareScheduleToKakao('${s.id}',event)">공유</button>
+          <button type="button" class="btn" onclick="copyScheduleToClipboard('${s.id}',event)">일정 복사</button>
           <button type="button" class="btn" onclick="editSchedule('${s.id}')">수정</button>
           <button type="button" class="btn" style="color:var(--up);border-color:var(--up);" onclick="confirmDelete('${s.id}')">삭제</button>
         </div>
@@ -866,7 +871,7 @@ function renderScheduleList() {
       ${presHtml ? `<div class="schedule-mobile-card-pres">${presHtml}</div>` : ''}
       <div class="schedule-mobile-card-actions">
         <button type="button" class="btn btn-primary" onclick="showDetail('${s.id}',event)">상세 보기</button>
-        <button type="button" class="btn schedule-kakao-button" onclick="shareScheduleToKakao('${s.id}',event)">공유</button>
+        <button type="button" class="btn" onclick="copyScheduleToClipboard('${s.id}',event)">일정 복사</button>
         <button type="button" class="btn" onclick="editSchedule('${s.id}')">수정</button>
       </div>
     </article>`;
@@ -1413,7 +1418,7 @@ async function showDetail(id, e) {
 
   document.getElementById('detailEditBtn').onclick   = () => { closeDetail(); editSchedule(id); };
   document.getElementById('detailDeleteBtn').onclick = () => { closeDetail(); confirmDelete(id); };
-  document.getElementById('detailKakaoShareBtn').onclick = (event) => shareScheduleToKakao(id, event);
+  document.getElementById('detailScheduleCopyBtn').onclick = (event) => copyScheduleToClipboard(id, event);
   document.getElementById('detailPresentationBtn').onclick = () =>
     goToSchedulePage('presentations?view=prepare&schedule=' + encodeURIComponent(id));
   const modal = document.getElementById('detailModal');

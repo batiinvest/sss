@@ -2926,7 +2926,6 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .upcoming-presenter strong { color: var(--muted); font-size: 11px; }
 .upcoming-actions { display: flex; align-items: flex-end; gap: 6px; }
 .upcoming-actions .btn { min-height: 38px; padding: 6px 10px; }
-.schedule-kakao-button { background: #fee500; border-color: #f0d000; color: #191919; }
 .schedule-list-head { align-items: flex-start; }
 .schedule-list-controls { flex-wrap: wrap; justify-content: flex-end; }
 .schedule-list-controls input { width: min(240px, 42vw); }

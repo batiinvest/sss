@@ -37,6 +37,157 @@ test('changed app pages keep valid inline JavaScript', () => {
   }
 });
 
+test('schedule copy writes a complete paste-ready notice to the clipboard', async () => {
+  const source = sourceSection(
+    read('schedule-calendar.html'),
+    'function buildScheduleClipboardText',
+    'async function init',
+  );
+  const schedule = {
+    id: 'schedule-1',
+    event_date: '2026-08-30',
+    event_time: '20:00:00',
+    location: '강남 스터디룸',
+    category: 'stock',
+    description: '자료를 준비해 주세요.',
+  };
+  const clipboardWrites = [];
+  const toastMessages = [];
+  const prompts = [];
+  let propagationStopped = false;
+  const context = {
+    console,
+    schedules: [schedule],
+    CAT_LABEL: { stock: '기업 분석' },
+    getRenderedScheduleTitle: () => '기업 분석 · AI 반도체',
+    getSchedulePresentations: () => [
+      { members: { name: '김정훈' }, topic: '반도체 > 삼성전자' },
+      { members: { name: '박지수' }, topic: '' },
+    ],
+    getPresentationTopicLabel: presentation => (
+      presentation.topic ? presentation.topic.split('>').pop().trim() : '종목 미입력'
+    ),
+    extractScheduleMemo: description => description,
+    navigator: {
+      clipboard: {
+        async writeText(text) {
+          clipboardWrites.push(text);
+        },
+      },
+    },
+    document: {},
+    toast(message) {
+      toastMessages.push(message);
+    },
+    window: {
+      prompt(...args) {
+        prompts.push(args);
+      },
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(source, context);
+
+  const copied = await context.copyScheduleToClipboard('schedule-1', {
+    stopPropagation() {
+      propagationStopped = true;
+    },
+  });
+
+  assert.equal(copied, true);
+  assert.equal(propagationStopped, true);
+  assert.deepEqual(clipboardWrites, [
+    [
+      '[SSS 스터디 일정]',
+      '기업 분석 · AI 반도체',
+      '일시: 2026-08-30 20:00',
+      '장소: 강남 스터디룸',
+      '구분: 기업 분석',
+      '',
+      '발표 순서',
+      '1. 김정훈 - 삼성전자',
+      '2. 박지수 - 종목 미입력',
+      '',
+      '메모',
+      '자료를 준비해 주세요.',
+    ].join('\n'),
+  ]);
+  assert.deepEqual(toastMessages, ['일정 내용을 복사했습니다. 오픈채팅방에 붙여넣어 주세요.']);
+  assert.deepEqual(prompts, []);
+});
+
+test('schedule copy falls back to a hidden selection when clipboard permission is unavailable', async () => {
+  const source = sourceSection(
+    read('schedule-calendar.html'),
+    'function buildScheduleClipboardText',
+    'async function init',
+  );
+  const calls = [];
+  const textarea = {
+    style: {},
+    setAttribute(name, value) {
+      calls.push(['attribute', name, value]);
+    },
+    select() {
+      calls.push(['select']);
+    },
+    setSelectionRange(start, end) {
+      calls.push(['range', start, end]);
+    },
+    remove() {
+      calls.push(['remove']);
+    },
+  };
+  const context = {
+    console: { warn() {} },
+    navigator: {
+      clipboard: {
+        async writeText() {
+          throw new Error('permission denied');
+        },
+      },
+    },
+    document: {
+      activeElement: { focus() { calls.push(['focus']); } },
+      body: { appendChild() { calls.push(['append']); } },
+      createElement(tag) {
+        assert.equal(tag, 'textarea');
+        return textarea;
+      },
+      execCommand(command) {
+        calls.push(['command', command]);
+        return true;
+      },
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(source, context);
+
+  assert.equal(await context.writeScheduleClipboardText('복사할 일정'), true);
+  assert.equal(textarea.value, '복사할 일정');
+  assert.deepEqual(calls, [
+    ['attribute', 'readonly', ''],
+    ['append'],
+    ['select'],
+    ['range', 0, 6],
+    ['command', 'copy'],
+    ['remove'],
+    ['focus'],
+  ]);
+});
+
+test('schedule copy UI has no Kakao SDK dependency or Kakao-only naming', () => {
+  const calendar = read('schedule-calendar.html');
+  assert.doesNotMatch(calendar, /Kakao|kakao|shareScheduleToKakao|detailKakaoShareBtn|schedule-kakao-button|카톡 공유/);
+  assert.doesNotMatch(read('js/config.js'), /KAKAO_JS_KEY/);
+  assert.doesNotMatch(read('css/style.css'), /schedule-kakao-button/);
+  assert.match(calendar, /function buildScheduleClipboardText/);
+  assert.match(calendar, /async function copyScheduleToClipboard/);
+  assert.match(calendar, /id="detailScheduleCopyBtn"/);
+  assert.equal((calendar.match(/>일정 복사<\/button>/g) || []).length, 4);
+  assert.match(read('app.html'), /id="page-frame"[^>]*allow="clipboard-write"/);
+});
+
 test('schedule creation uses the 20:00 default and local calendar dates', () => {
   const source = read('schedule-calendar.html');
   assert.match(source, /editingScheduleId \? '' : '20:00'/);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20260824.1">
+  <link rel="stylesheet" href="css/style.css?v=20260906.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -341,9 +341,9 @@
 <script src="js/utils/portfolio.js?v=20260811.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260811.3"></script>
-<script src="js/schedule-shared.js?v=20260810.2"></script>
+<script src="js/schedule-shared.js?v=20260906.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260810.2"></script>
+<script src="js/modal-pres.js?v=20260906.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -606,7 +606,10 @@ async function loadPresentationOrderData() {
       .select('id,name,is_active,joined_at')
       .eq('is_active', true)
       .order('joined_at', { ascending: true }),
-    getConfigStrict('pres_order'),
+    getConfigStrict('pres_order').then(async order => {
+      await loadPresentationManualRosters();
+      return order;
+    }),
   ]);
   if (presentationResult.error) throw presentationResult.error;
   if (scheduleResult.error) throw scheduleResult.error;

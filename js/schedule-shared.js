@@ -1244,6 +1244,34 @@ function shouldCarryPresentationDraftToNextCycle(
   return position.cursor > 0 && memberIndex < position.cursor;
 }
 
+const PRESENTATION_MANUAL_ROSTERS_KEY = 'presentation_manual_rosters_v1';
+let presentationManualRosters = {};
+
+async function loadPresentationManualRosters() {
+  const saved = await getConfigStrict(PRESENTATION_MANUAL_ROSTERS_KEY);
+  presentationManualRosters = saved && typeof saved === 'object' && !Array.isArray(saved)
+    ? saved : {};
+}
+
+function movePresentationInPlan(plan, sourceId, targetId, memberId) {
+  const rosters = Object.fromEntries(plan.items.map(item =>
+    [String(item.schedule.id), [...item.memberIds].map(String)]
+  ));
+  const source = String(sourceId);
+  const target = String(targetId);
+  const member = String(memberId);
+  if (!rosters[source]?.includes(member) || !rosters[target]) {
+    throw new Error('변경할 발표 일정을 다시 확인해 주세요.');
+  }
+  if (source === target) return rosters;
+  if (rosters[target].includes(member)) {
+    throw new Error('이미 해당 날짜에 발표가 배정되어 있습니다.');
+  }
+  rosters[source] = rosters[source].filter(id => id !== member);
+  rosters[target].push(member);
+  return rosters;
+}
+
 function buildPresentationSchedulePlan(
   allSchedules = [],
   allPresentations = [],
@@ -1275,10 +1303,10 @@ function buildPresentationSchedulePlan(
   const requestedDayTake = orderedIds.length
     ? Math.min(groupSize, orderedIds.length - requestedDayCursor)
     : 0;
-  const requestedDayMemberIds = orderedIds.slice(
-    requestedDayCursor,
-    requestedDayCursor + requestedDayTake
-  );
+  const requestedDayManualRoster = (opts.manualRosters || presentationManualRosters)[String(requestedDayPrimary?.id)];
+  const requestedDayMemberIds = Array.isArray(requestedDayManualRoster)
+    ? requestedDayManualRoster.map(String).filter(id => orderedIds.includes(id))
+    : orderedIds.slice(requestedDayCursor, requestedDayCursor + requestedDayTake);
   const requestedDayRows = requestedDayPrimary
     ? getLinkedSchedulePresentations(
         requestedDayPrimary,
@@ -1341,6 +1369,16 @@ function buildPresentationSchedulePlan(
       members: assignedMembers,
       cycleEnds,
     });
+  }
+
+  // 수동 편성은 빈 배열도 유효하다. 빈자리를 다음 순번으로 채우지 않는다.
+  const manualRosters = opts.manualRosters || presentationManualRosters;
+  for (const item of items) {
+    const roster = manualRosters[String(item.schedule.id)];
+    if (!Array.isArray(roster)) continue;
+    item.memberIds = [...new Set(roster.map(String))].filter(id => orderedIds.includes(id));
+    item.members = item.memberIds.map(id => ordered.find(member => String(member.id) === id));
+    item.isManual = true;
   }
 
   const previewTake = orderedIds.length
@@ -1748,6 +1786,7 @@ async function loadSharedData() {
     fetchMembers({ strict: true }),
     reloadPresentations({ strict: true })
   ]);
+  await loadPresentationManualRosters();
   schedules     = s;
   members       = m;
   presentations = p;

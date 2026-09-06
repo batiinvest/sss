@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20260824.1">
+  <link rel="stylesheet" href="css/style.css?v=20260906.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -111,7 +111,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
 <script src="js/db.js?v=20260810.2"></script>
-<script src="js/schedule-shared.js?v=20260810.2"></script>
+<script src="js/schedule-shared.js?v=20260906.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -602,6 +602,29 @@ async function movePresentationOrder(memberId, offset) {
   }
 }
 
+async function changeMemberPresentationSchedule(memberId, sourceId, targetId) {
+  if (presentationOrderSaving || !presentationSetupReady || sourceId === targetId) return;
+  presentationOrderSaving = true;
+  try {
+    await loadPresentationManualRosters();
+    const plan = getAutomaticPresentationPlan();
+    const rosters = movePresentationInPlan(plan, sourceId, targetId, memberId);
+    const next = { ...presentationManualRosters, ...rosters };
+    await setConfig(PRESENTATION_MANUAL_ROSTERS_KEY, next);
+    presentationManualRosters = next;
+    notifyPresentationOrderChanged(presOrder);
+    await reconcileAutomaticPresentationPlan();
+    toast('발표 날짜를 변경했습니다. 다른 멤버의 날짜는 유지됩니다.');
+  } catch (error) {
+    console.error('발표 날짜 변경 오류:', error);
+    toast('발표 일정 반영을 완료하지 못했습니다. ' + (error.message || '다시 시도해 주세요.'));
+  } finally {
+    presentationOrderSaving = false;
+    renderMemberPresPanel();
+    guessNextTurn();
+  }
+}
+
 function renderMemberPresPanel() {
   const panel = document.getElementById('memberPresPanel');
   if (!panel) return;
@@ -881,6 +904,24 @@ function renderMemberPresPanel() {
     row.appendChild(orderBtns);
     row.appendChild(av);
     row.appendChild(nameDiv);
+    if (autoItem && !isCompleted) {
+      const dateSelect = document.createElement('select');
+      dateSelect.setAttribute('aria-label', m.name + ' 발표 날짜 변경');
+      dateSelect.title = '날짜를 변경해도 다른 멤버의 발표일은 유지됩니다.';
+      dateSelect.style.cssText = 'max-width:145px;min-width:0;font-size:12px;';
+      dateSelect.disabled = presentationOrderSaving || !presentationSetupReady;
+      for (const item of automaticPlan.items) {
+        const option = document.createElement('option');
+        option.value = String(item.schedule.id);
+        option.textContent = item.schedule.event_date + ' · ' + (CAT_LABEL[item.schedule.category] || '발표');
+        option.selected = String(item.schedule.id) === String(autoItem.schedule.id);
+        dateSelect.appendChild(option);
+      }
+      dateSelect.onchange = () => changeMemberPresentationSchedule(
+        m.id, String(autoItem.schedule.id), dateSelect.value
+      );
+      rightArea.appendChild(dateSelect);
+    }
     row.appendChild(rightArea);
     panel.appendChild(row);
   });
@@ -899,7 +940,7 @@ document.addEventListener('click', e => {
 // 발표 일정은 순서와 등록된 스터디 날짜를 기준으로 자동 연결된다.
 function updatePanelGuide() {
   const guide = document.getElementById('panelGuide');
-  if (guide) guide.textContent = '위아래 버튼으로 순서를 조정하고, 종목은 자동 일정에 연결됩니다.';
+  if (guide) guide.textContent = '개별 일정 변경은 멤버 옆 날짜를 선택하세요. 다른 멤버의 날짜와 빈자리는 유지됩니다. 위아래 버튼은 기본 발표 순서를 조정합니다.';
 }
 window.addEventListener('resize', updatePanelGuide);
 document.addEventListener('DOMContentLoaded', updatePanelGuide);

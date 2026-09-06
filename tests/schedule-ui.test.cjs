@@ -580,7 +580,7 @@ test('presentation order controls save, reconcile, then notify through one move 
     '// 외부 클릭 시 드롭다운 닫기',
   );
   const moveFlowStart = order.indexOf('async function movePresentationOrder');
-  const moveFlowEnd = order.indexOf('function guessNextTurn', moveFlowStart);
+  const moveFlowEnd = order.indexOf('async function changeMemberPresentationSchedule', moveFlowStart);
   assert.notEqual(moveFlowStart, -1, 'missing movePresentationOrder');
   assert.ok(moveFlowEnd > moveFlowStart, 'movePresentationOrder must be a complete flow');
   const moveFlow = order.slice(moveFlowStart, moveFlowEnd);
@@ -741,7 +741,7 @@ test('schedule UI cache versions stay aligned', () => {
     assert.equal(matches[0][1], canonical, `${file}: CSS cache key`);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260810\.2/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260906\.1/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
   const serviceWorker = read('sw.js');

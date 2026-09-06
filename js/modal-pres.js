@@ -159,7 +159,10 @@ const ModalPres = (() => {
           .eq('status','planned').is('schedule_id',null)
           .order('created_at', { ascending: false }).limit(10),
         sb.from('members').select('*').eq('is_active', true).order('joined_at'),
-        getConfigStrict('pres_order'),
+        getConfigStrict('pres_order').then(async order => {
+          await loadPresentationManualRosters();
+          return order;
+        }),
         sb.from('presentations')
           .select('id,member_id,category,topic,status,schedule_id,presented_at,created_at'),
         sb.from('schedules')

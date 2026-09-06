@@ -2483,3 +2483,31 @@ test('all schedule surfaces consume the same automatic plan', () => {
   assert.doesNotMatch(modal, /limit\(1\)/);
   assert.doesNotMatch(order, /assignDateModal|dataTransfer|doAssign/);
 });
+
+test('manual postponement preserves other dates and empty slots after reload', () => {
+  const { buildPresentationSchedulePlan, movePresentationInPlan } = loadHelpers();
+  const dates = [schedule('s1', '2026-09-10'), schedule('s2', '2026-09-24'), schedule('s3', '2026-10-08')];
+  const opts = { fromDate: '2026-09-01' };
+  const original = buildPresentationSchedulePlan(dates, [], members, opts);
+  const manualRosters = movePresentationInPlan(original, 's1', 's3', 'A');
+  const plan = buildPresentationSchedulePlan(dates, [], members, { ...opts, manualRosters: JSON.parse(JSON.stringify(manualRosters)) });
+  assert.deepEqual(plain(plan.items.map(item => item.memberIds)), [['B', 'C'], ['D', 'E', 'F'], ['G', 'A']]);
+  let empty = movePresentationInPlan(plan, 's1', 's3', 'B');
+  const next = buildPresentationSchedulePlan(dates, [], members, { ...opts, manualRosters: empty });
+  empty = movePresentationInPlan(next, 's1', 's3', 'C');
+  const final = buildPresentationSchedulePlan(dates, [], members, { ...opts, manualRosters: empty });
+  assert.deepEqual(plain(final.items[0].memberIds), []);
+  assert.deepEqual(plain(final.items[1].memberIds), ['D', 'E', 'F']);
+});
+
+test('manual postponement moves existing content without moving the next presenter', () => {
+  const helpers = loadHelpers();
+  const dates = [schedule('s1', '2026-09-10'), schedule('s2', '2026-09-24'), schedule('s3', '2026-10-08')];
+  const rows = [presentation('pA', 's1', 'A', '2026-09-10'), presentation('pD', 's2', 'D', '2026-09-24')];
+  const opts = { fromDate: '2026-09-01' };
+  const original = helpers.buildPresentationSchedulePlan(dates, rows, members, opts);
+  const manualRosters = helpers.movePresentationInPlan(original, 's1', 's3', 'A');
+  const plan = helpers.buildPresentationSchedulePlan(dates, rows, members, { ...opts, manualRosters });
+  const patches = helpers.buildPresentationAssignmentPatches(dates, rows, plan, opts);
+  assert.deepEqual(plain(patches), [{ id: 'pA', payload: { schedule_id: 's3', presented_at: '2026-10-08' } }]);
+});

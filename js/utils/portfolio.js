@@ -368,3 +368,18 @@ function portfolioPriceAsOf(positions = [], priceMap = {}) {
     (newest !== oldest ? ' ~ ' + format(newest) : '') + ' (한국시간)' +
     (valid.length !== positions.length ? ' · 일부 기준 시각 미확인' : '');
 }
+
+function sortPortfolioHoldings(rows, key = 'currentValue', direction = 'desc') {
+  const allowed = ['stock_name', 'quantity', 'buyPrice', 'currentPrice', 'currentValue', 'returnRate', 'pnl'];
+  const field = allowed.includes(key) ? key : 'currentValue';
+  const sign = direction === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const left = a[field];
+    const right = b[field];
+    if (left === null || left === undefined) return right === null || right === undefined ? 0 : 1;
+    if (right === null || right === undefined) return -1;
+    const comparison = field === 'stock_name'
+      ? String(left).localeCompare(String(right), 'ko') : left - right;
+    return comparison * sign || String(a.stock_name || '').localeCompare(String(b.stock_name || ''), 'ko');
+  });
+}

@@ -664,7 +664,7 @@ test('presentation preparation preserves pending input and uses each automatic s
   assert.match(modal, /const storagePayload = buildPresentationDraftStoragePayload\(/);
   assert.match(modal, /insert\(\{ member_id: _me\.id, \.\.\.storagePayload \}\)/);
   assert.match(read('index.html'), /item\.status === 'planned' && !item\.schedule_id[\s\S]*?'날짜 미정'/);
-  assert.match(read('index.html'), /p\.schedule_id \? \(p\.presented_at \|\| '일정 미정'\) : '일정 미정'/);
+  assert.match(read('index.html'), /p\.schedule_id \? \(display\.date \|\| '일정 미정'\) : '일정 미정'/);
   assert.match(
     sourceSection(read('mypage.html'), 'async function renderMyPresentations', '// ── 결산 내역'),
     /\.eq\('status', 'done'\)/,
@@ -741,7 +741,7 @@ test('schedule UI cache versions stay aligned', () => {
     assert.equal(matches[0][1], canonical, `${file}: CSS cache key`);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260907\.1/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20260907\.2/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
   const serviceWorker = read('sw.js');

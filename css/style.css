@@ -3392,3 +3392,37 @@ button:disabled { cursor: wait; opacity: 0.62; }
   .home-priority-card[data-home-action="fund-summary"] > p { -webkit-line-clamp:unset; display:block; }
   .home-priority-card[data-home-action="fund-summary"] .home-priority-card-head { display:none; }
 }
+
+/* Desktop overview and comparison */
+.home-priority-card[data-home-action="fund-summary"] > p { display:block; -webkit-line-clamp:unset; overflow:visible; }
+#homeFundPriceTime { display:block; margin:0 0 8px; }
+.desktop-holdings-table { display:none; }
+@media (min-width:769px) {
+  .home-command-center .home-quick-actions, .topbar.desktop-home-dashboard .topbar-actions { display:none; }
+  .home-priority-card[data-home-action="fund-summary"] { order:-1; grid-column:1 / -1; min-height:0; display:grid; grid-template-columns:1fr auto; column-gap:24px; padding:16px 20px; }
+  .home-priority-card[data-home-action="fund-summary"] .home-priority-card-head { display:none; }
+  .home-priority-card[data-home-action="fund-summary"] .home-priority-label { grid-column:1; }
+  .home-priority-card[data-home-action="fund-summary"] > strong { font-size:24px; grid-column:1; }
+  .home-priority-card[data-home-action="fund-summary"] > p, #homeFundPriceTime { grid-column:1; }
+  .home-priority-card[data-home-action="fund-summary"] .home-priority-link { grid-column:2; grid-row:1 / span 4; align-self:center; }
+  .home-priority-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .home-priority-card { min-height:165px; }
+  .home-secondary-details > .dashboard-my-grid, .home-secondary-details > .presentation-order-summary { margin-top:16px; }
+  .fund-summary-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  #investmentHoldingList { display:none; }
+  .desktop-holdings-table { display:block; }
+  .desktop-holdings-table table { min-width:900px; width:100%; }
+  .desktop-holdings-table td { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .desktop-holdings-table td:nth-child(n+3):not(:last-child), .desktop-holdings-table th:nth-child(n+3):not(:last-child) { text-align:right; }
+  .desktop-holdings-table td small { display:block; color:var(--muted); margin-top:4px; }
+  .desktop-holdings-table th button { border:0; background:none; color:inherit; font:inherit; cursor:pointer; padding:8px 0; }
+  .desktop-holdings-table th[aria-sort="ascending"] button::after { content:' ↑'; }
+  .desktop-holdings-table th[aria-sort="descending"] button::after { content:' ↓'; }
+  .desktop-holdings-table th button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+}
+@media (min-width:1100px) {
+  .portfolio-overview-grid { grid-template-columns:minmax(300px,0.8fr) minmax(620px,1.2fr); }
+  .portfolio-chart-content { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .portfolio-donut { width:160px; }
+  .portfolio-legend { width:100%; max-height:210px; }
+}

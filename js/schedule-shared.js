@@ -1832,3 +1832,14 @@ function goToSchedulePage(pageName) {
     location.href = page + '.html' + (query ? '?' + query : '');
   }
 }
+
+function getPresentationDisplayInfo(presentation, allSchedules = []) {
+  const linked = presentation?.status === 'planned' && presentation.schedule_id
+    ? allSchedules.find(schedule => String(schedule.id) === String(presentation.schedule_id) && isPresentationSchedule(schedule))
+    : null;
+  return {
+    category: linked?.category || presentation?.category,
+    date: linked?.event_date || presentation?.presented_at || null,
+    topic: String(presentation?.topic || '').split('>').pop().trim(),
+  };
+}

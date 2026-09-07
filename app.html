@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.1">
+  <link rel="stylesheet" href="css/style.css?v=20260907.2">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -104,8 +104,8 @@
           <div id="sideBase" style="font-size:12px;font-weight:500;">—</div>
         </div>
         <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
-          <div style="font-size:10px;color:var(--muted);">누적 수익률</div>
-          <div id="sideReturn" style="font-size:12px;font-weight:500;">—</div>
+          <div style="font-size:10px;color:var(--muted);">결산 수익률</div>
+          <div title="현재 보유종목의 평가손익을 제외한 결산 기준 수익률" id="sideReturn" style="font-size:12px;font-weight:500;">—</div>
         </div>
         <div style="background:var(--surface);border-radius:4px;padding:5px 7px;">
           <div style="font-size:10px;color:var(--muted);">투자금</div>
@@ -210,13 +210,14 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260711.2"></script>
+<script src="js/utils/portfolio.js?v=20260907.2"></script>
+<script src="js/config.js?v=20260907.2"></script>
 <script src="js/db.js?v=20260711.2"></script>
-  <script src="js/pwa.js?v=20260907.1"></script>
+  <script src="js/pwa.js?v=20260907.2"></script>
 <script>
 (function reloadAfterServiceWorkerUpgrade() {
   if (!('serviceWorker' in navigator)) return;
-  const refreshKey = 'sss-sw-refresh-20260907.1';
+  const refreshKey = 'sss-sw-refresh-20260907.2';
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (refreshing || sessionStorage.getItem(refreshKey) === 'done') return;
@@ -287,7 +288,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260907.1');
+  params.set('v', '20260907.2');
   const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
     ? 'schedule-order'
     : parsed.page;

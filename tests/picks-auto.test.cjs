@@ -127,12 +127,14 @@ test('home renderer emits one card for an unchanged carried top pick', () => {
     document: { getElementById: id => elements[id] || null },
     currentMonth: () => '2026-08',
     globalPriceMap: {},
+    currentPortfolioContext: { holdings: [], allTradesData: [] },
     escapeHtml: value => String(value ?? ''),
     calcReturnRate: () => null,
     rCls: () => '',
   };
   vm.createContext(context);
   vm.runInContext(read('js/db.js'), context, { filename: 'js/db.js' });
+  vm.runInContext(read('js/utils/portfolio.js'), context);
   vm.runInContext(
     sourceSection(read('index.html'), 'function renderMyPicksData', 'async function renderMyPresData'),
     context,

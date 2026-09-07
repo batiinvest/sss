@@ -310,12 +310,15 @@ async function initSidebarAuth() {
     document.getElementById('sideReturn').textContent = (retRate >= 0 ? '+' : '') + retRate + '%';
     document.getElementById('sideReturn').style.color = retRate >= 0 ? '#0f6e56' : '#a32d2d';
 
-    // 투자금 / 잔액
-    const { data: trades } = await sb.from('trades').select('trade_type,price,quantity').eq('member_id', me.id);
-    const bought   = (trades || []).filter(t => t.trade_type === 'buy').reduce((s, t) => s + t.price * t.quantity, 0);
-    const sold     = (trades || []).filter(t => t.trade_type === 'sell').reduce((s, t) => s + t.price * t.quantity, 0);
-    const invested = bought - sold;
-    const cash     = (me.base_amount || 0) - invested;
+    // Use remaining acquisition cost, consistent with the portfolio overview.
+    const [holdingsResult, tradesResult] = await Promise.all([
+      sb.from('picks_with_trades').select('*').eq('member_id', me.id),
+      sb.from('trades').select('*').eq('member_id', me.id),
+    ]);
+    if (holdingsResult.error || tradesResult.error) throw holdingsResult.error || tradesResult.error;
+    const valuation = buildMemberPortfolioValuation(me, holdingsResult.data || [], tradesResult.data || [], {});
+    const invested = valuation.totalCost;
+    const cash = valuation.cash;
 
     document.getElementById('sideInvested').textContent = Math.round(invested / 10000) + '만원';
     document.getElementById('sideCash').textContent     = Math.round(cash / 10000) + '만원';

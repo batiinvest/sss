@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 투자</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.1">
+  <link rel="stylesheet" href="css/style.css?v=20260907.2">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -56,6 +56,23 @@
         <div class="investment-panel-head"><div><h3>보유 중</h3><p>실제 매수가 등록되어 현재 보유 중인 종목입니다.</p></div></div>
         <div id="investmentFundSummary" aria-label="전체 펀드 현황" aria-live="polite"></div>
         <div id="investmentHoldingList" class="investment-card-grid" aria-live="polite"></div>
+        <div class="desktop-holdings-table table-wrap">
+          <table>
+            <caption class="sr-only">보유종목 비교. 열 제목을 눌러 정렬합니다.</caption>
+            <thead><tr>
+              <th data-holding-sort="stock_name"><button type="button" onclick="setHoldingSort('stock_name')">종목</button></th>
+              <th>담당자</th>
+              <th data-holding-sort="quantity"><button type="button" onclick="setHoldingSort('quantity')">수량</button></th>
+              <th data-holding-sort="buyPrice"><button type="button" onclick="setHoldingSort('buyPrice')">평균 매수가</button></th>
+              <th data-holding-sort="currentPrice"><button type="button" onclick="setHoldingSort('currentPrice')">현재가</button></th>
+              <th data-holding-sort="currentValue"><button type="button" onclick="setHoldingSort('currentValue')">평가금액</button></th>
+              <th data-holding-sort="returnRate"><button type="button" onclick="setHoldingSort('returnRate')">평가 수익률</button></th>
+              <th data-holding-sort="pnl"><button type="button" onclick="setHoldingSort('pnl')">평가손익</button></th>
+              <th>상세</th>
+            </tr></thead>
+            <tbody id="investmentHoldingTableBody"></tbody>
+          </table>
+        </div>
       </section>
 
       <section id="investmentPanelCompleted" class="investment-view-panel" role="tabpanel" aria-labelledby="investmentTabCompleted" hidden>
@@ -116,9 +133,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260711.2"></script>
+<script src="js/config.js?v=20260907.2"></script>
 <script src="js/db.js?v=20260723.1"></script>
-<script src="js/utils/portfolio.js?v=20260907.1"></script>
+<script src="js/utils/portfolio.js?v=20260907.2"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
 <script>
 let allPicks = [];
@@ -126,6 +143,8 @@ let members  = [];
 let selMonth = currentMonth();
 let investmentPriceMap = {};
 let investmentTrades = [];
+let holdingSortKey = 'currentValue';
+let holdingSortDirection = 'desc';
 let investmentSearchTerm = '';
 let activeInvestmentView = 'ideas';
 let investmentDetailId = null;
@@ -364,6 +383,35 @@ function renderInvestmentStage(items, containerId, mode) {
   container.innerHTML = items.map(pick => investmentCardMarkup(pick, mode)).join('');
 }
 
+function setHoldingSort(key) {
+  holdingSortDirection = holdingSortKey === key && holdingSortDirection === 'desc' ? 'asc' : 'desc';
+  holdingSortKey = key;
+  renderInvestmentWorkspace();
+}
+
+function renderHoldingTable(rows) {
+  const money = value => value === null || value === undefined ? '평가 대기' : Math.round(value).toLocaleString('ko-KR') + '원';
+  const body = document.getElementById('investmentHoldingTableBody');
+  const sorted = sortPortfolioHoldings(rows, holdingSortKey, holdingSortDirection);
+  body.innerHTML = sorted.length ? sorted.map(row => '<tr>' +
+    '<td><strong>' + escapeHtml(row.stock_name || '종목 미정') + '</strong><small>' + escapeHtml(row.stock_code || '') + '</small></td>' +
+    '<td>' + escapeHtml(row.member_name) + '</td>' +
+    '<td>' + row.quantity.toLocaleString('ko-KR') + '주</td>' +
+    '<td>' + money(row.buyPrice) + '</td><td>' + money(row.currentPrice) + '</td>' +
+    '<td>' + money(row.currentValue) + '</td>' +
+    '<td class="' + (row.returnRate === null ? '' : row.returnRate >= 0 ? 'up' : 'dn') + '">' + (row.returnRate === null ? '평가 대기' : (row.returnRate >= 0 ? '+' : '') + row.returnRate.toFixed(1) + '%') + '</td>' +
+    '<td class="' + (row.pnl === null ? '' : row.pnl >= 0 ? 'up' : 'dn') + '">' + money(row.pnl) + '</td>' +
+    '<td><button type="button" class="btn" data-holding-id="' + escapeHtml(String(row.pick_id || row.id)) + '" aria-label="' + escapeHtml(row.stock_name || '종목') + ' 상세 보기">보기</button></td></tr>').join('')
+    : '<tr><td colspan="9" class="empty-cell">조건에 맞는 보유종목이 없습니다.</td></tr>';
+  body.querySelectorAll('[data-holding-id]').forEach(button => {
+    button.onclick = () => openInvestmentDetail(button.dataset.holdingId);
+  });
+  document.querySelectorAll('[data-holding-sort]').forEach(header => {
+    header.setAttribute('aria-sort', header.dataset.holdingSort === holdingSortKey
+      ? holdingSortDirection === 'asc' ? 'ascending' : 'descending' : 'none');
+  });
+}
+
 function renderInvestmentFundSummary(snapshot) {
   const money = value => value === null ? '평가 대기' : Math.round(value).toLocaleString('ko-KR') + '원';
   const stockCount = snapshot.allocations.filter(row => row.type === 'holding').length;
@@ -395,6 +443,7 @@ function renderInvestmentWorkspace() {
   document.getElementById('investmentCompletedCount').textContent = visible.completed.length;
   renderInvestmentStage(visible.ideas, 'investmentIdeasList', 'ideas');
   renderInvestmentStage(visible.holding, 'investmentHoldingList', 'holding');
+  renderHoldingTable(visible.holding);
   renderInvestmentStage(visible.completed, 'investmentCompletedList', 'completed');
   const summary = activeInvestmentView === 'ideas'
     ? `${ideaMonth.replace('-', '년 ')}월 · 아이디어 ${visible.ideas.length}건`

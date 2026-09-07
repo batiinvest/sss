@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.1">
+  <link rel="stylesheet" href="css/style.css?v=20260907.2">
   <script>
     (function () {
       if (window === window.parent) {
@@ -76,6 +76,7 @@
         <div class="home-priority-label">펀드 자산</div>
         <strong id="homeFundTitle">자산을 계산하는 중...</strong>
         <p id="homeFundMeta">현금과 보유 종목의 평가 상태를 확인합니다.</p>
+        <small id="homeFundPriceTime" class="fund-price-note"></small>
         <button type="button" class="home-priority-link" onclick="navigateToAppRoute('picks?view=holding')">보유 현황 <span aria-hidden="true">→</span></button>
       </article>
     </div>
@@ -89,70 +90,6 @@
     <div id="mobileRecentPresentations" hidden></div>
     <div id="mobileActiveInvestments" hidden></div>
   </section>
-
-  <section class="presentation-order-summary dashboard-presentation-order desktop-home-dashboard" aria-labelledby="desktopPresentationOrderTitle">
-    <div class="presentation-order-summary-head">
-      <div>
-        <div class="presentation-order-eyebrow">현재 발표 사이클</div>
-          <h2 id="desktopPresentationOrderTitle">발표 순서</h2>
-        <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
-      </div>
-      <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('presentations?view=prepare')">발표 관리 <span aria-hidden="true">→</span></button>
-    </div>
-    <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
-  </section>
-
-  <!-- ── 내 투자 아이디어 + 내 발표종목 ── -->
-  <div id="mySection" class="dashboard-my-grid desktop-home-dashboard" style="display:none;">
-
-    <!-- 내 투자 아이디어 -->
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">내 투자 아이디어</div>
-        <a href="picks.html?view=ideas" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
-      </div>
-
-      <!-- 이번 달 제출 여부 배너 -->
-      <div id="myPickBanner" style="display:none;margin-bottom:10px;"></div>
-
-      <!-- 보유 중 종목 -->
-      <div id="myPickCards" style="display:flex;flex-direction:column;gap:8px;"></div>
-    </div>
-
-    <!-- 내 발표종목 -->
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">내 발표종목</div>
-        <a href="#" onclick="navigateToAppRoute('presentations?view=history');return false;" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
-      </div>
-
-      <!-- 예정 발표 -->
-      <div id="myPresPlanned" style="display:none;margin-bottom:12px;"></div>
-
-      <!-- 최근 발표 이력 -->
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>발표일</th><th>종목</th><th>발표가</th><th>현재가</th><th>수익률</th></tr></thead>
-          <tbody id="myPresTbody"><tr><td colspan="5" class="empty-cell">불러오는 중...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- 로그인 멤버 없을 때 안내 -->
-  <div id="myMemberNotice" style="display:none;" class="info-banner mb-card desktop-home-dashboard">
-    멤버 정보와 연동되지 않은 계정입니다. 관리자에게 이메일 등록을 요청하면 내 투자 아이디어와 발표종목이 표시됩니다.
-  </div>
-
-  <!-- ── 전체 펀드 메트릭 ── -->
-  <div class="metric-grid metric-grid-dashboard desktop-home-dashboard">
-    <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
-    <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
-    <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
-    <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
-    <div class="metric"><div class="metric-label">이번 달 아이디어</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
-    <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
-  </div>
 
   <section id="portfolioOverview" class="portfolio-overview-grid desktop-home-dashboard" aria-label="포트폴리오 현황">
     <article class="card portfolio-chart-card" aria-labelledby="portfolioChartTitle">
@@ -219,6 +156,74 @@
     </article>
   </section>
 
+  <details class="home-secondary-details desktop-home-dashboard">
+    <summary><span>내 발표·아이디어와 상세 지표</span><small>발표 순서, 개인 기록, 펀드 상세 지표</small></summary>
+  <section class="presentation-order-summary dashboard-presentation-order desktop-home-dashboard" aria-labelledby="desktopPresentationOrderTitle">
+    <div class="presentation-order-summary-head">
+      <div>
+        <div class="presentation-order-eyebrow">현재 발표 사이클</div>
+          <h2 id="desktopPresentationOrderTitle">발표 순서</h2>
+        <p class="presentation-order-status" aria-live="polite">발표 순서를 불러오는 중...</p>
+      </div>
+      <button type="button" class="btn presentation-order-link" onclick="navigateToAppRoute('presentations?view=prepare')">발표 관리 <span aria-hidden="true">→</span></button>
+    </div>
+    <ol class="presentation-order-list" aria-label="발표자 순서"></ol>
+  </section>
+
+  <!-- ── 내 투자 아이디어 + 내 발표종목 ── -->
+  <div id="mySection" class="dashboard-my-grid desktop-home-dashboard" style="display:none;">
+
+    <!-- 내 투자 아이디어 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">내 투자 아이디어</div>
+        <a href="picks.html?view=ideas" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+      </div>
+
+      <!-- 이번 달 제출 여부 배너 -->
+      <div id="myPickBanner" style="display:none;margin-bottom:10px;"></div>
+
+      <!-- 보유 중 종목 -->
+      <div id="myPickCards" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <!-- 내 발표종목 -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">내 발표종목</div>
+        <a href="#" onclick="navigateToAppRoute('presentations?view=history');return false;" style="font-size:12px;color:#185fa5;text-decoration:none;">전체 →</a>
+      </div>
+
+      <!-- 예정 발표 -->
+      <div id="myPresPlanned" style="display:none;margin-bottom:12px;"></div>
+
+      <!-- 최근 발표 이력 -->
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>발표일</th><th>종목</th><th>발표가</th><th>현재가</th><th>수익률</th></tr></thead>
+          <tbody id="myPresTbody"><tr><td colspan="5" class="empty-cell">불러오는 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 로그인 멤버 없을 때 안내 -->
+  <div id="myMemberNotice" style="display:none;" class="info-banner mb-card desktop-home-dashboard">
+    멤버 정보와 연동되지 않은 계정입니다. 관리자에게 이메일 등록을 요청하면 내 투자 아이디어와 발표종목이 표시됩니다.
+  </div>
+
+  <!-- ── 전체 펀드 메트릭 ── -->
+  <div class="metric-grid metric-grid-dashboard desktop-home-dashboard">
+    <div class="metric"><div class="metric-label">총 운용 자산</div><div class="metric-value" id="totalAsset">—</div><div class="metric-sub" id="totalProfit">—</div></div>
+    <div class="metric"><div class="metric-label">총 투자금액</div><div class="metric-value" id="totalInvested">—</div><div class="metric-sub" id="investedSub">보유 종목 매수금 합계</div></div>
+    <div class="metric"><div class="metric-label">펀드 잔액 (현금)</div><div class="metric-value" id="totalCash">—</div><div class="metric-sub" id="cashSub">미투자 잔액 합계</div></div>
+    <div class="metric"><div class="metric-label">평가손익 (보유 종목)</div><div class="metric-value" id="unrealizedPnl">—</div><div class="metric-sub" id="unrealizedRate">현재가 기준 미확정</div></div>
+    <div class="metric"><div class="metric-label">이번 달 아이디어</div><div class="metric-value" id="pickStatus">—</div><div class="metric-sub" id="pickMissing">—</div></div>
+    <div class="metric"><div class="metric-label">참여자 수</div><div class="metric-value" id="memberCount">—</div><div class="metric-sub">활성 참여자</div></div>
+  </div>
+
+  </details>
+
   <div class="card top-picks-card desktop-home-dashboard">
     <div class="card-head">
       <div class="card-title">이번 달 아이디어 <span id="priceUpdated" style="font-size:11px;color:var(--muted);font-weight:400;"></span></div>
@@ -229,7 +234,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>추천자</th><th>종목</th><th>매수가</th><th>현재가</th><th class="col-hide-mobile">등락</th><th>수익률<br><span style="font-size:10px;font-weight:400;color:var(--muted);">(누적 수익률)</span></th><th class="col-hide-mobile">목표가</th><th>상태</th></tr></thead>
+        <thead><tr><th>추천자</th><th>종목</th><th>아이디어 기준가</th><th>현재가</th><th class="col-hide-mobile">등락</th><th>기준가 대비 수익률<br><span style="font-size:10px;font-weight:400;color:var(--muted);">(실제 매수가 대비)</span></th><th class="col-hide-mobile">목표가</th><th>상태</th></tr></thead>
         <tbody id="picksTbody"><tr><td colspan="8" class="empty-cell">불러오는 중...</td></tr></tbody>
       </table>
     </div>
@@ -335,20 +340,21 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260711.2"></script>
+<script src="js/config.js?v=20260907.2"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
-<script src="js/utils/portfolio.js?v=20260907.1"></script>
+<script src="js/utils/portfolio.js?v=20260907.2"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260811.3"></script>
-<script src="js/schedule-shared.js?v=20260907.1"></script>
+<script src="js/schedule-shared.js?v=20260907.2"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260907.1"></script>
+<script src="js/modal-pres.js?v=20260907.2"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
 let allCurrentPicks = [];
 let globalPriceMap = {};   // 현재가 캐시 (내 섹션에서도 재사용)
+let dashboardPresentationSchedules = [];
 let currentPortfolioContext = { members: [], holdings: [], allTradesData: [] };
 let currentHomeDashboardData = null;
 let currentHomeMyData = null;
@@ -382,7 +388,7 @@ async function init() {
 
   const now = new Date();
   document.getElementById('updatedAt').textContent =
-    `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 체결가 기준`;
+    `${now.toLocaleDateString('ko-KR')} ${now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})} · 화면 조회 시각`;
 
   await reloadHomeDashboard({ showSkeleton: true });
 }
@@ -482,6 +488,7 @@ async function initMobileHome(now = new Date()) {
 }
 
 async function activatePresentationDraftCycle(memberRows, turnData) {
+  dashboardPresentationSchedules = turnData?.schedules || [];
   const orderedMembers = normalizePresentationOrder(
     (memberRows || []).filter(Boolean),
     turnData?.order || []
@@ -854,9 +861,10 @@ function renderHomePriorities(dashboardData, myData) {
       ? `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount}`
       : '자산 현황',
     title: fundTitle,
-    meta: fundMeta + ' · ' + portfolioPriceAsOf(snapshot.positions, globalPriceMap || {}),
+    meta: fundMeta,
     tone: snapshot.holdingCount && !snapshot.hasCompletePricing ? 'attention' : 'ready',
   });
+  document.getElementById('homeFundPriceTime').textContent = portfolioPriceAsOf(snapshot.positions, globalPriceMap || {});
 }
 
 async function loadDashboardPicks(month) {
@@ -1117,22 +1125,15 @@ function renderMyPicksData(me, picks) {
       ? (curPrice - basePrice) * p.buy_quantity : null;
     const pnlRate = calcReturnRate(basePrice, curPrice);
 
-    // 실제 보유 수익률 — 이월인 경우 원본 월 탑픽의 buy_price로 계산
     const isCarried = !!p.carried_from;
     const isAutoSource = effectivePick?._isCarryFallback &&
       String(effectivePick.pick_id || effectivePick.id) === String(p.pick_id || p.id);
-    let realBuy  = p.buy_price; // trades 체결가 (이월 픽엔 없음)
-    if (isCarried && !realBuy && p.carried_from) {
-      // 같은 종목의 이전 픽 중 buy_price 있는 것 찾기
-      const origPick = picks.find(op =>
-        op.stock_code === p.stock_code &&
-        op.month === p.carried_from &&
-        op.buy_price
-      );
-      realBuy = origPick?.buy_price || null;
-    }
-    const realRate = (isCarried && realBuy && realBuy !== basePrice)
-      ? calcReturnRate(realBuy, curPrice) : null;
+    const myValuation = buildMemberPortfolioValuation(me, currentPortfolioContext.holdings,
+      currentPortfolioContext.allTradesData, globalPriceMap);
+    const positions = myValuation.positions.filter(position => position.stock_code === p.stock_code);
+    const realQuantity = positions.reduce((sum, position) => sum + position.quantity, 0);
+    const realBuy = realQuantity ? positions.reduce((sum, position) => sum + position.cost, 0) / realQuantity : null;
+    const realRate = realBuy ? calcReturnRate(realBuy, curPrice) : null;
 
     const upside   = (p.target_price && curPrice) ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
     const pnlColor = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
@@ -1147,14 +1148,14 @@ function renderMyPicksData(me, picks) {
             ? `<span style="font-size:10px;background:#e8f2fb;color:#185fa5;padding:1px 5px;border-radius:3px;margin-left:4px;">${thisMonth.replace('-','년 ')}월 자동 연장</span>`
             : isCarried ? '<span style="font-size:10px;background:var(--amberbg);color:var(--amber);padding:1px 5px;border-radius:3px;margin-left:4px;">이월</span>' : ''}
         </div>
-        <span class="badge b-hold">보유 중</span>
+        <span class="badge b-hold">${realQuantity ? '보유 중' : '아이디어'}</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
         <div>
-          <div style="color:var(--muted);margin-bottom:2px;">매수가</div>
+          <div style="color:var(--muted);margin-bottom:2px;">아이디어 기준가</div>
           <div style="font-weight:500;">${basePrice ? basePrice.toLocaleString()+'원' : '—'}</div>
-          ${isCarried && realBuy && realBuy !== basePrice
-            ? `<div style="font-size:10px;color:var(--muted);">(${p.carried_from?.replace('-','년 ')}월 ${realBuy.toLocaleString()}원)</div>` : ''}
+          ${realBuy
+            ? `<div style="font-size:10px;color:var(--muted);">실제 평균 매수가 ${realBuy.toLocaleString()}원</div>` : ''}
         </div>
         <div>
           <div style="color:var(--muted);margin-bottom:2px;">현재가</div>
@@ -1163,12 +1164,12 @@ function renderMyPicksData(me, picks) {
           </div>
         </div>
         <div>
-          <div style="color:var(--muted);margin-bottom:2px;">평가손익</div>
+          <div style="color:var(--muted);margin-bottom:2px;">기준가 대비 수익률</div>
           <div style="font-weight:500;${pnlColor}">
             ${pnlRate !== null ? (pnlRate>=0?'+':'') + pnlRate.toFixed(1) + '%' : '—'}
           </div>
           ${realRate !== null
-            ? `<div style="font-size:10px;" class="${rCls(realRate)}">(${realRate>=0?'+':''}${realRate.toFixed(1)}%)</div>` : ''}
+            ? `<div style="font-size:10px;" class="${rCls(realRate)}">실제 매수가 대비 ${realRate>=0?'+':''}${realRate.toFixed(1)}%</div>` : ''}
         </div>
         <div>
           <div style="color:var(--muted);margin-bottom:2px;">목표가</div>
@@ -1195,8 +1196,9 @@ async function renderMyPresData(me, presData, priceMap) {
     plannedEl.style.display = 'block';
     plannedEl.innerHTML = planned.map(p => {
       const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
-      const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
-      const scheduleText = p.schedule_id ? (p.presented_at || '일정 미정') : '일정 미정';
+      const display = getPresentationDisplayInfo(p, dashboardPresentationSchedules);
+      const catBadge  = display.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
+      const scheduleText = p.schedule_id ? (display.date || '일정 미정') : '일정 미정';
       return `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px;">
         📋 ${catBadge} <strong style="color:var(--text);">${topicName}</strong>
         <span style="color:var(--muted);">${scheduleText} 예정</span>
@@ -1517,7 +1519,7 @@ function renderPicksTable(picks, prices) {
     const dayChange  = priceInfo?.change;
     const recRate    = p._recRate;
     const holdRate   = p._holdRate;
-    const refPrice   = p.buy_price || p.price_at;
+    const refPrice   = p.price_at || p.buy_price || p.buy_price_ref;
     const upside     = p.target_price && (curPrice || refPrice)
       ? (((p.target_price - (curPrice||refPrice)) / (curPrice||refPrice)) * 100).toFixed(1)
       : null;

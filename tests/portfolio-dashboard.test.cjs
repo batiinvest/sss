@@ -294,3 +294,11 @@ test('price reference exposes missing and mixed timestamps instead of claiming a
   assert.match(mixed, / ~ /);
   assert.doesNotMatch(mixed, /미확인/);
 });
+
+test('holdings sorting is numeric, reversible and leaves missing prices at the end', () => {
+  const {sortPortfolioHoldings} = loadPortfolioHelpers();
+  const rows = [{stock_name:'B',currentValue:100},{stock_name:'A',currentValue:20},{stock_name:'C',currentValue:null}];
+  assert.deepEqual(plain(sortPortfolioHoldings(rows,'currentValue','asc')).map(row=>row.stock_name), ['A','B','C']);
+  assert.deepEqual(plain(sortPortfolioHoldings(rows,'currentValue','desc')).map(row=>row.stock_name), ['B','A','C']);
+  assert.deepEqual(rows.map(row=>row.stock_name), ['B','A','C']);
+});

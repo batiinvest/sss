@@ -2511,3 +2511,13 @@ test('manual postponement moves existing content without moving the next present
   const patches = helpers.buildPresentationAssignmentPatches(dates, rows, plan, opts);
   assert.deepEqual(plain(patches), [{ id: 'pA', payload: { schedule_id: 's3', presented_at: '2026-10-08' } }]);
 });
+
+test('planned presentation display follows its schedule without rewriting completed history', () => {
+  const { getPresentationDisplayInfo } = loadHelpers();
+  const schedules = [{id:'s', category:'stock', event_date:'2026-09-21'}];
+  const original = {status:'planned', schedule_id:'s', category:'industry', topic:'옛 산업 > 종목명', presented_at:'2026-09-07'};
+  assert.deepEqual(plain(getPresentationDisplayInfo(original, schedules)), {category:'stock',date:'2026-09-21',topic:'종목명'});
+  assert.equal(getPresentationDisplayInfo({...original,status:'done'}, schedules).category, 'industry');
+  assert.equal(getPresentationDisplayInfo(original, []).category, 'industry');
+  assert.equal(original.category, 'industry');
+});

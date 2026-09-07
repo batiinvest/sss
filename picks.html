@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 투자</title>
-  <link rel="stylesheet" href="css/style.css?v=20260906.1">
+  <link rel="stylesheet" href="css/style.css?v=20260907.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -54,6 +54,7 @@
 
       <section id="investmentPanelHolding" class="investment-view-panel" role="tabpanel" aria-labelledby="investmentTabHolding" hidden>
         <div class="investment-panel-head"><div><h3>보유 중</h3><p>실제 매수가 등록되어 현재 보유 중인 종목입니다.</p></div></div>
+        <div id="investmentFundSummary" aria-label="전체 펀드 현황" aria-live="polite"></div>
         <div id="investmentHoldingList" class="investment-card-grid" aria-live="polite"></div>
       </section>
 
@@ -117,12 +118,14 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260711.2"></script>
 <script src="js/db.js?v=20260723.1"></script>
+<script src="js/utils/portfolio.js?v=20260907.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
 <script>
 let allPicks = [];
 let members  = [];
 let selMonth = currentMonth();
 let investmentPriceMap = {};
+let investmentTrades = [];
 let investmentSearchTerm = '';
 let activeInvestmentView = 'ideas';
 let investmentDetailId = null;
@@ -142,7 +145,7 @@ function recentMonthsFrom(month, count = 8) {
 }
 
 async function reloadPicksData() {
-  allPicks = await fetchAllPicks();
+  [allPicks, investmentTrades, members] = await Promise.all([fetchAllPicks(), fetchAllTrades(), fetchMembers()]);
   const codes = [...new Set(allPicks.map(p => p.stock_code).filter(Boolean))];
   investmentPriceMap = await fetchCurrentPrices(codes);
 }
@@ -153,9 +156,10 @@ async function init() {
   checkDBConnection();
 
   // 조회 화면은 DB를 변경하지 않는다. 이월 항목은 화면에서만 합성한다.
-  [members, allPicks] = await Promise.all([
+  [members, allPicks, investmentTrades] = await Promise.all([
     fetchMembers(),
     fetchAllPicks(),
+    fetchAllTrades(),
   ]);
   investmentPriceMap = await fetchCurrentPrices([...new Set(allPicks.map(p => p.stock_code).filter(Boolean))]);
 
@@ -360,9 +364,27 @@ function renderInvestmentStage(items, containerId, mode) {
   container.innerHTML = items.map(pick => investmentCardMarkup(pick, mode)).join('');
 }
 
+function renderInvestmentFundSummary(snapshot) {
+  const money = value => value === null ? '평가 대기' : Math.round(value).toLocaleString('ko-KR') + '원';
+  const stockCount = snapshot.allocations.filter(row => row.type === 'holding').length;
+  document.getElementById('investmentFundSummary').innerHTML =
+    '<div class="fund-summary-grid">' + [
+      ['전체 총자산', money(snapshot.totalAsset)],
+      ['현금', money(snapshot.cash)],
+      ['전체 평가손익', money(snapshot.unrealizedPnl)],
+      ['보유 구성', stockCount + '종목 · ' + snapshot.holdingCount + '건'],
+    ].map(([label, value]) => '<div><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('') +
+    '</div><p class="fund-price-note">전체 활성 멤버 기준 · 검색/필터와 무관한 합계<br>' +
+    escapeHtml(portfolioPriceAsOf(snapshot.positions, investmentPriceMap)) +
+    (snapshot.hasCompletePricing ? '' : '<br>일부 현재가가 없어 전체 평가를 기다리고 있습니다.') + '</p>';
+}
+
 function renderInvestmentWorkspace() {
   const ideaMonth = currentMonth();
   const partition = partitionInvestmentItems(ideaMonth, allPicks, members);
+  const snapshot = buildPortfolioSnapshot(members, allPicks, investmentTrades, investmentPriceMap);
+  partition.holding = portfolioHoldingRows(snapshot, members);
+  renderInvestmentFundSummary(snapshot);
   const visible = {
     ideas: partition.ideas.filter(matchesInvestmentFilters),
     holding: partition.holding.filter(matchesInvestmentFilters),
@@ -377,7 +399,7 @@ function renderInvestmentWorkspace() {
   const summary = activeInvestmentView === 'ideas'
     ? `${ideaMonth.replace('-', '년 ')}월 · 아이디어 ${visible.ideas.length}건`
     : activeInvestmentView === 'holding'
-      ? `실제 보유 종목 ${visible.holding.length}건`
+      ? `보유 내역 ${visible.holding.length}건 · 전체 ${snapshot.holdingCount}건`
       : `매도 완료 기록 ${visible.completed.length}건`;
   document.getElementById('investmentViewSummary').textContent = summary;
 }
@@ -603,7 +625,11 @@ async function openInvestmentDetail(id, displayMonth = '') {
     return;
   }
   const rawPick = allPicks.find(item => String(item.pick_id || item.id) === String(id));
-  pick = pick || resolveLatestInvestmentChainPick(rawPick, allPicks);
+  const holding = activeInvestmentView === 'holding' && !displayMonth
+    ? portfolioHoldingRows(buildPortfolioSnapshot(members, allPicks, investmentTrades, investmentPriceMap), members)
+      .find(item => String(item.pick_id || item.id) === String(id))
+    : null;
+  pick = pick || holding || resolveLatestInvestmentChainPick(rawPick, allPicks);
   if (!pick) { toast('투자 기록을 찾을 수 없습니다.'); return; }
   const detailToken = String(id) + '|' + String(displayMonth || pick.month || '');
   investmentDetailId = detailToken;

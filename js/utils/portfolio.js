@@ -337,3 +337,34 @@ function buildPortfolioSnapshot(
     memberValuations,
   };
 }
+
+// The holdings list uses the same remaining trade positions as the fund total.
+function portfolioHoldingRows(snapshot, members = []) {
+  const names = new Map(members.map(member => [String(member.id), member.name]));
+  return snapshot.positions.map(position => ({
+    ...position,
+    status: 'hold',
+    buy_price: position.buyPrice,
+    buy_quantity: position.quantity,
+    member_name: position.member_name || names.get(String(position.member_id)) || '담당자 미정',
+  }));
+}
+
+function portfolioPriceAsOf(positions = [], priceMap = {}) {
+  if (!positions.length) return '보유 내역 없음';
+  const timestamps = positions.map(position => {
+    const entry = priceMap[position.stock_code];
+    return Date.parse(entry?.updatedAt || entry?.updated_at || '');
+  });
+  const valid = timestamps.filter(Number.isFinite);
+  if (!valid.length) return '가격 기준 시각 확인 불가';
+  const format = value => new Date(value).toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  const oldest = Math.min(...valid);
+  const newest = Math.max(...valid);
+  return '가격 기준 ' + format(oldest) +
+    (newest !== oldest ? ' ~ ' + format(newest) : '') + ' (한국시간)' +
+    (valid.length !== positions.length ? ' · 일부 기준 시각 미확인' : '');
+}

@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20260906.1">
+  <link rel="stylesheet" href="css/style.css?v=20260907.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -26,6 +26,7 @@
   </div>
 
   <div id="tabPresOrderContent" class="presentation-setup-shell">
+    <section id="myPresentationCard" class="my-presentation-card" aria-label="내 발표 준비" hidden></section>
     <section class="card presentation-setup-card">
       <div class="presentation-turn-panel">
         <div class="presentation-turn-copy">
@@ -111,10 +112,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260522"></script>
 <script src="js/db.js?v=20260810.2"></script>
-<script src="js/schedule-shared.js?v=20260906.1"></script>
+<script src="js/schedule-shared.js?v=20260907.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
+let presentationCurrentMember = null;
 let adminUser   = false; // 관리자 여부
 const requestedScheduleId = new URLSearchParams(location.search).get('schedule');
 let currentIndustryConfigKey = null;
@@ -726,7 +728,7 @@ function renderMemberPresPanel() {
 
     // ── 우측 영역: 종목 입력 or 선택 칩
     const rightArea = document.createElement('div');
-    rightArea.style.cssText = 'flex:1;min-width:0;display:flex;align-items:center;gap:6px;';
+    rightArea.className = 'presentation-member-fields';
     if (autoItem && !isAssigned && !isCompleted) {
       const autoBadge = document.createElement('span');
       autoBadge.style.cssText = 'font-size:10px;color:#185fa5;background:#e8f2fb;border-radius:4px;padding:2px 5px;white-space:nowrap;flex-shrink:0;';
@@ -782,10 +784,10 @@ function renderMemberPresPanel() {
     } else {
       // 종목 미입력 → 검색 입력창 + 직접 입력 버튼
       const wrap = document.createElement('div');
-      wrap.style.cssText = 'flex:1;position:relative;display:flex;gap:4px;align-items:center;';
+      wrap.className = 'presentation-stock-search';
 
       const searchWrap = document.createElement('div');
-      searchWrap.style.cssText = 'flex:1;position:relative;';
+      searchWrap.className = 'presentation-stock-search-field';
 
       const input = document.createElement('input');
       input.type = 'text'; input.placeholder = '종목 검색...';
@@ -908,7 +910,7 @@ function renderMemberPresPanel() {
       const dateSelect = document.createElement('select');
       dateSelect.setAttribute('aria-label', m.name + ' 발표 날짜 변경');
       dateSelect.title = '날짜를 변경해도 다른 멤버의 발표일은 유지됩니다.';
-      dateSelect.style.cssText = 'max-width:145px;min-width:0;font-size:12px;';
+      dateSelect.className = 'presentation-date-select';
       dateSelect.disabled = presentationOrderSaving || !presentationSetupReady;
       for (const item of automaticPlan.items) {
         const option = document.createElement('option');
@@ -920,12 +922,44 @@ function renderMemberPresPanel() {
       dateSelect.onchange = () => changeMemberPresentationSchedule(
         m.id, String(autoItem.schedule.id), dateSelect.value
       );
-      rightArea.appendChild(dateSelect);
+      const dateLabel = document.createElement('label');
+      dateLabel.className = 'presentation-date-field';
+      const caption = document.createElement('span');
+      caption.textContent = '발표 날짜';
+      dateLabel.append(caption, dateSelect);
+      rightArea.appendChild(dateLabel);
     }
     row.appendChild(rightArea);
     panel.appendChild(row);
   });
   renderLegacyDraftNotice();
+  renderMyPresentationCard(automaticPlan);
+}
+
+function renderMyPresentationCard(plan) {
+  const card = document.getElementById('myPresentationCard');
+  if (!card || !presentationCurrentMember) return;
+  const member = presentationCurrentMember;
+  const item = getMemberPresentationPlanItem(plan, member.id, schedules, presentations);
+  const draft = item ? findCurrentPresentationDraft(presentations, member.id, {
+    scheduleId: item.schedule.id, draftEpoch: presentationDraftEpoch,
+  }) : null;
+  card.hidden = false;
+  card.innerHTML = '<div><span class="presentation-order-eyebrow">내 발표 준비</span>' +
+    '<h2>' + escapeHtml(draft?.topic || '발표종목을 입력해 주세요') + '</h2>' +
+    '<p>' + escapeHtml(item ? item.schedule.event_date + ' · ' + CAT_LABEL[item.schedule.category] : '등록된 발표 일정이 없습니다.') + '</p></div>';
+  if (!item) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'btn btn-primary';
+  button.textContent = draft?.topic ? '내 종목 수정' : '내 종목 입력';
+  button.onclick = () => {
+    if (draft?.topic) { openPresEditModal(member, draft); return; }
+    const row = [...document.querySelectorAll('.pres-member-row')].find(el => String(el.dataset.memberId) === String(member.id));
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row?.querySelector('input')?.focus({ preventScroll: true });
+  };
+  card.appendChild(button);
 }
 
 // 외부 클릭 시 드롭다운 닫기
@@ -1089,7 +1123,7 @@ async function init() {
   checkDBConnection();
 
   try {
-    [adminUser] = await Promise.all([isAdmin()]);
+    [adminUser, presentationCurrentMember] = await Promise.all([isAdmin(), getCurrentMember()]);
     await loadSharedData();   // js/schedule-shared.js
     // 발표자 순서 DB에서 불러오기
     const savedOrder = await getConfigStrict('pres_order');

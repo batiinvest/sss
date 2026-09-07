@@ -3356,3 +3356,39 @@ button:disabled { cursor: wait; opacity: 0.62; }
   .loading-spinner,
   .mobile-list-skeleton { animation: none !important; }
 }
+
+/* Mobile presentation input and fund overview */
+.presentation-member-fields { flex:1; min-width:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.presentation-stock-search { flex:1; min-width:180px; position:relative; display:flex; gap:8px; align-items:center; }
+.presentation-stock-search-field { flex:1; min-width:0; position:relative; }
+.presentation-date-field { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
+.presentation-date-select { width:auto; min-width:170px; }
+.my-presentation-card { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px; margin-bottom:16px; background:var(--surface); border:1px solid var(--accent); border-radius:12px; }
+.my-presentation-card[hidden] { display:none; }
+.my-presentation-card > div { min-width:0; }
+.my-presentation-card h2 { font-size:18px; margin:6px 0; overflow-wrap:anywhere; }
+.my-presentation-card p { color:var(--muted); font-size:13px; }
+.my-presentation-card .btn { flex-shrink:0; min-height:44px; }
+.fund-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; }
+.fund-summary-grid > div { padding:12px; border-radius:10px; background:var(--bg); }
+.fund-summary-grid span { display:block; color:var(--muted); font-size:12px; margin-bottom:6px; }
+.fund-summary-grid strong { display:block; font-size:18px; overflow-wrap:anywhere; }
+.fund-price-note { font-size:12px; color:var(--muted); line-height:1.6; margin:8px 0 16px; }
+@media (max-width:768px) {
+  .schedule-topbar-actions { display:grid; grid-template-columns:minmax(0,1fr); }
+  .schedule-topbar-actions .schedule-view-tabs { width:100%; }
+  .presentation-member-fields { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+  .presentation-stock-search { min-width:0; width:100%; }
+  .presentation-stock-search-field input { min-width:0; }
+  .presentation-date-field { display:grid; grid-template-columns:65px minmax(0,1fr); }
+  .presentation-date-select { width:100%; min-width:0; }
+  .presentation-member-fields .pres-stock-chip { width:100%; min-height:48px; flex-wrap:wrap; }
+  .presentation-member-fields .pres-stock-chip .chip-name { flex-basis:100%; white-space:normal; overflow-wrap:anywhere; font-size:15px; }
+  .presentation-member-fields > button:not(.pres-stock-chip) { justify-self:end; min-width:44px; min-height:44px; }
+  .pres-member-row .order-btn { min-width:44px !important; min-height:44px !important; width:44px !important; height:44px !important; }
+  .presentation-member-list .pres-member-row > div:last-child { flex:1 0 100% !important; margin-left:0; }
+  .my-presentation-card { flex-direction:column; align-items:stretch; }
+  .home-priority-card[data-home-action="fund-summary"] { order:-1; min-height:0; }
+  .home-priority-card[data-home-action="fund-summary"] > p { -webkit-line-clamp:unset; display:block; }
+  .home-priority-card[data-home-action="fund-summary"] .home-priority-card-head { display:none; }
+}

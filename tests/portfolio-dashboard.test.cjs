@@ -255,3 +255,42 @@ test('portfolio chart keeps its smallest labels readable', () => {
   assert.match(css, /\.portfolio-kpi strong \{[\s\S]*?font-size: 14px;/);
   assert.match(css, /\.portfolio-cell-meta \{[\s\S]*?font-size: 11px;/);
 });
+
+test('holding cards preserve the same remaining quantities and costs as the fund snapshot', () => {
+  const { buildPortfolioSnapshot, portfolioHoldingRows } = loadPortfolioHelpers();
+  const members = [{ id: 'a', name: '멤버', base_amount: 5000 }];
+  const picks = [
+    { id: 'p1', member_id: 'a', stock_code: 'AAA', status: 'sold', buy_quantity: 0 },
+    { id: 'p2', member_id: 'a', stock_code: 'BBB', status: 'hold', buy_quantity: 99, buy_price: 999 },
+    { id: 'p3', member_id: 'a', stock_code: 'CCC', status: 'hold', buy_quantity: 0 },
+  ];
+  const trades = [
+    { id: '1', pick_id: 'p1', member_id: 'a', trade_type: 'buy', price: 100, quantity: 10, traded_at: '2026-09-01' },
+    { id: '2', pick_id: 'p1', member_id: 'a', trade_type: 'sell', price: 120, quantity: 4, traded_at: '2026-09-02' },
+    { id: '3', pick_id: 'p2', member_id: 'a', trade_type: 'buy', price: 200, quantity: 2, traded_at: '2026-09-01' },
+  ];
+  const snapshot = buildPortfolioSnapshot(members, picks, trades, { AAA: 130, BBB: 210 });
+  const rows = portfolioHoldingRows(snapshot, members);
+  assert.equal(rows.length, snapshot.holdingCount);
+  assert.equal(rows.find(row => row.id === 'p1').buy_quantity, 6);
+  assert.equal(rows.find(row => row.id === 'p1').status, 'hold');
+  assert.equal(rows.find(row => row.id === 'p2').buy_quantity, 2);
+  assert.equal(rows.reduce((sum, row) => sum + row.buy_price * row.buy_quantity, 0), snapshot.totalCost);
+  assert.equal(rows.every(row => row.member_name === '멤버'), true);
+});
+
+test('price reference exposes missing and mixed timestamps instead of claiming a fresh quote', () => {
+  const { portfolioPriceAsOf } = loadPortfolioHelpers();
+  const rows = [{ stock_code: 'A' }, { stock_code: 'B' }];
+  assert.equal(portfolioPriceAsOf(rows, {}), '가격 기준 시각 확인 불가');
+  const partial = portfolioPriceAsOf(rows, { A: { updatedAt: '2026-09-04T06:30:00Z' } });
+  assert.match(partial, /09.*04/);
+  assert.match(partial, /15:30/);
+  assert.match(partial, /일부 기준 시각 미확인/);
+  const mixed = portfolioPriceAsOf(rows, {
+    A: { updatedAt: '2026-09-04T06:30:00Z' },
+    B: { updatedAt: '2026-09-07T06:30:00Z' },
+  });
+  assert.match(mixed, / ~ /);
+  assert.doesNotMatch(mixed, /미확인/);
+});

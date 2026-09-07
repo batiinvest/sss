@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20260906.1">
+  <link rel="stylesheet" href="css/style.css?v=20260907.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -338,12 +338,12 @@
 <script src="js/config.js?v=20260711.2"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
-<script src="js/utils/portfolio.js?v=20260811.1"></script>
+<script src="js/utils/portfolio.js?v=20260907.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260811.3"></script>
-<script src="js/schedule-shared.js?v=20260906.1"></script>
+<script src="js/schedule-shared.js?v=20260907.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260906.1"></script>
+<script src="js/modal-pres.js?v=20260907.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -580,7 +580,7 @@ async function loadDashboardData() {
   const [members, picks, allPicksRaw, trades, allTradesData, me, turnData] = await Promise.all([
     fetchMemberStats(),
     loadDashboardPicks(month),
-    fetchAllPicks({ status: 'hold' }),
+    fetchAllPicks(),
     fetchTrades(8),
     fetchAllTrades(),
     getCurrentMember(),
@@ -846,15 +846,15 @@ function renderHomePriorities(dashboardData, myData) {
   const pnl = snapshot.unrealizedPnl;
   const fundMeta = [
     `현금 ${won(snapshot.cash)}`,
-    `보유 ${snapshot.holdingCount}건`,
+    `보유 ${snapshot.allocations.filter(row => row.type === 'holding').length}종목 · ${snapshot.holdingCount}건`,
     pnl === null ? `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount}` : `평가손익 ${pnl >= 0 ? '+' : ''}${won(pnl)}`,
   ].join(' · ');
   setHomePriorityCard('fund-summary', {
     state: snapshot.holdingCount && !snapshot.hasCompletePricing
       ? `현재가 ${snapshot.priceMatchedCount}/${snapshot.holdingCount}`
-      : '업데이트 완료',
+      : '자산 현황',
     title: fundTitle,
-    meta: fundMeta,
+    meta: fundMeta + ' · ' + portfolioPriceAsOf(snapshot.positions, globalPriceMap || {}),
     tone: snapshot.holdingCount && !snapshot.hasCompletePricing ? 'attention' : 'ready',
   });
 }
@@ -1322,9 +1322,7 @@ async function refreshPrices() {
 
     renderPicksTable(currentPicks, globalPriceMap);
     const portfolioSnapshot = renderPortfolioOverview(currentPortfolioContext, globalPriceMap);
-    const t = new Date();
-    document.getElementById('priceUpdated').textContent =
-      `현재가 ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
+    document.getElementById('priceUpdated').textContent = portfolioPriceAsOf(portfolioSnapshot?.positions || [], globalPriceMap);
 
     if (!pnlEl) return;
     if (!portfolioSnapshot || portfolioSnapshot.priceMatchedCount === 0) {

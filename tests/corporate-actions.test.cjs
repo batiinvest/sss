@@ -93,6 +93,7 @@ test('server position overrides raw trades once and rejects pre-ex quotes', () =
 
 function serviceContext(rpc) {
   const scope = vm.createContext({ sb: { rpc }, crypto: { randomUUID: () => 'stable-request-id' } });
+  vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../js/utils/corporate-actions.js'), 'utf8'), scope);
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../js/corporate-actions-service.js'), 'utf8'), scope);
   return scope;
 }
@@ -117,4 +118,41 @@ test('trade retries preserve idempotency token after uncertain response', async 
   await assert.rejects(scope.submitCorporateTrade(buy), /timeout/);
   await scope.submitCorporateTrade(buy);
   assert.deepEqual(calls, ['stable-request-id', 'stable-request-id']);
+});
+
+test('read adapter applies holdings and reference prices once and deduplicates view joins', async () => {
+  const position = { ...replay([buy], [action], at('2026-09-20')), pick_id: 'p', sales: [] };
+  const scope = serviceContext(async name => ({ data: name === 'sss_corporate_actions_version' ? 1 :
+    name === 'sss_corporate_actions_list' ? [action] : [position] }));
+  const raw = { pick_id: 'p', stock_code: '327260', price_at: 93300, target_price: 117725,
+    submitted_at: '2026-04-01T00:00:00Z', buy_price: 75500, buy_quantity: 6 };
+  const rows = await scope.attachCorporatePositions([raw, raw]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].buy_quantity, 12);
+  assert.equal(rows[0].buy_price, 37750);
+  assert.equal(rows[0].price_at, 46650);
+  assert.equal(rows[0].target_price, 58862.5);
+  const again = await scope.attachCorporatePositions(rows);
+  assert.equal(again[0].price_at, 46650);
+  assert.equal(raw.buy_quantity, 6);
+});
+
+test('closed corporate position retains adjusted cost basis for completed-investment cards', async () => {
+  const scope = serviceContext(async name => ({ data: name === 'sss_corporate_actions_version' ? 1 :
+    name === 'sss_corporate_actions_list' ? [action] : [{ pick_id: 'p', quantity: 0, averagePrice: 0,
+      history: [{ existing_shares: 1, new_shares: 1 }], sales: [{ quantity: 12, averagePrice: 37750, price: 48500 }] }] }));
+  const [row] = await scope.attachCorporatePositions([{ pick_id: 'p', stock_code: '327260', submitted_at: '2026-04-01', status: 'sold' }]);
+  assert.equal(row.buy_price, 37750);
+  assert.equal(row.status, 'sold');
+  assert.equal(row.sell_price, 48500);
+});
+
+test('all-picks query passes rows through the corporate adapter', async () => {
+  let calls = 0;
+  const scope = vm.createContext({ console, attachCorporatePositions: async rows => { calls++; return rows.map(row => ({ ...row, adjusted: true })); },
+    sb: { from: () => ({ select: () => ({ order: async () => ({ data: [{ pick_id: 'p' }] }) }) }) } });
+  vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../js/db.js'), 'utf8'), scope);
+  const rows = await scope.fetchAllPicks();
+  assert.equal(calls, 1);
+  assert.equal(rows[0].adjusted, true);
 });

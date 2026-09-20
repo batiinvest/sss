@@ -58,6 +58,24 @@ async function caLoadHistory() {
       });
       article.append(label, date, button);
     }
+    if (row.status === 'applied') {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = '잘못 등록한 내역 취소';
+      const reason = document.createElement('input');
+      reason.placeholder = '취소 사유'; reason.setAttribute('aria-label', row.stock_name + ' 무상증자 취소 사유');
+      const cancel = document.createElement('button');
+      cancel.type = 'button'; cancel.className = 'btn'; cancel.textContent = '기록을 남기고 취소';
+      const requestId = crypto.randomUUID();
+      cancel.onclick = () => caRun(async () => {
+        if (reason.value.trim().length < 3) throw new Error('취소 사유를 3자 이상 입력하세요.');
+        await corporateRpc('sss_reverse_bonus', { p_action_id: row.id, p_reason: reason.value.trim(), p_request_id: requestId });
+        await caLoadHistory(); toast('무상증자를 취소하고 잔고를 다시 계산했습니다.');
+      });
+      const help = document.createElement('p');
+      help.textContent = '취소 후 수량·결산이 다시 계산됩니다. 이미 신주를 매도해 잔고가 부족해지는 경우에는 취소되지 않습니다.';
+      details.append(summary, help, reason, cancel); article.append(details);
+    }
     container.append(article);
   }
 }
@@ -78,7 +96,7 @@ caElement('caForm').onsubmit = event => {
       '</strong> · ' + Number(row.beforeQuantity).toLocaleString('ko-KR') + '주 → ' +
       Number(row.quantity).toLocaleString('ko-KR') + '주<br>평균 매수가 ' + won(Number(row.beforeAverage)) + ' → ' +
       won(Number(row.averagePrice)) + '<br>총원가 ' + won(Number(row.cost)) + ' · 미입고 ' +
-      Number(row.pendingQuantity).toLocaleString('ko-KR') + '주</p>').join('') || '<p>권리 대상 보유분이 없습니다.</p>';
+      Number(row.pendingQuantity).toLocaleString('ko-KR') + '주<br>결산 보정 차액 ' + won(Number(row.settlementDelta || 0)) + '</p>').join('') || '<p>권리 대상 보유분이 없습니다.</p>';
     caElement('caPreview').hidden = false;
   });
 };

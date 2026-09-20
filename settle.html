@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 결산 관리</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.3">
+  <link rel="stylesheet" href="css/style.css?v=20260921.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -96,8 +96,8 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260907.3"></script>
-<script src="js/db.js?v=20260428"></script>
+<script src="js/config.js?v=20260921.1"></script>
+<script src="js/db.js?v=20260921.1"></script>
 <script>
 let allSettles = [];
 
@@ -126,7 +126,7 @@ function renderSettles(settles) {
     return `<tr>
       <td class="muted">${ds}</td>
       <td>${s.members?.name || '-'}</td>
-      <td style="font-weight:500;">${s.picks?.stock_name || '-'}</td>
+      <td style="font-weight:500;">${escapeHtml(s.picks?.stock_name || '-')}${s.corporate_note ? '<br><small>' + escapeHtml(s.corporate_note) + '</small>' : ''}</td>
       <td>${won(s.buy_price)}</td>
       <td>${won(s.sell_price)}</td>
       <td class="muted">-${won(s.tax_fee)}</td>

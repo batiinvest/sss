@@ -1,4 +1,4 @@
-const APP_VERSION = '20260907.3';
+const APP_VERSION = '20260921.1';
 const CACHE_NAME = `sss-pwa-v${APP_VERSION}`;
 const STYLE_URL = `./css/style.css?v=${APP_VERSION}`;
 
@@ -11,6 +11,7 @@ const APP_SHELL = [
   './members.html',
   './settle.html',
   './admin.html',
+  './corporate-actions.html',
   './fees.html',
   './mypage.html',
   './presentations.html',
@@ -24,6 +25,9 @@ const APP_SHELL = [
   STYLE_URL,
   './js/config.js',
   './js/db.js',
+  './js/corporate-actions-service.js',
+  './js/corporate-actions-page.js',
+  './js/utils/corporate-actions.js',
   './js/fees-auto.js',
   './js/modal-pick.js',
   './js/modal-pres.js',

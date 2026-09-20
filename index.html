@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.3">
+  <link rel="stylesheet" href="css/style.css?v=20260921.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -340,16 +340,17 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260907.3"></script>
-<script src="js/corporate-actions-service.js?v=20260920.1"></script>
+<script src="js/config.js?v=20260921.1"></script>
+<script src="js/utils/corporate-actions.js?v=20260921.1"></script>
+<script src="js/corporate-actions-service.js?v=20260921.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
-<script src="js/utils/portfolio.js?v=20260907.3"></script>
+<script src="js/utils/portfolio.js?v=20260921.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20260811.3"></script>
-<script src="js/schedule-shared.js?v=20260907.3"></script>
+<script src="js/db.js?v=20260921.1"></script>
+<script src="js/schedule-shared.js?v=20260921.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20260907.3"></script>
+<script src="js/modal-pres.js?v=20260921.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -880,7 +881,7 @@ async function loadMyDashboardData(memberId) {
       .order('created_at', { ascending: false }),
   ]);
   return {
-    picks: myPicksRes.data || [],
+    picks: await attachCorporatePositions(myPicksRes.data || []),
     presentations: myPresRes.data || [],
   };
 }
@@ -1069,7 +1070,7 @@ async function renderMySection() {
       .order('presented_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false }),
   ]);
-  renderMyPicksData(me, myPicksRes.data || []);
+  renderMyPicksData(me, await attachCorporatePositions(myPicksRes.data || []));
   renderMyPresData(me, myPresRes.data || [], globalPriceMap);
 }
 
@@ -1153,7 +1154,7 @@ function renderMyPicksData(me, picks) {
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
         <div>
-          <div style="color:var(--muted);margin-bottom:2px;">아이디어 기준가</div>
+          <div style="color:var(--muted);margin-bottom:2px;">${p._priceAdjusted ? '무상증자 조정 기준가' : '아이디어 기준가'}</div>
           <div style="font-weight:500;">${basePrice ? basePrice.toLocaleString()+'원' : '—'}</div>
           ${realBuy
             ? `<div style="font-size:10px;color:var(--muted);">실제 평균 매수가 ${realBuy.toLocaleString()}원</div>` : ''}
@@ -1556,7 +1557,7 @@ function renderPicksTable(picks, prices) {
     return `<tr>
       <td><div class="flex"><div class="avatar ${avCls[i%6]}">${(p.member_name||'').slice(0,2)}</div>${p.member_name}</div></td>
       <td style="font-weight:500;">${p.stock_name}<br><span style="font-size:11px;color:var(--muted);">${p.stock_code||''}${p._isCarryFallback ? ` · ${escapeHtml(automaticPickLabel(p))}` : ''}</span></td>
-      <td>${refPrice ? won(refPrice) : '<span class="muted">-</span>'}</td>
+      <td>${refPrice ? won(refPrice) : '<span class="muted">-</span>'}${p._priceAdjusted ? '<br><small>무상증자 조정</small>' : ''}</td>
       <td>${curPrice ? won(curPrice) : '<span class="muted">-</span>'}</td>
       <td>${dayChangeEl}</td>
       <td>${rateCell}</td>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 매수·매도 등록</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.3">
+  <link rel="stylesheet" href="css/style.css?v=20260921.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -150,9 +150,10 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260907.3"></script>
-<script src="js/corporate-actions-service.js?v=20260920.1"></script>
-<script src="js/db.js?v=20260711.2"></script>
+<script src="js/config.js?v=20260921.1"></script>
+<script src="js/utils/corporate-actions.js?v=20260921.1"></script>
+<script src="js/corporate-actions-service.js?v=20260921.1"></script>
+<script src="js/db.js?v=20260921.1"></script>
 <script>
 let members  = [];
 let allPicks = [];
@@ -402,7 +403,9 @@ async function submitSell() {
 }
 
 function tradeDateTime(date) {
-  return new Date(date + 'T12:00:00+09:00').toISOString();
+  const time = new Date(date + 'T12:00:00+09:00').getTime();
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+  return new Date(date === today ? Math.min(time, Date.now()) : time).toISOString();
 }
 
 function setTradeError(type, message) {

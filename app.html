@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.3">
+  <link rel="stylesheet" href="css/style.css?v=20260921.1">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -210,15 +210,16 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/utils/portfolio.js?v=20260907.3"></script>
-<script src="js/config.js?v=20260907.3"></script>
-<script src="js/corporate-actions-service.js?v=20260920.1"></script>
-<script src="js/db.js?v=20260711.2"></script>
-  <script src="js/pwa.js?v=20260907.3"></script>
+<script src="js/utils/portfolio.js?v=20260921.1"></script>
+<script src="js/config.js?v=20260921.1"></script>
+<script src="js/utils/corporate-actions.js?v=20260921.1"></script>
+<script src="js/corporate-actions-service.js?v=20260921.1"></script>
+<script src="js/db.js?v=20260921.1"></script>
+  <script src="js/pwa.js?v=20260921.1"></script>
 <script>
 (function reloadAfterServiceWorkerUpgrade() {
   if (!('serviceWorker' in navigator)) return;
-  const refreshKey = 'sss-sw-refresh-20260907.3';
+  const refreshKey = 'sss-sw-refresh-20260921.1';
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (refreshing || sessionStorage.getItem(refreshKey) === 'done') return;
@@ -230,7 +231,7 @@
 
 const APP_PAGES = new Set([
   'index', 'presentations', 'picks', 'trade', 'schedule-calendar',
-  'fees', 'settle', 'members', 'mypage', 'admin'
+  'fees', 'settle', 'members', 'mypage', 'admin', 'corporate-actions'
 ]);
 const PAGE_LABELS = {
   index: '홈',
@@ -243,6 +244,7 @@ const PAGE_LABELS = {
   members: '참여자 현황',
   mypage: '내 정보',
   admin: '사용자 관리',
+  'corporate-actions': '무상증자 관리',
 };
 let currentPage = '';
 let currentRoute = '';
@@ -289,7 +291,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20260907.3');
+  params.set('v', '20260921.1');
   const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
     ? 'schedule-order'
     : parsed.page;
@@ -313,7 +315,7 @@ function updateActiveNavigation(page) {
 
 function loadPage(route, options = {}) {
   let parsed = normalizeRoute(route);
-  if (parsed.page === 'admin' && !currentUserIsAdmin) {
+  if (['admin', 'corporate-actions'].includes(parsed.page) && !currentUserIsAdmin) {
     toast('관리자만 접근할 수 있습니다.');
     parsed = normalizeRoute('index');
   }

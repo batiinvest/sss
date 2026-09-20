@@ -49,7 +49,7 @@ async function deactivateMember(id) {
 async function fetchPicksByMonth(month) {
   const { data, error } = await sb.from('picks_with_trades').select('*').eq('month', month).order('submitted_at');
   if (error) { console.error('fetchPicksByMonth:', error); return []; }
-  return data;
+  return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
 }
 
 async function fetchAllPicks(filters = {}) {
@@ -58,13 +58,13 @@ async function fetchAllPicks(filters = {}) {
   if (filters.status)    q = q.eq('status', filters.status);
   const { data, error } = await q.order('month', { ascending: false });
   if (error) { console.error('fetchAllPicks:', error); return []; }
-  return data;
+  return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
 }
 
 async function submitPick(payload) {
   const { data, error } = await sb.from('picks').insert(payload).select().single();
   if (error) throw error;
-  return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
+  return data;
 }
 
 function prevMonthOf(month) {
@@ -106,7 +106,8 @@ async function fetchLatestPriorPicks(month, fields = '*') {
       latestByMember.set(pick.member_id, pick);
     }
   }
-  return [...latestByMember.values()];
+  const rows = [...latestByMember.values()];
+  return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(rows) : rows;
 }
 
 async function fetchCarryForwardSourcePicks(month, fields = '*') {
@@ -352,7 +353,7 @@ async function fetchMyPicks(memberId, filters = {}) {
   if (filters.status) q = q.eq('status', filters.status);
   const { data, error } = await q.order('month', { ascending: false });
   if (error) { console.error('fetchMyPicks:', error); return []; }
-  return data || [];
+  return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data || []) : data || [];
 }
 
 // ── 내 발표 히스토리 (로그인 멤버 기준)

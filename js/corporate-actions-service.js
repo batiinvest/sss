@@ -21,19 +21,36 @@ async function corporateRpc(name, args = {}) {
 }
 
 async function attachCorporatePositions(picks) {
+  if (picks?.some(pick => !pick.pick_id && !pick.id)) return picks;
   if (!picks?.length || !await corporateBackendAvailable()) return picks;
-  const result = await corporateRpc('sss_corporate_positions', {
+  const [result, actions] = await Promise.all([corporateRpc('sss_corporate_positions', {
     p_pick_ids: [...new Set(picks.map(p => String(p.pick_id || p.id)))],
     p_as_of: new Date().toISOString(),
-  });
+  }), corporateRpc('sss_corporate_actions_list')]);
   const positions = new Map((result || []).map(row => [String(row.pick_id), row]));
-  return picks.map(pick => {
+  const unique = new Map(picks.map(pick => [String(pick.pick_id || pick.id), pick]));
+  return [...unique.values()].map(pick => {
+    const stockActions = (actions || []).filter(action => action.stock_code === pick.stock_code && action.status === 'applied');
+    const basisDate = pick.submitted_at || (pick.carried_from || pick.month || '') + '-01';
+    const originalPrice = pick._originalPriceAt ?? pick.price_at;
+    const originalTarget = pick._originalTargetPrice ?? pick.target_price;
+    const adjustedPrice = adjustedIdeaPrice(originalPrice, basisDate, stockActions);
+    const adjustedTarget = adjustedIdeaPrice(originalTarget, basisDate, stockActions);
+    const decorated = { ...pick, price_at: adjustedPrice ?? originalPrice, target_price: adjustedTarget ?? originalTarget,
+      _originalPriceAt: originalPrice, _originalTargetPrice: originalTarget,
+      _priceAdjusted: adjustedPrice !== null && adjustedPrice !== Number(originalPrice) };
     const position = positions.get(String(pick.pick_id || pick.id));
-    if (!position?.history?.length) return pick;
+    if (!position || !(Number(position.quantity) > 0 || position.sales?.length || position.history?.length)) return decorated;
+    const soldQuantity = (position.sales || []).reduce((sum, sale) => sum + Number(sale.quantity), 0);
+    const soldCost = (position.sales || []).reduce((sum, sale) => sum + Number(sale.quantity) * Number(sale.averagePrice), 0);
+    const soldValue = (position.sales || []).reduce((sum, sale) => sum + Number(sale.quantity) * Number(sale.price), 0);
     return {
-      ...pick, _corporatePosition: position,
-      buy_price: Number(position.averagePrice), buy_quantity: Number(position.quantity),
-      status: Number(position.quantity) > 0 ? 'hold' : pick.status,
+      ...decorated, _corporatePosition: position,
+      buy_price: Number(position.quantity) > 0 ? Number(position.averagePrice) : soldQuantity ? soldCost / soldQuantity : null,
+      buy_quantity: Number(position.quantity),
+      sell_price: soldQuantity ? soldValue / soldQuantity : pick.sell_price,
+      realized_return: soldCost > 0 ? (soldValue - soldCost) / soldCost * 100 : pick.realized_return,
+      status: Number(position.quantity) > 0 ? 'hold' : 'sold',
     };
   });
 }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 투자</title>
-  <link rel="stylesheet" href="css/style.css?v=20260907.3">
+  <link rel="stylesheet" href="css/style.css?v=20260921.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -133,10 +133,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260907.3"></script>
-<script src="js/corporate-actions-service.js?v=20260920.1"></script>
-<script src="js/db.js?v=20260723.1"></script>
-<script src="js/utils/portfolio.js?v=20260907.3"></script>
+<script src="js/config.js?v=20260921.1"></script>
+<script src="js/utils/corporate-actions.js?v=20260921.1"></script>
+<script src="js/corporate-actions-service.js?v=20260921.1"></script>
+<script src="js/db.js?v=20260921.1"></script>
+<script src="js/utils/portfolio.js?v=20260921.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
 <script>
 let allPicks = [];
@@ -751,6 +752,7 @@ async function openInvestmentDetail(id, displayMonth = '') {
   detailBody.innerHTML = `
     ${detailHero}
     ${typeof corporateHistoryMarkup === 'function' ? corporateHistoryMarkup(pick) : ''}
+    ${pick._priceAdjusted ? '<section class="detail-section"><h3>가격 조정</h3><p>아이디어 기준가와 목표가는 무상증자 비율을 반영했습니다. 원래 기준가 ' + won(pick._originalPriceAt) + '</p></section>' : ''}
     ${pick._isCarryFallback ? `<section class="detail-section"><h3>자동 연장</h3><p>${escapeHtml(pick.month)}에는 별도 변경이 없어 ${escapeHtml(pick.carried_from || '이전')} 아이디어를 그대로 유지하고 있습니다.</p></section>` : ''}
     <section class="detail-section"><h3>목표주가</h3><p>${pick.target_price ? Number(pick.target_price).toLocaleString('ko-KR') + '원' : '아직 목표주가가 등록되지 않았습니다.'}</p></section>
     <section class="detail-section"><h3>현재 상태와 다음 단계</h3><p>${stateHelp}</p></section>

@@ -1,0 +1,708 @@
+{
+  "view": " SELECT p.id AS pick_id,\n p.month,\n p.stock_name,\n p.stock_code,\n p.market,\n p.reason,\n p.target_price,\n p.current_cap,\n p.target_cap,\n p.submitted_at,\n p.price_at,\n p.carried_from,\n m.id AS member_id,\n m.name AS member_name,\n b.price AS buy_price,\n b.quantity AS buy_quantity,\n b.traded_at AS bought_at,\n sv.price AS sell_price,\n sv.traded_at AS sold_at,\n CASE\n WHEN sv.price IS NOT NULL THEN 'sold'::text\n ELSE 'hold'::text\n END AS status,\n CASE\n WHEN b.price IS NOT NULL AND sv.price IS NOT NULL THEN round((sv.price - b.price)::numeric / b.price::numeric * 100::numeric, 2)\n ELSE NULL::numeric\n END AS realized_return\n FROM picks p\n JOIN members m ON p.member_id = m.id\n LEFT JOIN trades b ON b.pick_id = p.id AND b.trade_type = 'buy'::text\n LEFT JOIN trades sv ON sv.pick_id = p.id AND sv.trade_type = 'sell'::text;",
+  "columns": [
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "app_settings",
+      "column_name": "key",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "app_settings",
+      "column_name": "value",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "app_settings",
+      "column_name": "updated_at",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "members",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "members",
+      "column_name": "name",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "members",
+      "column_name": "email",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "members",
+      "column_name": "base_amount",
+      "is_nullable": "NO",
+      "column_default": "1000000"
+    },
+    {
+      "udt_name": "date",
+      "data_type": "date",
+      "table_name": "members",
+      "column_name": "joined_at",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_DATE"
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "members",
+      "column_name": "is_active",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "members",
+      "column_name": "note",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "members",
+      "column_name": "created_at",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "members",
+      "column_name": "phone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "picks",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "picks",
+      "column_name": "member_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks",
+      "column_name": "month",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks",
+      "column_name": "stock_name",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks",
+      "column_name": "stock_code",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks",
+      "column_name": "market",
+      "is_nullable": "YES",
+      "column_default": "'KOSPI'::text"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks",
+      "column_name": "reason",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "table_name": "picks",
+      "column_name": "current_cap",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "table_name": "picks",
+      "column_name": "target_cap",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks",
+      "column_name": "target_price",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "picks",
+      "column_name": "submitted_at",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks",
+      "column_name": "price_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks",
+      "column_name": "carried_from",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "picks_with_trades",
+      "column_name": "pick_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "month",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "stock_name",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "stock_code",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "market",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "reason",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks_with_trades",
+      "column_name": "target_price",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "table_name": "picks_with_trades",
+      "column_name": "current_cap",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "table_name": "picks_with_trades",
+      "column_name": "target_cap",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "picks_with_trades",
+      "column_name": "submitted_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks_with_trades",
+      "column_name": "price_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "carried_from",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "picks_with_trades",
+      "column_name": "member_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "member_name",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks_with_trades",
+      "column_name": "buy_price",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks_with_trades",
+      "column_name": "buy_quantity",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "picks_with_trades",
+      "column_name": "bought_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "picks_with_trades",
+      "column_name": "sell_price",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "picks_with_trades",
+      "column_name": "sold_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "picks_with_trades",
+      "column_name": "status",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "picks_with_trades",
+      "column_name": "realized_return",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "settlements",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "settlements",
+      "column_name": "member_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "settlements",
+      "column_name": "pick_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "buy_price",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "sell_price",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "quantity",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "gross_profit",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "tax_fee",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "net_profit",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "settlements",
+      "column_name": "return_rate",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "settlements",
+      "column_name": "new_base_amount",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "settlements",
+      "column_name": "settled_at",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "trades",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "trades",
+      "column_name": "pick_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "trades",
+      "column_name": "member_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "trades",
+      "column_name": "trade_type",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "trades",
+      "column_name": "stock_name",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "trades",
+      "column_name": "stock_code",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "trades",
+      "column_name": "price",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "trades",
+      "column_name": "quantity",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "trades",
+      "column_name": "traded_at",
+      "is_nullable": "YES",
+      "column_default": "now()"
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "trades",
+      "column_name": "note",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.role() = 'authenticated'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "app_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "auth_read",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(auth.role() = 'authenticated'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "app_settings",
+      "permissive": "PERMISSIVE",
+      "policyname": "auth_write",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(auth.role() = 'authenticated'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "members",
+      "permissive": "PERMISSIVE",
+      "policyname": "auth_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(auth.role() = 'authenticated'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "picks",
+      "permissive": "PERMISSIVE",
+      "policyname": "auth_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(auth.role() = 'authenticated'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "settlements",
+      "permissive": "PERMISSIVE",
+      "policyname": "auth_all",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(auth.role() = 'authenticated'::text)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "trades",
+      "permissive": "PERMISSIVE",
+      "policyname": "auth_all",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "triggers": [
+    {
+      "tgname": "trg_calc_settlement",
+      "proname": "calc_settlement",
+      "definition": "CREATE TRIGGER trg_calc_settlement BEFORE INSERT ON public.settlements FOR EACH ROW EXECUTE FUNCTION calc_settlement()",
+      "table_name": "settlements",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.calc_settlement()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nDECLARE\r\n v_base integer;\r\nBEGIN\r\n -- 현재 기준금액 조회\r\n SELECT base_amount INTO v_base FROM members WHERE id = NEW.member_id;\r\n\r\n -- net_profit\r\n NEW.net_profit := NEW.gross_profit - NEW.tax_fee;\r\n\r\n -- return_rate (기준금액 대비)\r\n IF v_base IS NOT NULL AND v_base > 0 THEN\r\n NEW.return_rate := ROUND(NEW.net_profit::numeric / v_base * 100, 2);\r\n ELSE\r\n NEW.return_rate := 0;\r\n END IF;\r\n\r\n -- new_base_amount (손실 복구 없이 순수 누적)\r\n NEW.new_base_amount := COALESCE(v_base, 1000000) + NEW.net_profit;\r\n\r\n RETURN NEW;\r\nEND;\r\n$function$\n"
+    },
+    {
+      "tgname": "trg_update_member_base",
+      "proname": "update_member_base",
+      "definition": "CREATE TRIGGER trg_update_member_base AFTER INSERT ON public.settlements FOR EACH ROW EXECUTE FUNCTION update_member_base()",
+      "table_name": "settlements",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.update_member_base()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nBEGIN\r\n -- new_base_amount 가 NULL 이면 갱신 건너뜀\r\n IF NEW.new_base_amount IS NOT NULL THEN\r\n UPDATE members SET base_amount = NEW.new_base_amount WHERE id = NEW.member_id;\r\n END IF;\r\n RETURN NEW;\r\nEND;\r\n$function$\n"
+    },
+    {
+      "tgname": "trg_auto_settle",
+      "proname": "auto_settle_on_sell",
+      "definition": "CREATE TRIGGER trg_auto_settle AFTER INSERT ON public.trades FOR EACH ROW EXECUTE FUNCTION auto_settle_on_sell()",
+      "table_name": "trades",
+      "function_definition": "CREATE OR REPLACE FUNCTION public.auto_settle_on_sell()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nDECLARE\r\n v_buy_price integer;\r\n v_buy_qty integer;\r\n v_gross integer;\r\n v_fee integer;\r\n v_pick_member uuid;\r\nBEGIN\r\n -- sell 거래가 아니면 무시\r\n IF NEW.trade_type <> 'sell' THEN\r\n RETURN NEW;\r\n END IF;\r\n\r\n -- 같은 pick의 매수 거래 조회\r\n SELECT price, quantity, member_id\r\n INTO v_buy_price, v_buy_qty, v_pick_member\r\n FROM trades\r\n WHERE pick_id = NEW.pick_id\r\n AND trade_type = 'buy'\r\n ORDER BY traded_at ASC\r\n LIMIT 1;\r\n\r\n IF v_buy_price IS NULL THEN\r\n -- 매수 내역 없으면 결산 생략\r\n RETURN NEW;\r\n END IF;\r\n\r\n -- 수량: 매도 수량 사용 (매수 수량과 다를 수 있음)\r\n -- gross_profit: (매도가 - 매수가) × 수량\r\n v_gross := (NEW.price - v_buy_price) * NEW.quantity;\r\n\r\n -- 수수료: 매수금액 + 매도금액의 0.3% (증권거래세 포함 근사치)\r\n v_fee := -ROUND((v_buy_price * NEW.quantity + NEW.price * NEW.quantity) * 0.003);\r\n\r\n -- 이미 결산이 존재하면 중복 생성 방지\r\n IF EXISTS (\r\n SELECT 1 FROM settlements\r\n WHERE pick_id = NEW.pick_id AND member_id = NEW.member_id\r\n ) THEN\r\n -- 기존 결산 업데이트\r\n UPDATE settlements SET\r\n sell_price = NEW.price,\r\n quantity = NEW.quantity,\r\n gross_profit= v_gross,\r\n tax_fee = v_fee,\r\n settled_at = NOW()\r\n WHERE pick_id = NEW.pick_id AND member_id = NEW.member_id;\r\n ELSE\r\n -- 새 결산 생성 (calc_settlement 트리거가 net_profit 등 자동 계산)\r\n INSERT INTO settlements (\r\n member_id, pick_id,\r\n buy_price, sell_price, quantity,\r\n gross_profit, tax_fee\r\n ) VALUES (\r\n NEW.member_id, NEW.pick_id,\r\n v_buy_price, NEW.price, NEW.quantity,\r\n v_gross, v_fee\r\n );\r\n END IF;\r\n\r\n RETURN NEW;\r\nEND;\r\n$function$\n"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "members_email_key",
+      "definition": "UNIQUE (email)",
+      "table_name": "members"
+    },
+    {
+      "conname": "members_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "members"
+    },
+    {
+      "conname": "picks_member_id_fkey",
+      "definition": "FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE",
+      "table_name": "picks"
+    },
+    {
+      "conname": "picks_member_id_month_key",
+      "definition": "UNIQUE (member_id, month)",
+      "table_name": "picks"
+    },
+    {
+      "conname": "picks_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "picks"
+    },
+    {
+      "conname": "trades_member_id_fkey",
+      "definition": "FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE",
+      "table_name": "trades"
+    },
+    {
+      "conname": "trades_pick_id_fkey",
+      "definition": "FOREIGN KEY (pick_id) REFERENCES picks(id) ON DELETE SET NULL",
+      "table_name": "trades"
+    },
+    {
+      "conname": "trades_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "trades"
+    },
+    {
+      "conname": "trades_trade_type_check",
+      "definition": "CHECK ((trade_type = ANY (ARRAY['buy'::text, 'sell'::text])))",
+      "table_name": "trades"
+    },
+    {
+      "conname": "settlements_member_id_fkey",
+      "definition": "FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE",
+      "table_name": "settlements"
+    },
+    {
+      "conname": "settlements_pick_id_fkey",
+      "definition": "FOREIGN KEY (pick_id) REFERENCES picks(id) ON DELETE CASCADE",
+      "table_name": "settlements"
+    },
+    {
+      "conname": "settlements_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "settlements"
+    }
+  ]
+}

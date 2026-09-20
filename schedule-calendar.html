@@ -433,14 +433,12 @@ async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(ne
 function buildScheduleClipboardText(s) {
   const lines = [
     '[SSS 스터디 일정]',
-    '',
     ['stock', 'industry'].includes(s.category) ? CAT_LABEL[s.category] : getRenderedScheduleTitle(s),
-    '',
     `일시: ${s.event_date} ${s.event_time ? s.event_time.slice(0, 5) : '시간 미정'}`,
   ];
   const pres = getSchedulePresentations(s.id, s.event_date);
   if (pres.length) {
-    lines.push('', '발표 순서', '');
+    lines.push('', '발표 순서');
     pres.forEach((p, index) => {
       lines.push(`${index + 1}. ${p.members?.name || '발표자 미정'} - ${getPresentationTopicLabel(p)}`);
     });

@@ -99,13 +99,10 @@ test('schedule copy writes a complete paste-ready notice to the clipboard', asyn
   assert.deepEqual(clipboardWrites, [
     [
       '[SSS 스터디 일정]',
-      '',
       '기업 분석',
-      '',
       '일시: 2026-08-30 20:00',
       '',
       '발표 순서',
-      '',
       '1. 김정훈 - 삼성전자',
       '2. 박지수 - 종목 미입력',
       '',

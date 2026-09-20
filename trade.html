@@ -85,7 +85,7 @@
           </div>
           <div class="form-group">
             <label for="sell-date">매도일</label>
-            <input type="date" id="sell-date" />
+            <input type="date" id="sell-date" onchange="loadAvailableSellQuantity()" />
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -151,6 +151,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260907.3"></script>
+<script src="js/corporate-actions-service.js?v=20260920.1"></script>
 <script src="js/db.js?v=20260711.2"></script>
 <script>
 let members  = [];
@@ -273,6 +274,29 @@ async function loadAvailableSellQuantity() {
   availableSellQuantity = 0;
   if (!pickId) { message.textContent = '매도 가능 수량: 종목을 선택하세요.'; return; }
   message.textContent = '매도 가능 수량을 확인하는 중…';
+  if (await corporateBackendAvailable()) {
+    try {
+      const date = document.getElementById('sell-date').value;
+      if (!date) throw new Error('매도일을 선택하세요.');
+      const rows = await corporateRpc('sss_corporate_positions', {
+        p_pick_ids: [pickId], p_as_of: tradeDateTime(date),
+      });
+      // Server returns all selected positions, including positions without actions.
+      const position = (rows || []).find(row => String(row.pick_id) === String(pickId));
+      if (!position) throw new Error('거래일 기준 잔고를 확인하지 못했습니다.');
+      if (document.getElementById('sell-pick').value !== pickId || document.getElementById('sell-date').value !== date) return;
+      availableSellQuantity = Number(position.tradableQuantity);
+      document.getElementById('sell-qty').max = String(availableSellQuantity);
+      document.getElementById('sell-pick').selectedOptions[0].dataset.buy = String(position.averagePrice);
+      message.textContent = `매도 가능 ${availableSellQuantity.toLocaleString('ko-KR')}주 · 신주 미입고 ${Number(position.pendingQuantity).toLocaleString('ko-KR')}주`;
+      calcSellReturn();
+      return;
+    } catch (error) {
+      message.textContent = error.message;
+      document.getElementById('sell-qty').max = '0';
+      return;
+    }
+  }
   const { data, error } = await sb.from('trades').select('trade_type,quantity').eq('pick_id', pickId);
   if (error) { message.textContent = '매도 가능 수량을 확인하지 못했습니다.'; return; }
   availableSellQuantity = (data || []).reduce((sum, trade) =>
@@ -292,7 +316,7 @@ function calcSellReturn() {
   const sp  = parseInt(document.getElementById('sell-price').value) || 0;
   const sq  = parseInt(document.getElementById('sell-qty').value)   || 0;
   const pickOpt = document.getElementById('sell-pick').selectedOptions[0];
-  const bp  = parseInt(pickOpt?.dataset?.buy) || 0;
+  const bp  = Number(pickOpt?.dataset?.buy) || 0;
 
   if (bp && sp && sq) {
     const r = ((sp - bp) / bp * 100).toFixed(2);

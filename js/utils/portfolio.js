@@ -112,7 +112,14 @@ function buildMemberPortfolioValuation(
   const addPosition = (holding, buyPrice, quantity, usesFallback = false) => {
     if (buyPrice <= 0 || quantity <= 0) return;
     const cost = buyPrice * quantity;
-    const currentPrice = portfolioCurrentPrice(priceMap, holding?.stock_code);
+    let currentPrice = portfolioCurrentPrice(priceMap, holding?.stock_code);
+    const events = holding?._corporatePosition?.history || [];
+    if (events.length) {
+      const entry = priceMap[holding.stock_code];
+      const quoteTime = Date.parse(entry?.updatedAt || entry?.updated_at || '');
+      const lastEx = Math.max(...events.map(event => Date.parse(event.ex_date + 'T00:00:00+09:00')));
+      if (!Number.isFinite(quoteTime) || quoteTime < lastEx) currentPrice = null;
+    }
     const currentValue = currentPrice === null ? null : currentPrice * quantity;
     const estimatedValue = currentValue ?? cost;
     const pnl = currentValue === null ? null : currentValue - cost;
@@ -138,6 +145,12 @@ function buildMemberPortfolioValuation(
     if (!pickId || usedPickIds.has(pickId)) return;
     if (holding._isCarryFallback) return;
     usedPickIds.add(pickId);
+
+    if (holding._corporatePosition) {
+      const adjusted = holding._corporatePosition;
+      addPosition(holding, portfolioNumber(adjusted.averagePrice), portfolioNumber(adjusted.quantity), false);
+      return;
+    }
 
     const state = tradeStateByPick.get(pickId);
     if (state) {

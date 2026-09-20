@@ -182,6 +182,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260907.3"></script>
+<script src="js/utils/portfolio.js?v=20260907.3"></script>
+<script src="js/corporate-actions-service.js?v=20260920.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260723.1"></script>
@@ -251,17 +253,17 @@ async function renderMetrics() {
 
   try {
     // 투자금/잔액 + 결산승률 병렬 조회
-    const [{ data: trades, error: e1 }, { data: settles, error: e2 }] = await Promise.all([
-      sb.from('trades').select('trade_type,price,quantity').eq('member_id', m.id),
+    const [{ data: trades, error: e1 }, { data: settles, error: e2 }, picks] = await Promise.all([
+      sb.from('trades').select('*').eq('member_id', m.id),
       sb.from('settlements').select('net_profit').eq('member_id', m.id),
+      fetchAllPicks({ member_id: m.id }),
     ]);
     if (e1) throw e1;
     if (e2) throw e2;
 
-    const bought   = (trades||[]).filter(t => t.trade_type === 'buy').reduce((s,t) => s + t.price * t.quantity, 0);
-    const sold     = (trades||[]).filter(t => t.trade_type === 'sell').reduce((s,t) => s + t.price * t.quantity, 0);
-    const invested = bought - sold;
-    const cash     = (m.base_amount || 0) - invested;
+    const valuation = buildMemberPortfolioValuation(m, picks, trades || [], {});
+    const invested = valuation.totalCost;
+    const cash = valuation.cash;
     document.getElementById('myInvested').textContent = won(invested);
     document.getElementById('myCash').textContent = `잔액 ${won(cash)}`;
 
@@ -281,10 +283,7 @@ async function renderMetrics() {
 async function renderMyPicks() {
   const tbody = document.getElementById('myPicksTbody');
   try {
-    const { data: picks, error } = await sb.from('picks_with_trades')
-      .select('*').eq('member_id', myMember.id)
-      .order('submitted_at', { ascending: false });
-    if (error) throw error;
+    const picks = await fetchAllPicks({ member_id: myMember.id });
 
     document.getElementById('myPickCount').textContent = (picks||[]).length + '건';
     const holds = (picks||[]).filter(p => p.status === 'hold');
@@ -326,7 +325,7 @@ async function renderMyPicks() {
         ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
       return `<tr>
         <td class="muted">${(p.month||'').replace('-','년 ')}월${isAutoSource ? `<br><span class="badge b-hold">${thisMonth.replace('-','년 ')}월 자동 연장</span>` : ''}</td>
-        <td style="font-weight:500;">${p.stock_name}</td>
+        <td style="font-weight:500;">${escapeHtml(p.stock_name)}<br><small>${escapeHtml(corporatePositionLabel(p))}</small></td>
         <td>${p.buy_price ? won(p.buy_price) : '—'}</td>
         <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
         <td class="${pnlRate !== null ? rCls(pnlRate) : ''}">${pnl !== null ? (pnl>=0?'+':'')+won(pnl)+'('+pnlRate+'%)' : '—'}</td>

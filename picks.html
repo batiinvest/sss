@@ -134,6 +134,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260907.3"></script>
+<script src="js/corporate-actions-service.js?v=20260920.1"></script>
 <script src="js/db.js?v=20260723.1"></script>
 <script src="js/utils/portfolio.js?v=20260907.3"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
@@ -260,6 +261,7 @@ function investmentState(pick) {
 }
 
 function investmentCurrentPrice(pick) {
+  if (pick._corporatePosition && Object.prototype.hasOwnProperty.call(pick, 'currentPrice')) return pick.currentPrice;
   return investmentPriceMap[pick.stock_code]?.price || null;
 }
 
@@ -324,7 +326,8 @@ function investmentCardMarkup(pick, mode) {
   const displayMonth = pick._isCarryFallback ? (pick.month || '') : '';
   const open = `openInvestmentDetail('${escapeHtml(id)}','${escapeHtml(displayMonth)}')`;
   const stockName = escapeHtml(pick.stock_name || '종목 미입력');
-  const stockMeta = [pick.member_name || '담당자 미정', pick.stock_code || '', pick._isCarryFallback ? automaticPickLabel(pick) : '']
+  const stockMeta = [pick.member_name || '담당자 미정', pick.stock_code || '', pick._isCarryFallback ? automaticPickLabel(pick) : '',
+    typeof corporatePositionLabel === 'function' ? corporatePositionLabel(pick) : '']
     .filter(Boolean).map(escapeHtml).join(' · ');
 
   if (mode === 'completed') {
@@ -394,7 +397,7 @@ function renderHoldingTable(rows) {
   const body = document.getElementById('investmentHoldingTableBody');
   const sorted = sortPortfolioHoldings(rows, holdingSortKey, holdingSortDirection);
   body.innerHTML = sorted.length ? sorted.map(row => '<tr>' +
-    '<td><strong>' + escapeHtml(row.stock_name || '종목 미정') + '</strong><small>' + escapeHtml(row.stock_code || '') + '</small></td>' +
+    '<td><strong>' + escapeHtml(row.stock_name || '종목 미정') + '</strong><small>' + escapeHtml(row.stock_code || '') + '</small><small>' + escapeHtml(corporatePositionLabel(row)) + '</small></td>' +
     '<td>' + escapeHtml(row.member_name) + '</td>' +
     '<td>' + row.quantity.toLocaleString('ko-KR') + '주</td>' +
     '<td>' + money(row.buyPrice) + '</td><td>' + money(row.currentPrice) + '</td>' +
@@ -747,6 +750,7 @@ async function openInvestmentDetail(id, displayMonth = '') {
       </div>`;
   detailBody.innerHTML = `
     ${detailHero}
+    ${typeof corporateHistoryMarkup === 'function' ? corporateHistoryMarkup(pick) : ''}
     ${pick._isCarryFallback ? `<section class="detail-section"><h3>자동 연장</h3><p>${escapeHtml(pick.month)}에는 별도 변경이 없어 ${escapeHtml(pick.carried_from || '이전')} 아이디어를 그대로 유지하고 있습니다.</p></section>` : ''}
     <section class="detail-section"><h3>목표주가</h3><p>${pick.target_price ? Number(pick.target_price).toLocaleString('ko-KR') + '원' : '아직 목표주가가 등록되지 않았습니다.'}</p></section>
     <section class="detail-section"><h3>현재 상태와 다음 단계</h3><p>${stateHelp}</p></section>
@@ -761,7 +765,7 @@ async function openInvestmentDetail(id, displayMonth = '') {
   detailBuyButton.disabled = false;
   detailBuyButton.onclick = () => navigateToAppRoute(`trade?type=buy&pick=${encodeURIComponent(pick.pick_id || pick.id)}`);
   detailSellButton.hidden = state.key !== 'investing';
-  detailSellButton.disabled = quantity <= 0;
+  detailSellButton.disabled = (pick._corporatePosition ? Number(pick._corporatePosition.tradableQuantity) : quantity) <= 0;
   detailSellButton.textContent = detailSellButton.disabled ? '보유수량 없음' : '매도 등록';
   detailSellButton.onclick = () => navigateToAppRoute(`trade?type=sell&pick=${encodeURIComponent(pick.pick_id || pick.id)}`);
 }

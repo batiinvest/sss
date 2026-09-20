@@ -316,7 +316,9 @@ async function initSidebarAuth() {
       sb.from('trades').select('*').eq('member_id', me.id),
     ]);
     if (holdingsResult.error || tradesResult.error) throw holdingsResult.error || tradesResult.error;
-    const valuation = buildMemberPortfolioValuation(me, holdingsResult.data || [], tradesResult.data || [], {});
+    const holdings = typeof attachCorporatePositions === 'function'
+      ? await attachCorporatePositions(holdingsResult.data || []) : holdingsResult.data || [];
+    const valuation = buildMemberPortfolioValuation(me, holdings, tradesResult.data || [], {});
     const invested = valuation.totalCost;
     const cash = valuation.cash;
 

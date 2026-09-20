@@ -341,6 +341,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260907.3"></script>
+<script src="js/corporate-actions-service.js?v=20260920.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
 <script src="js/utils/presentation.js?v=20260529"></script>
 <script src="js/utils/portfolio.js?v=20260907.3"></script>
@@ -1281,12 +1282,7 @@ async function refreshPrices() {
   const rateEl = document.getElementById('unrealizedRate');
 
   try {
-    const { data: holdPicks, error: holdPicksError } = await sb.from('picks_with_trades')
-      .select('pick_id, stock_name, stock_code, buy_price, buy_quantity, status, member_id, member_name, month')
-      .eq('status', 'hold')
-      .gt('buy_price', 0)
-      .gt('buy_quantity', 0);
-    if (holdPicksError) throw holdPicksError;
+    const holdPicks = await fetchAllPicks();
 
     const activeMemberIds = new Set(
       (currentPortfolioContext.members || []).map(member => String(member.id))

@@ -64,7 +64,7 @@ async function fetchAllPicks(filters = {}) {
 async function submitPick(payload) {
   const { data, error } = await sb.from('picks').insert(payload).select().single();
   if (error) throw error;
-  return data;
+  return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
 }
 
 function prevMonthOf(month) {
@@ -230,6 +230,9 @@ async function fetchAllTrades() {
 }
 
 async function submitTrade(payload) {
+  if (typeof corporateBackendAvailable === 'function' && await corporateBackendAvailable()) {
+    return submitCorporateTrade(payload);
+  }
   const { data, error } = await sb.from('trades').insert(payload).select().single();
   if (error) throw error;
   return data;

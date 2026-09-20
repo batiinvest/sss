@@ -17,7 +17,10 @@
         <div class="page-title">사용자 관리</div>
         <div class="updated">참여자 추가 · 정보 수정 · 탈퇴 처리 &nbsp;·&nbsp; 수익률 현황은 <a href="members.html" style="color:var(--accent);">참여자 현황</a>에서 확인</div>
       </div>
-      <button class="btn btn-primary" id="addMemberBtn" onclick="openForm()">+ 참여자 추가</button>
+      <div class="flex-wrap gap-8">
+        <a class="btn" href="corporate-actions.html">무상증자 관리</a>
+        <button class="btn btn-primary" id="addMemberBtn" onclick="openForm()">+ 참여자 추가</button>
+      </div>
     </div>
 
     <!-- 관리자 전용 안내 배너 (비관리자에게만 표시) -->
@@ -104,6 +107,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260907.3"></script>
+<script src="js/corporate-actions-service.js?v=20260920.1"></script>
 <script src="js/db.js?v=20260427"></script>
 <script>
 // 현재 수정 중인 멤버 ID를 전역 변수로 관리 (hidden input 대신)

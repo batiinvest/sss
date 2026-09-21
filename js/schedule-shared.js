@@ -144,15 +144,7 @@ function getAutomaticPresentationScheduleTitle(
       : inferredIndustryNames.length === 1
         ? inferredIndustryNames
         : []
-    : category === 'stock'
-      ? uniqueScheduleTitleParts(
-          linkedPresentations
-            .filter(presentation => presentation?.category !== 'industry')
-            .map(presentation =>
-              getPresentationScheduleTopicParts(presentation).subject
-            )
-        )
-      : [];
+    : [];
   return detailParts.length
     ? `${baseTitle} — ${detailParts.join('·')}`
     : baseTitle;
@@ -172,6 +164,9 @@ function getScheduleDisplayTitle(schedule, linkedPresentations = [], opts = {}) 
       getScheduleEventType(schedule.category),
       schedule.category
     );
+  }
+  if (schedule.category === 'stock' && /^(기업 분석|종목 분석)\s*[—–-]\s*.+$/.test(storedTitle)) {
+    return PRESENTATION_SCHEDULE_AUTO_TITLES.stock;
   }
   if (storedTitle && !isManagedPresentationScheduleTitle(storedTitle)) {
     return storedTitle;

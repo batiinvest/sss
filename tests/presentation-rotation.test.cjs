@@ -144,14 +144,14 @@ test('schedule types derive presentation categories and automatic titles', () =>
   ];
   assert.equal(
     getAutomaticPresentationScheduleTitle('stock', stockRows),
-    '기업 분석 — Qualcomm·LS',
+    '기업 분석',
   );
   assert.equal(
     getScheduleDisplayTitle(
       { category: 'stock', title: '기업 분석' },
       stockRows,
     ),
-    '기업 분석 — Qualcomm·LS',
+    '기업 분석',
   );
 
   const industryRows = [

@@ -3421,8 +3421,48 @@ button:disabled { cursor: wait; opacity: 0.62; }
   .desktop-holdings-table th button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 }
 @media (min-width:1100px) {
-  .portfolio-overview-grid { grid-template-columns:minmax(300px,0.8fr) minmax(620px,1.2fr); }
+  .portfolio-overview-grid { grid-template-columns:minmax(260px,0.6fr) minmax(620px,1.4fr); }
   .portfolio-chart-content { display:flex; flex-direction:column; align-items:center; gap:14px; }
   .portfolio-donut { width:220px; }
   .portfolio-legend { width:100%; max-height:210px; }
+}
+
+/* Home portfolio: asset allocation and position details have distinct roles. */
+#portfolioOverview { align-items:start; }
+#portfolioOverview .portfolio-chart-card,
+#portfolioOverview .portfolio-holdings-card { min-height:0; }
+#portfolioOverview .portfolio-chart-content { min-height:0; }
+#portfolioOverview .portfolio-legend { max-height:none; overflow:visible; }
+#portfolioOverview .portfolio-table-wrap { max-height:none; overflow-x:auto; }
+#portfolioOverview .portfolio-holdings-table th,
+#portfolioOverview .portfolio-holdings-table td { width:auto; }
+#portfolioOverview .portfolio-holdings-table th:first-child { width:29%; }
+.portfolio-weight { font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.portfolio-price-note { margin:10px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
+@media (max-width:768px) {
+  #portfolioOverview { display:grid !important; grid-template-columns:minmax(0,1fr); }
+  #portfolioOverview .portfolio-chart-content { display:flex; flex-direction:column; gap:12px; align-items:stretch; }
+  #portfolioOverview .portfolio-donut { width:100%; height:12px; aspect-ratio:auto; border-radius:6px; background:linear-gradient(to right, #1d5fa7 var(--stock-share, 0%), #cbd5e1 var(--stock-share, 0%)) !important; }
+  #portfolioOverview .portfolio-donut-center { display:none; }
+  #portfolioOverview .portfolio-donut-wrap { display:block; }
+  #portfolioOverview .portfolio-legend { flex-direction:row; gap:12px; }
+  #portfolioOverview .portfolio-legend-row { flex:1; padding:4px 0; gap:6px; }
+  #portfolioOverview .portfolio-table-wrap { margin:0; padding:0; width:100%; }
+  #portfolioOverview .portfolio-table-wrap::after { display:none; }
+  #portfolioOverview .portfolio-holdings-table { min-width:0 !important; width:100%; table-layout:fixed; }
+  #portfolioOverview .portfolio-holdings-table th:first-child { width:32%; }
+  #portfolioOverview .portfolio-holdings-table th:nth-child(3) { width:26%; }
+  #portfolioOverview .portfolio-holdings-table th:nth-child(4) { width:16%; }
+  #portfolioOverview .portfolio-holdings-table th:nth-child(5) { width:26%; }
+  #portfolioOverview .portfolio-holdings-table th,
+  #portfolioOverview .portfolio-holdings-table td { padding:10px 4px; }
+  #portfolioOverview .portfolio-holdings-table th:nth-child(2),
+  #portfolioOverview .portfolio-holdings-table td:nth-child(2) { display:none; }
+  #portfolioOverview .portfolio-holdings-table td:nth-child(3) .portfolio-cell-meta { display:none; }
+  #portfolioOverview .portfolio-stock-name { white-space:normal; overflow-wrap:anywhere; font-size:12px; }
+  #portfolioOverview .portfolio-cell-value,
+  #portfolioOverview .portfolio-return,
+  #portfolioOverview .portfolio-weight { font-size:12px; }
+  #portfolioOverview .portfolio-cell-meta { font-size:10px; white-space:normal; }
+  #portfolioOverview .portfolio-status-chip { font-size:11px; padding:3px 7px; }
 }

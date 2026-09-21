@@ -233,7 +233,7 @@ test('home dashboard places portfolio chart and holdings table above monthly pic
   assert.match(index, /class="portfolio-overview-grid desktop-home-dashboard"/);
   assert.match(index, /id="portfolioDonut"[^>]+role="img"/);
   assert.match(index, /id="portfolioHoldingsTbody"/);
-  assert.match(index, /<caption class="sr-only">현재 보유 중인 종목별 수량, 평가금액과 수익률<\/caption>/);
+  assert.match(index, /<caption class="sr-only">현재 보유 중인 종목별 수량, 평가금액, 총자산 대비 비중과 수익률<\/caption>/);
   assert.match(index, /<th scope="col">종목<\/th>/);
   assert.match(index, /function renderPortfolioOverview\(/);
   assert.match(index, /renderPortfolioOverview\(currentPortfolioContext, globalPriceMap\)/);

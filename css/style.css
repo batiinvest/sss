@@ -3428,7 +3428,7 @@ button:disabled { cursor: wait; opacity: 0.62; }
 }
 
 /* Home portfolio: asset allocation and position details have distinct roles. */
-#portfolioOverview { align-items:start; }
+#portfolioOverview { align-items:stretch; }
 #portfolioOverview .portfolio-chart-card,
 #portfolioOverview .portfolio-holdings-card { min-height:0; }
 #portfolioOverview .portfolio-chart-content { min-height:0; }
@@ -3439,6 +3439,18 @@ button:disabled { cursor: wait; opacity: 0.62; }
 #portfolioOverview .portfolio-holdings-table th:first-child { width:29%; }
 .portfolio-weight { font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .portfolio-price-note { margin:10px 0 0; color:var(--muted); font-size:11px; line-height:1.5; }
+@media (min-width:1100px) {
+  #portfolioOverview { grid-template-columns:minmax(260px,360px) minmax(0,1fr); }
+  #portfolioOverview .portfolio-chart-content {
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:minmax(0,1fr) auto;
+    align-items:stretch;
+    gap:24px;
+  }
+  #portfolioOverview .portfolio-donut { width:min(100%,260px); }
+  #portfolioOverview .portfolio-legend { padding-top:16px; border-top:1px solid var(--border); }
+}
 @media (max-width:768px) {
   #portfolioOverview { display:grid !important; grid-template-columns:minmax(0,1fr); }
   #portfolioOverview .portfolio-chart-content { display:flex; flex-direction:column; gap:12px; align-items:stretch; }

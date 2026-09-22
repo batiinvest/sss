@@ -256,6 +256,15 @@ test('portfolio chart keeps its smallest labels readable', () => {
   assert.match(css, /\.portfolio-cell-meta \{[\s\S]*?font-size: 11px;/);
 });
 
+test('desktop portfolio panels align while mobile allocation remains compact', () => {
+  const css = read('css/style.css');
+  assert.match(css, /#portfolioOverview \{ align-items:stretch; \}/);
+  assert.doesNotMatch(css, /#portfolioOverview \{ align-items:start; \}/);
+  assert.match(css, /#portfolioOverview \{ grid-template-columns:minmax\(260px,360px\) minmax\(0,1fr\); \}/);
+  assert.match(css, /grid-template-rows:minmax\(0,1fr\) auto/);
+  assert.match(css, /#portfolioOverview \.portfolio-donut \{ width:100%; height:12px;/);
+});
+
 test('holding cards preserve the same remaining quantities and costs as the fund snapshot', () => {
   const { buildPortfolioSnapshot, portfolioHoldingRows } = loadPortfolioHelpers();
   const members = [{ id: 'a', name: '멤버', base_amount: 5000 }];

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 내 정보</title>
-  <link rel="stylesheet" href="css/style.css?v=20260921.3">
+  <link rel="stylesheet" href="css/style.css?v=20260922.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -186,6 +186,7 @@
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
 <script src="js/corporate-actions-service.js?v=20260921.3"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
+<script src="js/utils/presentation.js?v=20260922"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260921.3"></script>
 <script>
@@ -365,7 +366,7 @@ async function renderMyPresentations() {
 
     // 평균 수익률
     const withRet = pres
-      .map(p => ({ item: p, rate: calcReturnRate(p.price_at, myPriceMap[p.stock_code]?.price) }))
+      .map(p => ({ item: p, rate: calcReturnRate(getPresentationReturnBase(p), myPriceMap[p.stock_code]?.price) }))
       .filter(x => x.rate !== null);
     const returns = withRet.map(x => x.rate);
     const avg = returns.length ? returns.reduce((s,r) => s+r, 0) / returns.length : null;
@@ -376,7 +377,7 @@ async function renderMyPresentations() {
     tbody.innerHTML = pres.map(p => {
       const cur      = p.stock_code ? myPriceMap[p.stock_code] : null;
       const curPrice = cur?.price;
-      const retNum = calcReturnRate(p.price_at, curPrice);
+      const retNum = calcReturnRate(getPresentationReturnBase(p), curPrice);
       const ret = retNum !== null ? retNum.toFixed(1) : null;
       const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
       const catBadge  = p.category === 'industry'

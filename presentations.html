@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 발표 기록</title>
-  <link rel="stylesheet" href="css/style.css?v=20260921.3">
+  <link rel="stylesheet" href="css/style.css?v=20260922.1">
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
@@ -129,7 +129,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20260529"></script>
+<script src="js/utils/presentation.js?v=20260922"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260921.3"></script>
 <script>
@@ -310,14 +310,15 @@ function getCurPrice(p) {
 
 function getReturn(p) {
   const cur = getCurPrice(p);
-  return calcReturnRate(p.price_at, cur?.price);
+  return calcReturnRate(getPresentationReturnBase(p), cur?.price);
 }
 
 function getCapReturn(p) {
   const cur = getCurPrice(p);
   if (!cur?.market_cap) return null;
-  if (p.price_at && cur.price) {
-    return calcMarketCapReturn(calcMarketCapAt(p.price_at, cur.price, cur.market_cap), cur.market_cap);
+  const basePrice = getPresentationReturnBase(p);
+  if (basePrice && cur.price) {
+    return calcMarketCapReturn(calcMarketCapAt(basePrice, cur.price, cur.market_cap), cur.market_cap);
   }
   return calcMarketCapReturn(p.market_cap_at, cur.market_cap);
 }
@@ -361,7 +362,7 @@ function renderPresentationCards(data) {
       <span class="mobile-stock-card-head"><strong>${escapeHtml(stockName)}</strong><span class="badge ${item.status === 'planned' ? 'b-warn' : 'b-sold'}">${status}</span></span>
       <span class="mobile-stock-card-meta">${escapeHtml(memberName)} · ${escapeHtml(item.presented_at || '날짜 미정')} ${item.stock_code ? '· ' + escapeHtml(item.stock_code) : ''}</span>
       <span class="mobile-stock-card-metrics">
-        <span>발표 당시가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
+        <span title="${escapeHtml(getPresentationPriceTitle(item))}">발표일 종가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '확인 대기'}</strong></span>
         <span>현재가<strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>발표 후 수익률<strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></span>
       </span>
@@ -540,7 +541,7 @@ async function openPresentationDetail(id) {
       <div><span>현재가</span><strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></div>
       <div><span>발표 후 수익률</span><strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></div>
       <div><span>목표주가</span><strong>${targetPrice ? Number(targetPrice).toLocaleString('ko-KR') + '원' : '미등록'}</strong></div>
-      <div><span>발표 당시가</span><strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '—'}</strong></div>
+      <div title="${escapeHtml(getPresentationPriceTitle(item))}"><span>발표일 종가</span><strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '확인 대기'}</strong></div>
       <div><span>상태</span><strong>${statusLabel}</strong></div>
       <div><span>최근 업데이트</span><strong>${escapeHtml(item.updated_at ? fmtDate(item.updated_at) : item.presented_at || '—')}</strong></div>
     </div>
@@ -651,6 +652,7 @@ function renderTable(data) {
       <td style="text-align:right;">
         ${p.status === 'planned'
           ? (cur?.price ? '<span style="font-size:13px;font-weight:500;">' + cur.price.toLocaleString() + '원</span>' : '<span style="color:var(--muted);font-size:12px;">—</span>')
+          : isAutomaticPresentationPrice(p) ? `<span title="${escapeHtml(getPresentationPriceTitle(p))}">${p.price_at ? p.price_at.toLocaleString() + '원' : '확인 대기'}</span>`
           : (cur || p.price_at) ? `<div class="price-cell price-cell-editable" onclick="editPriceAt('${p.id}', ${p.price_at || 0}, this)"
               title="클릭하여 발표 당시 주가 입력"
               style="cursor:pointer;padding:3px 6px;border-radius:4px;display:inline-block;min-width:60px;text-align:right;">
@@ -662,9 +664,9 @@ function renderTable(data) {
       <td style="text-align:right;" class="${retCls}"><strong>${retStr}</strong></td>
       <td style="text-align:right;font-size:12px;color:var(--muted);" class="hist-hide-mobile">
         ${(()=>{
-          // price_at 있고 현재가·현재시총 있으면 비율로 역산
-          if (p.price_at && cur?.price && cur?.market_cap) {
-            const capAt = Math.round(cur.market_cap * (p.price_at / cur.price));
+          const basePrice = getPresentationReturnBase(p);
+          if (basePrice && cur?.price && cur?.market_cap) {
+            const capAt = Math.round(cur.market_cap * (basePrice / cur.price));
             return capAt.toLocaleString() + '억';
           }
           return p.market_cap_at ? p.market_cap_at.toLocaleString() + '억' : '—';
@@ -681,6 +683,7 @@ function renderTable(data) {
 
 // ── 발표 당시가 인라인 편집
 function editPriceAt(id, currentPrice, cell) {
+  if (isAutomaticPresentationPrice(allData.find(p => p.id === id))) return;
   // 이미 편집 중이면 무시
   if (cell.querySelector('.price-edit-input')) return;
 
@@ -718,6 +721,7 @@ function editPriceAt(id, currentPrice, cell) {
 }
 
 async function savePriceAt(id, priceVal, cell) {
+  if (isAutomaticPresentationPrice(allData.find(p => p.id === id))) return;
   const price = parseInt(priceVal);
   if (!price || price <= 0) { toast('올바른 주가를 입력하세요.'); return; }
 
@@ -783,8 +787,9 @@ function updateRowStats(row, id) {
 
   // 수익률
   let retStr = '—'; let retCls = '';
-  if (p.price_at && cur?.price) {
-    const ret = (cur.price - p.price_at) / p.price_at * 100;
+  const basePrice = getPresentationReturnBase(p);
+  if (basePrice && cur?.price) {
+    const ret = calcReturnRate(basePrice, cur.price);
     retCls = ret >= 0 ? 'up' : 'dn';
     retStr = '<strong>' + (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%</strong>';
   }
@@ -795,8 +800,8 @@ function updateRowStats(row, id) {
   // 시총(발표시) — stock_prices의 shares를 모르므로 직접 입력한 price_at 기준으로
   // market_cap_at은 별도 입력이 없으면 비율로 추정
   // 현재 시총이 있으면 비율로 발표 당시 시총 추정
-  if (p.price_at && cur?.price && cur?.market_cap) {
-    const capAt = Math.round(cur.market_cap * (p.price_at / cur.price));
+  if (basePrice && cur?.price && cur?.market_cap) {
+    const capAt = Math.round(cur.market_cap * (basePrice / cur.price));
     tds[7].style.textAlign = 'right'; tds[7].style.fontSize = '12px'; tds[7].style.color = 'var(--muted)';
     tds[7].textContent = capAt.toLocaleString() + '억';
     tds[8].style.textAlign = 'right'; tds[8].style.fontSize = '12px'; tds[8].style.color = 'var(--muted)';

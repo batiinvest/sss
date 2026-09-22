@@ -1,4 +1,4 @@
-const APP_VERSION = '20260921.3';
+const APP_VERSION = '20260922.1';
 const CACHE_NAME = `sss-pwa-v${APP_VERSION}`;
 const STYLE_URL = `./css/style.css?v=${APP_VERSION}`;
 

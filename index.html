@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20260921.3">
+  <link rel="stylesheet" href="css/style.css?v=20260922.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -332,7 +332,7 @@
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
 <script src="js/corporate-actions-service.js?v=20260921.3"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20260529"></script>
+<script src="js/utils/presentation.js?v=20260922"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
 <script src="js/db.js?v=20260921.3"></script>
@@ -521,7 +521,7 @@ function renderMobileRecentPresentations(items) {
   }
   container.innerHTML = items.map(item => {
     const current = globalPriceMap[item.stock_code]?.price || null;
-    const rate = item.price_at && current ? (current - item.price_at) / item.price_at * 100 : null;
+    const rate = calcReturnRate(getPresentationReturnBase(item), current);
     const name = mobilePresentationName(item);
     const status = item.status === 'planned' ? '발표 예정' : '발표 완료';
     const presentationDate = item.status === 'planned' && !item.schedule_id
@@ -1208,7 +1208,7 @@ async function renderMyPresData(me, presData, priceMap) {
     const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
     const cur       = p.stock_code ? mergedMap[p.stock_code] : null;
     const curPrice  = cur?.price;
-    const ret       = calcReturnRate(p.price_at, curPrice);
+    const ret       = calcReturnRate(getPresentationReturnBase(p), curPrice);
     const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
     return `<tr>
       <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at || '—'}</td>
@@ -1347,7 +1347,7 @@ async function loadTopPresentationReturns(scope = topPresentationReturnScope) {
 
   try {
     const { data: presRows, error: presError } = await sb.from('presentations')
-      .select('id, member_id, category, topic, stock_code, price_at, presented_at, status')
+      .select('id, member_id, category, topic, stock_code, price_at, price_adjusted_at, price_date, price_source, presented_at, status')
       .not('stock_code', 'is', null)
       .not('price_at', 'is', null);
     if (presError) throw presError;
@@ -1383,7 +1383,7 @@ async function loadTopPresentationReturns(scope = topPresentationReturnScope) {
 
     const ranked = presentations.map(p => {
       const currentPrice = priceMap[p.stock_code]?.price;
-      const basePrice = Number(p.price_at);
+      const basePrice = getPresentationReturnBase(p);
       const returnRate = calcReturnRate(basePrice, currentPrice);
       if (returnRate === null) return null;
       return {
@@ -1411,8 +1411,8 @@ async function loadTopPresentationReturns(scope = topPresentationReturnScope) {
           <div class="rank-name">${stockName}<span class="rank-tag ${p.category === 'industry' ? 'rank-tag-industry' : 'rank-tag-stock'}">${categoryText}</span></div>
           <div class="rank-meta">${p.stock_code || '-'} · ${p.presenter} · ${dateText}</div>
         </div>
-        <div class="rank-price">
-          ${won(p.basePrice)} → ${won(p.currentPrice)}
+        <div class="rank-price" title="${escapeHtml(getPresentationPriceTitle(p))}">
+          ${won(p.price_at)} → ${won(p.currentPrice)}
         </div>
         <div class="rank-return ${rCls(p.returnRate)}">${pct(p.returnRate)}</div>
       </div>`;

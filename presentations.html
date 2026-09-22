@@ -362,7 +362,7 @@ function renderPresentationCards(data) {
       <span class="mobile-stock-card-head"><strong>${escapeHtml(stockName)}</strong><span class="badge ${item.status === 'planned' ? 'b-warn' : 'b-sold'}">${status}</span></span>
       <span class="mobile-stock-card-meta">${escapeHtml(memberName)} · ${escapeHtml(item.presented_at || '날짜 미정')} ${item.stock_code ? '· ' + escapeHtml(item.stock_code) : ''}</span>
       <span class="mobile-stock-card-metrics">
-        <span title="${escapeHtml(getPresentationPriceTitle(item))}">발표일 종가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '확인 대기'}</strong></span>
+        <span title="${escapeHtml(getPresentationPriceTitle(item))}">발표일 종가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : isAutomaticPresentationPrice(item) ? '확인 대기' : '—'}</strong></span>
         <span>현재가<strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>발표 후 수익률<strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></span>
       </span>
@@ -541,7 +541,9 @@ async function openPresentationDetail(id) {
       <div><span>현재가</span><strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></div>
       <div><span>발표 후 수익률</span><strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></div>
       <div><span>목표주가</span><strong>${targetPrice ? Number(targetPrice).toLocaleString('ko-KR') + '원' : '미등록'}</strong></div>
-      <div title="${escapeHtml(getPresentationPriceTitle(item))}"><span>발표일 종가</span><strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '확인 대기'}</strong></div>
+      <div title="${escapeHtml(getPresentationPriceTitle(item))}"><span>발표일 종가</span><strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : isAutomaticPresentationPrice(item) ? '확인 대기' : '—'}</strong></div>
+      ${getPresentationReturnBase(item) && Number(item.price_adjusted_at) !== Number(item.price_at) && isAutomaticPresentationPrice(item)
+        ? `<div><span>수익률 기준 수정종가</span><strong>${Number(item.price_adjusted_at).toLocaleString('ko-KR')}원</strong></div>` : ''}
       <div><span>상태</span><strong>${statusLabel}</strong></div>
       <div><span>최근 업데이트</span><strong>${escapeHtml(item.updated_at ? fmtDate(item.updated_at) : item.presented_at || '—')}</strong></div>
     </div>

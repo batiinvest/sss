@@ -7,6 +7,8 @@ declare
   n bigint;
   accepted boolean;
 begin
+  -- The nested subtransaction also rolls back if an editor drops outer transaction statements.
+  begin
   select * into strict p from public.presentations
   where stock_code ~ '^[0-9]{6}$' and coalesce(status, 'done') = 'done'
     and presented_at < (now() at time zone 'Asia/Seoul')::date
@@ -40,6 +42,9 @@ begin
   if public.apply_presentation_day_price(p.id, p.stock_code, p.presented_at - 1, 100, 50, now()) then
     raise exception 'Planned presentation accepted';
   end if;
+  raise exception using errcode = 'P0099', message = 'Rollback successful test mutations';
+  exception when sqlstate 'P0099' then null;
+  end;
 end;
 $$;
 rollback;

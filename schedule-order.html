@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20260922.2">
+  <link rel="stylesheet" href="css/style.css?v=20261020.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -782,6 +782,30 @@ function renderMemberPresPanel() {
       rightArea.appendChild(chip);
 
     } else {
+      // 이전 회차 완료 기록도 보여 주어 '미입력'으로 오해하지 않게 한다.
+      const latestCompleted = presentations
+        .filter(p => String(p.member_id) === String(m.id) && p.status === 'done' && p.topic &&
+          getPresentationRotationDate(p, schedules) &&
+          getPresentationRotationDate(p, schedules) <= toDateStr(new Date()))
+        .slice().sort((a, b) =>
+          String(getPresentationRotationDate(b, schedules)).localeCompare(
+            String(getPresentationRotationDate(a, schedules))) ||
+          String(b.created_at || '').localeCompare(String(a.created_at || ''))
+        )[0];
+      if (latestCompleted) {
+        const historyBtn = document.createElement('button');
+        historyBtn.type = 'button';
+        historyBtn.className = 'pres-stock-chip chip-completed';
+        historyBtn.style.flexBasis = '100%';
+        historyBtn.textContent = '최근 발표 완료 · ' +
+          getPresentationRotationDate(latestCompleted, schedules) + ' · ' + latestCompleted.topic;
+        historyBtn.setAttribute('aria-label', m.name + ' 최근 완료 발표 보기: ' + latestCompleted.topic);
+        historyBtn.onclick = () => goToSchedulePage(
+          'presentations?view=history&id=' + encodeURIComponent(latestCompleted.id)
+        );
+        rightArea.appendChild(historyBtn);
+      }
+
       // 종목 미입력 → 검색 입력창 + 직접 입력 버튼
       const wrap = document.createElement('div');
       wrap.className = 'presentation-stock-search';
@@ -790,7 +814,7 @@ function renderMemberPresPanel() {
       searchWrap.className = 'presentation-stock-search-field';
 
       const input = document.createElement('input');
-      input.type = 'text'; input.placeholder = '종목 검색...';
+      input.type = 'text'; input.placeholder = latestCompleted ? '다음 발표 종목 검색...' : '종목 검색...';
       input.style.cssText = 'width:100%;font-size:12px;padding:5px 8px;';
       input.setAttribute('aria-label', m.name + ' 발표종목 검색');
       input.dataset.memberId   = m.id;

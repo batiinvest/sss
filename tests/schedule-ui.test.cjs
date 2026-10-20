@@ -692,7 +692,7 @@ test('industry names persist independently and legacy topics stay outside the ne
     assert.match(source, /recoverInitialPresentationDrafts\(/);
   }
   assert.match(modal, /getPresentationIndustryConfigKey\(/);
-  assert.match(modal, /return getPresentationTurnState\(allPresentations, orderedMembers\)/);
+  assert.match(modal, /return getPresentationTurnState\(allPresentations, orderedMembers, \{ schedules: _scheduleRows \}\)/);
   assert.doesNotMatch(
     sourceSection(modal, 'function getModalTurnState', '// ── 팝업 HTML 마운트'),
     /includePlanned|p\.status === 'planned'/,
@@ -739,7 +739,7 @@ test('schedule UI cache versions stay aligned', () => {
     assert.equal(matches[0][1], canonical, `${file}: CSS cache key`);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20260921\.3/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20261020\.2/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
   const serviceWorker = read('sw.js');

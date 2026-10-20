@@ -2478,7 +2478,7 @@ test('all schedule surfaces consume the same automatic plan', () => {
   assert.match(modal, /getConfigStrict\('pres_order'\)/);
   assert.doesNotMatch(modal, /from\('app_settings'\).*pres_order/);
   assert.match(modal, /topic, category: cat/);
-  assert.doesNotMatch(modal, /category:\s*_autoAssignment/);
+  assert.doesNotMatch(modal, /topic, category:\s*_autoAssignment/);
   assert.match(modal, /getNextPresentationInputPlanItem/);
   assert.doesNotMatch(modal, /limit\(1\)/);
   assert.doesNotMatch(order, /assignDateModal|dataTransfer|doAssign/);
@@ -2520,4 +2520,30 @@ test('planned presentation display follows its schedule without rewriting comple
   assert.equal(getPresentationDisplayInfo({...original,status:'done'}, schedules).category, 'industry');
   assert.equal(getPresentationDisplayInfo(original, []).category, 'industry');
   assert.equal(original.category, 'industry');
+});
+
+
+test('scheduled cycle advances with missing topics and admits newcomers in the next cycle', () => {
+  const { getPresentationTurnState } = loadHelpers();
+  const roster = [...members.slice(0, 7).map(m => ({ ...m, joined_at: '2025-01-01' })),
+    { id: 'new', name: '신입', joined_at: '2026-09-10' }];
+  const dates = [schedule('a', '2026-09-07', 'stock'),
+    schedule('b', '2026-09-21', 'stock'), schedule('c', '2026-10-05', 'stock')];
+  const partial = getPresentationTurnState([], roster, { schedules: dates, untilDate: '2026-09-22' });
+  assert.equal(partial.category, 'stock');
+  assert.equal(partial.total, 7);
+  assert.equal(partial.pendingMembers.some(m => m.id === 'new'), false);
+  const next = getPresentationTurnState([], roster, { schedules: dates, untilDate: '2026-10-20' });
+  assert.equal(next.category, 'industry');
+  assert.equal(next.total, 8);
+  assert.equal(next.pendingMembers.some(m => m.id === 'new'), true);
+});
+
+test('dinner and future schedules do not complete a presentation cycle', () => {
+  const { getPresentationTurnState } = loadHelpers();
+  const dates = [schedule('a', '2026-09-07', 'industry'),
+    schedule('meal', '2026-09-21', 'dinner'), schedule('future', '2026-10-26', 'industry')];
+  const turn = getPresentationTurnState([], members.slice(0, 7), { schedules: dates, untilDate: '2026-10-20' });
+  assert.equal(turn.category, 'industry');
+  assert.equal(turn.completedCount, 3);
 });

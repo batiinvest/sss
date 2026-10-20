@@ -26,7 +26,7 @@ const ModalPres = (() => {
 
   function getModalTurnState(allPresentations, orderedMembers) {
     if (typeof getPresentationTurnState === 'function') {
-      return getPresentationTurnState(allPresentations, orderedMembers);
+      return getPresentationTurnState(allPresentations, orderedMembers, { schedules: _scheduleRows });
     }
 
     const ordered = (orderedMembers || []).filter(Boolean);
@@ -283,6 +283,7 @@ const ModalPres = (() => {
       _me.id,
       {
         scheduleId: _autoAssignment?.schedule.id,
+        category: _autoAssignment?.schedule.category || modalTurnState.category,
         draftEpoch: _draftEpoch,
         carryoverIds: presentationDraftCarryoverIds,
       }
@@ -293,6 +294,7 @@ const ModalPres = (() => {
     // 1순위: 전체 draft에서 가장 최근 category/industry
     // 2순위: 완료된 발표 기준 다음 카테고리 추천
     const allDrafts = (allRes.data || []).filter(row =>
+      row.category === (_autoAssignment?.schedule.category || modalTurnState.category) &&
       isCurrentUnassignedPresentationDraft(
         row,
         _draftEpoch,

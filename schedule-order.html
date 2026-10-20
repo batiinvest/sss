@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261020.1">
+  <link rel="stylesheet" href="css/style.css?v=20261020.2">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
@@ -112,7 +112,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/db.js?v=20260921.3"></script>
-<script src="js/schedule-shared.js?v=20260921.3"></script>
+<script src="js/schedule-shared.js?v=20261020.2"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -649,7 +649,7 @@ function renderMemberPresPanel() {
   const automaticPlan = getAutomaticPresentationPlan();
   const visiblePlanItem = getVisiblePresentationPlanItem(automaticPlan);
   const cycleCategory = visiblePlanItem?.schedule?.category ||
-    getPresentationTurnState(presentations, orderedMembers).category;
+    getPresentationTurnState(presentations, orderedMembers, { schedules }).category;
   const completedByMember = new Map(
     getCurrentCycleCompletedPresentations(
       schedules,
@@ -711,6 +711,7 @@ function renderMemberPresPanel() {
       m.id,
       {
         scheduleId: autoItem?.schedule.id,
+        category: autoItem?.schedule.category || cycleCategory,
         draftEpoch: presentationDraftEpoch,
       }
     );
@@ -1113,7 +1114,7 @@ function guessNextTurn() {
   const visibleItem = focusedItem || plan.items?.[0] || null;
   const visibleSchedule = visibleItem?.schedule || null;
   const category = visibleSchedule?.category ||
-    getPresentationTurnState(presentations, getOrderedCycleMembers()).category;
+    getPresentationTurnState(presentations, getOrderedCycleMembers(), { schedules }).category;
   const categorySelect = document.getElementById('thisTurnCategory');
   categorySelect.value = category;
   categorySelect.disabled = Boolean(visibleSchedule);

@@ -756,7 +756,8 @@ function findCurrentPresentationDraft(
   const plannedRows = (allPresentations || [])
     .filter(presentation =>
       String(presentation.member_id || '') === memberKey &&
-      presentation.status === 'planned'
+      presentation.status === 'planned' &&
+      (!opts.category || presentation.category === opts.category)
     )
     .sort((a, b) =>
       String(b.created_at || '').localeCompare(String(a.created_at || ''))
@@ -1717,7 +1718,37 @@ async function syncPlannedPresentationsToSchedulePlan(
   return { plan, patches };
 }
 
+// 일정이 있는 회차는 종목 입력 유무가 아니라 경과한 발표 슬롯으로 계산한다.
+// 회차 시작 후 가입한 멤버는 다음 회차부터 참여한다.
+function getScheduledPresentationTurnState(allSchedules, orderedMembers, opts = {}) {
+  const today = opts.untilDate || toDateStr(new Date());
+  const ordered = (orderedMembers || []).filter(m => m?.id);
+  const past = sortPresentationSchedules(allSchedules).filter(s => s.event_date < today);
+  if (!past.length || !ordered.length) return null;
+  const last = past[past.length - 1];
+  let start = past.length - 1;
+  while (start > 0 && past[start - 1].category === last.category) start -= 1;
+  const run = [...new Map(past.slice(start).map(s => [s.event_date, s])).values()];
+  const firstDate = run[0].event_date;
+  const participants = ordered.filter(m => !m.joined_at || String(m.joined_at).slice(0, 10) <= firstDate);
+  if (!participants.length) return null;
+  const groupSize = Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE);
+  const consumed = Math.min(participants.length, run.length * groupSize);
+  const complete = consumed >= participants.length;
+  const category = complete ? (last.category === 'stock' ? 'industry' : 'stock') : last.category;
+  const pending = complete ? ordered : participants.slice(consumed);
+  return {
+    category, label: CAT_LABEL[category], completedCount: complete ? 0 : consumed,
+    total: complete ? ordered.length : participants.length,
+    pendingMembers: pending, nextMember: pending[0] || null,
+    cycleKey: 'scheduled:' + category + ':' + (complete ? last.event_date : firstDate),
+    completedPreviousCycle: complete,
+  };
+}
+
 function getPresentationTurnState(allPresentations, orderedMembers, opts = {}) {
+  const scheduled = getScheduledPresentationTurnState(opts.schedules || [], orderedMembers, opts);
+  if (scheduled) return scheduled;
   const ordered = (orderedMembers || []).filter(Boolean);
   const orderedIds = ordered.map(m => m.id);
   const total = orderedIds.length;

@@ -2547,3 +2547,14 @@ test('dinner and future schedules do not complete a presentation cycle', () => {
   assert.equal(turn.category, 'industry');
   assert.equal(turn.completedCount, 3);
 });
+
+
+test('old carried drafts cannot reappear after a completed schedule cycle', () => {
+  const { findCurrentPresentationDraft } = loadHelpers();
+  const old = orphanDraft('old', 'A', '2026-09-01T00:00:00Z', { category: 'industry', presented_at: '2026-09-07' });
+  const fresh = orphanDraft('new', 'A', '2026-10-25T00:00:00Z', { category: 'industry', presented_at: '2026-10-25' });
+  const opts = { category: 'industry', afterDate: '2026-10-05', draftEpoch: '2026-09-01T00:00:00Z', carryoverIds: new Set(['old']) };
+  assert.equal(findCurrentPresentationDraft([old], 'A', opts), null);
+  assert.equal(findCurrentPresentationDraft([old, fresh], 'A', opts).id, 'new');
+  assert.equal(old.status, 'planned');
+});

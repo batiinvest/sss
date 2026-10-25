@@ -757,7 +757,8 @@ function findCurrentPresentationDraft(
     .filter(presentation =>
       String(presentation.member_id || '') === memberKey &&
       presentation.status === 'planned' &&
-      (!opts.category || presentation.category === opts.category)
+      (!opts.category || presentation.category === opts.category) &&
+      (!opts.afterDate || String(presentation.presented_at || presentation.created_at || '').slice(0, 10) > opts.afterDate)
     )
     .sort((a, b) =>
       String(b.created_at || '').localeCompare(String(a.created_at || ''))
@@ -1534,8 +1535,13 @@ function buildPresentationAssignmentPatches(
     }
   }
 
+  const completedThrough = getScheduledPresentationTurnState(
+    allSchedules, plan.orderedMembers || [], { untilDate: fromDate }
+  )?.completedThrough;
   const eligibleRows = (allPresentations || []).filter(presentation => {
     if (presentation.status !== 'planned' || !presentation.member_id) return false;
+    if (!presentation.schedule_id && completedThrough &&
+        String(presentation.presented_at || presentation.created_at || '').slice(0, 10) <= completedThrough) return false;
     if (!presentation.schedule_id) {
       const isCurrentDraft = isCurrentUnassignedPresentationDraft(
         presentation,
@@ -1743,6 +1749,7 @@ function getScheduledPresentationTurnState(allSchedules, orderedMembers, opts = 
     pendingMembers: pending, nextMember: pending[0] || null,
     cycleKey: 'scheduled:' + category + ':' + (complete ? last.event_date : firstDate),
     completedPreviousCycle: complete,
+    completedThrough: complete ? last.event_date : (past[start - 1]?.event_date || null),
   };
 }
 

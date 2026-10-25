@@ -284,6 +284,7 @@ const ModalPres = (() => {
       {
         scheduleId: _autoAssignment?.schedule.id,
         category: _autoAssignment?.schedule.category || modalTurnState.category,
+        afterDate: modalTurnState.completedThrough,
         draftEpoch: _draftEpoch,
         carryoverIds: presentationDraftCarryoverIds,
       }
@@ -295,6 +296,7 @@ const ModalPres = (() => {
     // 2순위: 완료된 발표 기준 다음 카테고리 추천
     const allDrafts = (allRes.data || []).filter(row =>
       row.category === (_autoAssignment?.schedule.category || modalTurnState.category) &&
+      (!modalTurnState.completedThrough || String(row.presented_at || row.created_at || '').slice(0, 10) > modalTurnState.completedThrough) &&
       isCurrentUnassignedPresentationDraft(
         row,
         _draftEpoch,

@@ -1107,7 +1107,7 @@ test('only past drafts linked to real presentation schedules are completed', () 
   );
 });
 
-test('past schedule overflow is carried forward before expected rows are completed', () => {
+test('past schedule assignments survive current order and group size changes', () => {
   const { classifyPastScheduledPresentationRows } = loadHelpers();
   const schedules = [schedule('past-talk', '2026-07-01', 'industry')];
   const rows = [
@@ -1124,19 +1124,16 @@ test('past schedule overflow is carried forward before expected rows are complet
       { today: '2026-07-25', orderedMembers: members }
     )),
     {
-      completionPatches: ['A', 'B', 'C'].map(memberId => ({
+      completionPatches: ['A', 'B', 'C', 'D'].map(memberId => ({
         id: `p${memberId}`,
         payload: { status: 'done' },
       })),
-      carryoverPatches: [{
-        id: 'pD',
-        payload: { schedule_id: null },
-      }],
+      carryoverPatches: [],
     }
   );
 });
 
-test('past overflow sync preserves the required presentation date', async () => {
+test('past sync only completes stored assignments and never registers carryovers', async () => {
   const registered = [];
   const { syncPastScheduledPresentationsDone } = loadHelpers({
     sb: {
@@ -1182,18 +1179,11 @@ test('past overflow sync preserves the required presentation date', async () => 
     { today: '2026-07-25', orderedMembers: members }
   );
 
-  assert.deepEqual(registered, [{
-    key: 'presentation_draft_carryover_v1:pD',
-    value: true,
-  }]);
+  assert.deepEqual(registered, []);
   assert.deepEqual(updates, [
-    { payload: { schedule_id: null }, ids: ['pD'] },
-    { payload: { status: 'done' }, ids: ['pA', 'pB', 'pC'] },
+    { payload: { status: 'done' }, ids: ['pA', 'pB', 'pC', 'pD'] },
   ]);
-  assert.deepEqual(plain(result.carryoverPatches), [{
-    id: 'pD',
-    payload: { schedule_id: null },
-  }]);
+  assert.deepEqual(plain(result.carryoverPatches), []);
 });
 
 test('the new draft epoch separates legacy orphan topics from the current cycle', () => {
@@ -2557,4 +2547,31 @@ test('old carried drafts cannot reappear after a completed schedule cycle', () =
   assert.equal(findCurrentPresentationDraft([old], 'A', opts), null);
   assert.equal(findCurrentPresentationDraft([old, fresh], 'A', opts).id, 'new');
   assert.equal(old.status, 'planned');
+});
+
+
+test('historical completion preserves same-day schedules and former members', () => {
+  const { classifyPastScheduledPresentationRows } = loadHelpers();
+  const schedules = [
+    schedule('morning', '2026-10-05', 'stock'),
+    schedule('evening', '2026-10-05', 'stock'),
+    schedule('today', '2026-10-25', 'industry'),
+  ];
+  const rows = [
+    presentation('kim', 'morning', 'D', '2026-10-05'),
+    presentation('lee-qqq', 'morning', 'F', '2026-10-05'),
+    presentation('second-talk', 'evening', 'G', '2026-10-05'),
+    presentation('keep-today', 'today', 'A', '2026-10-25'),
+    presentation('unconfirmed', null, 'B', '2026-10-05'),
+  ];
+  for (const orderedMembers of [[], [...members].reverse(), [members[0]]]) {
+    assert.deepEqual(plain(classifyPastScheduledPresentationRows(schedules, rows, {
+      today: '2026-10-25', orderedMembers, groupSize: 1,
+    })), {
+      completionPatches: ['kim', 'lee-qqq', 'second-talk'].map(id => ({
+        id, payload: { status: 'done' },
+      })),
+      carryoverPatches: [],
+    });
+  }
 });

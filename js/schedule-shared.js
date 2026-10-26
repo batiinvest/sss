@@ -802,79 +802,23 @@ function classifyPastScheduledPresentationRows(
   opts = {}
 ) {
   const today = opts.today || toDateStr(new Date());
-  const orderedMembers = (opts.orderedMembers || []).filter(member => member?.id);
-  if (!orderedMembers.length) {
-    return { completionPatches: [], carryoverPatches: [] };
-  }
-  const orderedIds = orderedMembers.map(member => String(member.id));
-  const pastSchedules = sortPresentationSchedules(allSchedules)
-    .filter(schedule => schedule.event_date && schedule.event_date < today);
-  const primaryByDate = new Map();
-  pastSchedules.forEach(schedule => {
-    if (!primaryByDate.has(schedule.event_date)) {
-      primaryByDate.set(schedule.event_date, schedule);
-    }
-  });
-
-  const completionPatches = [];
-  const carryoverPatches = [];
-  const processedIds = new Set();
-  for (const schedule of primaryByDate.values()) {
-    const cursor = inferPresentationCursor(
-      allSchedules,
-      allPresentations,
-      orderedMembers,
-      schedule.event_date,
-      opts.groupSize
-    );
-    const take = Math.min(
-      Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE),
-      orderedIds.length - cursor
-    );
-    const expectedIds = new Set(orderedIds.slice(cursor, cursor + take));
-    const completedMembers = new Set();
-    const linkedRows = (allPresentations || [])
-      .filter(presentation =>
-        presentation.status === 'planned' &&
-        String(presentation.schedule_id || '') === String(schedule.id)
-      )
-      .sort((a, b) =>
-        String(a.created_at || '').localeCompare(String(b.created_at || ''))
-      );
-
-    for (const presentation of linkedRows) {
-      processedIds.add(String(presentation.id));
-      const memberId = String(presentation.member_id || '');
-      if (expectedIds.has(memberId) && !completedMembers.has(memberId)) {
-        completedMembers.add(memberId);
-        completionPatches.push({
-          id: presentation.id,
-          payload: { status: 'done' },
-        });
-      } else {
-        carryoverPatches.push({
-          id: presentation.id,
-          payload: { schedule_id: null },
-        });
-      }
-    }
-  }
-  const pastScheduleIds = new Set(pastSchedules.map(schedule => String(schedule.id)));
-  for (const presentation of allPresentations || []) {
-    if (
-      presentation.status !== 'planned' ||
-      !presentation.schedule_id ||
-      !pastScheduleIds.has(String(presentation.schedule_id)) ||
-      processedIds.has(String(presentation.id))
-    ) {
-      continue;
-    }
-    carryoverPatches.push({
+  // Historical assignments are authoritative. Today's rotation, group size,
+  // and membership must never detach a presenter from a past schedule.
+  const pastScheduleIds = new Set(sortPresentationSchedules(allSchedules)
+    .filter(schedule => schedule.event_date && schedule.event_date < today)
+    .map(schedule => String(schedule.id)));
+  const completionPatches = (allPresentations || [])
+    .filter(presentation =>
+      presentation.id && presentation.member_id &&
+      presentation.status === 'planned' &&
+      presentation.schedule_id &&
+      pastScheduleIds.has(String(presentation.schedule_id))
+    )
+    .map(presentation => ({
       id: presentation.id,
-      payload: { schedule_id: null },
-    });
-  }
-  return { completionPatches, carryoverPatches };
+      payload: { status: 'done' },
+    }));
+  return { completionPatches, carryoverPatches: [] };
 }
 
 function buildPastPresentationCompletionPatches(
@@ -900,15 +844,6 @@ async function syncPastScheduledPresentationsDone(
     allPresentations,
     opts
   );
-  const carryoverIds = classified.carryoverPatches.map(patch => patch.id);
-  if (carryoverIds.length) {
-    await registerPresentationDraftCarryoverIds(carryoverIds);
-    const { error } = await client
-      .from('presentations')
-      .update({ schedule_id: null })
-      .in('id', carryoverIds);
-    if (error) throw error;
-  }
   const patches = classified.completionPatches;
   if (patches.length) {
     const { error } = await client

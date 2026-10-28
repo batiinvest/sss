@@ -256,16 +256,30 @@ function normalizePresentationDate(value) {
   return match ? match[1] : null;
 }
 
-// A new industry turn starts at the first saved presenter, including newcomers.
-function planIndustryStudyCycle(existingSchedules, payload, orderedMembers, opts = {}) {
+function getNextStudyCycleState(allSchedules, orderedMembers, opts = {}) {
+  return getPresentationTurnState(opts.presentations || [], orderedMembers, {
+    schedules: allSchedules,
+    untilDate: opts.startDate || opts.today || toDateStr(new Date()),
+  });
+}
+
+// Each completed turn alternates industry/company, restarting the saved order.
+function planStudyCycle(existingSchedules, payload, orderedMembers, opts = {}) {
   const ordered = normalizePresentationOrder(orderedMembers);
   if (!ordered.length) throw new Error('활동 중인 발표자가 없습니다.');
   const today = opts.today || toDateStr(new Date());
   if (!payload.event_date || payload.event_date < today) {
-    throw new Error('산업스터디 시작일은 오늘 이후로 선택하세요.');
+    throw new Error('스터디 시작일은 오늘 이후로 선택하세요.');
   }
+  const turn = getNextStudyCycleState(existingSchedules, ordered, {
+    ...opts, startDate: payload.event_date,
+  });
+  if (turn.completedCount > 0) {
+    throw new Error('진행 중인 스터디가 아직 끝나지 않았습니다. 마지막 회차 이후의 시작일을 선택하세요.');
+  }
+  const category = turn.category;
   const plan = planBiweeklyPresentationSchedules(existingSchedules, {
-    ...payload, category: 'industry',
+    ...payload, category, title: getAutomaticScheduleTitle('study', category),
   }, { count: Math.ceil(ordered.length / PRESENTATION_GROUP_SIZE) });
   const sessions = plan.candidates.map((candidate, index) => ({
     ...candidate,
@@ -278,11 +292,11 @@ function planIndustryStudyCycle(existingSchedules, payload, orderedMembers, opts
       plan.conflicts.push({ event_date: schedule.event_date, schedules: [schedule] });
     }
   }
-  return { ...plan, sessions };
+  return { ...plan, category, sessions };
 }
 
-async function prepareIndustryCycleRosters(plan, allPresentations = [], opts = {}) {
-  if (plan.conflicts.length) throw new Error('기존 일정과 겹쳐 산업스터디를 등록하지 않았습니다.');
+async function prepareStudyCycleRosters(plan, allPresentations = [], opts = {}) {
+  if (plan.conflicts.length) throw new Error('기존 일정과 겹쳐 스터디를 등록하지 않았습니다.');
   const saved = await getConfigStrict(PRESENTATION_MANUAL_ROSTERS_KEY);
   const rosters = saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...saved } : {};
   const newRows = plan.rowsToCreate.map(row => ({ ...row, id: (opts.createId || (() => crypto.randomUUID()))() }));

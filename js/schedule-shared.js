@@ -256,6 +256,58 @@ function normalizePresentationDate(value) {
   return match ? match[1] : null;
 }
 
+// A new industry turn starts at the first saved presenter, including newcomers.
+function planIndustryStudyCycle(existingSchedules, payload, orderedMembers, opts = {}) {
+  const ordered = normalizePresentationOrder(orderedMembers);
+  if (!ordered.length) throw new Error('활동 중인 발표자가 없습니다.');
+  const today = opts.today || toDateStr(new Date());
+  if (!payload.event_date || payload.event_date < today) {
+    throw new Error('산업스터디 시작일은 오늘 이후로 선택하세요.');
+  }
+  const plan = planBiweeklyPresentationSchedules(existingSchedules, {
+    ...payload, category: 'industry',
+  }, { count: Math.ceil(ordered.length / PRESENTATION_GROUP_SIZE) });
+  const sessions = plan.candidates.map((candidate, index) => ({
+    ...candidate,
+    members: ordered.slice(index * PRESENTATION_GROUP_SIZE, (index + 1) * PRESENTATION_GROUP_SIZE),
+  }));
+  const dates = new Set(sessions.map(session => session.event_date));
+  for (const schedule of existingSchedules) {
+    if (isPresentationSchedule(schedule) && schedule.event_date >= sessions[0].event_date &&
+        schedule.event_date <= sessions.at(-1).event_date && !dates.has(schedule.event_date)) {
+      plan.conflicts.push({ event_date: schedule.event_date, schedules: [schedule] });
+    }
+  }
+  return { ...plan, sessions };
+}
+
+async function prepareIndustryCycleRosters(plan, allPresentations = [], opts = {}) {
+  if (plan.conflicts.length) throw new Error('기존 일정과 겹쳐 산업스터디를 등록하지 않았습니다.');
+  const saved = await getConfigStrict(PRESENTATION_MANUAL_ROSTERS_KEY);
+  const rosters = saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...saved } : {};
+  const newRows = plan.rowsToCreate.map(row => ({ ...row, id: (opts.createId || (() => crypto.randomUUID()))() }));
+  const rows = [...plan.reused, ...newRows];
+  for (const session of plan.sessions) {
+    const matches = rows.filter(row => row.event_date === session.event_date);
+    if (matches.length !== 1) throw new Error('회차별 일정을 확인하지 못했습니다.');
+    const row = matches[0];
+    const ids = session.members.map(member => String(member.id));
+    if (Array.isArray(rosters[row.id]) && JSON.stringify(rosters[row.id].map(String)) !== JSON.stringify(ids)) {
+      throw new Error('기존 일정의 수동 발표 순서가 다릅니다. 시작일을 바꾸거나 기존 일정을 확인하세요.');
+    }
+    if (allPresentations.some(p => String(p.schedule_id) === String(row.id) &&
+        (p.status === 'done' || !ids.includes(String(p.member_id))))) {
+      throw new Error('기존 일정에 다른 발표 기록이 있습니다. 시작일을 바꿔 주세요.');
+    }
+    rosters[row.id] = ids;
+  }
+  // Persist rosters before inserting schedules: even an interrupted response
+  // cannot leave newly created schedules assigned to the wrong presenters.
+  await setConfig(PRESENTATION_MANUAL_ROSTERS_KEY, rosters);
+  presentationManualRosters = rosters;
+  return newRows;
+}
+
 // 운영 DB의 presentations.presented_at은 필수다. 아직 일정이 없는 초안은
 // 오늘을 저장용 기준일로 사용하고, 일정이 생기면 자동 편성에서 실제 날짜로 바꾼다.
 function buildPresentationDraftStoragePayload(payload = {}, opts = {}) {

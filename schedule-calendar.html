@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20261025.2">
+  <link rel="stylesheet" href="css/style.css?v=20261028.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -23,6 +23,7 @@
         <button type="button" class="active" aria-current="page">일정</button>
         <button type="button" onclick="goToSchedulePage('presentations?view=prepare')">발표 관리</button>
       </nav>
+      <button type="button" class="btn" onclick="openForm({category:'industry', industryCycle:true})">산업스터디 시작</button>
       <button type="button" class="btn btn-primary schedule-add-button" onclick="openForm()">+ 일정 추가</button>
     </div>
   </div>
@@ -90,7 +91,7 @@
             onchange="updateScheduleSeriesPreview()"
           />
           <span>
-            <strong>2주 간격으로 3회 자동 등록</strong>
+            <strong id="scheduleSeriesLabel">2주 간격으로 3회 자동 등록</strong>
             <small id="scheduleSeriesHelp">자동 제목·테마·시간·장소를 세 일정에 동일하게 적용합니다.</small>
           </span>
         </label>
@@ -220,7 +221,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/db.js?v=20260921.3"></script>
-<script src="js/schedule-shared.js?v=20261025.2"></script>
+<script src="js/schedule-shared.js?v=20261028.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -965,6 +966,12 @@ function handleScheduleThemeChange() {
   updateScheduleSeriesPreview();
 }
 
+let industryCycleMode = false;
+
+function isIndustryCycleEnabled() {
+  return industryCycleMode && getSelectedScheduleCategory() === 'industry' && isScheduleSeriesEnabled();
+}
+
 function isScheduleSeriesEnabled() {
   const category = getSelectedScheduleCategory();
   return !editingScheduleId &&
@@ -983,6 +990,13 @@ function updateScheduleSeriesPreview(resetSelection = false) {
   const guide = document.getElementById('scheduleFormGuide');
 
   if (resetSelection) checkbox.checked = eligible;
+  const cycle = eligible && industryCycleMode && category === 'industry';
+  const sessionCount = cycle ? Math.ceil(normalizePresentationOrder(members, presOrder).length / PRESENTATION_GROUP_SIZE) : 3;
+  document.getElementById('scheduleSeriesLabel').textContent = cycle
+    ? `2주 간격 · 회당 3명 · 총 ${sessionCount}회 자동 편성` : '2주 간격으로 3회 자동 등록';
+  document.getElementById('scheduleSeriesHelp').textContent = cycle
+    ? '현재 발표 순서의 처음부터 활동 멤버 전원을 한 번씩 편성합니다. 저장 후 개별 날짜를 변경할 수 있습니다.'
+    : '자동 제목·테마·시간·장소를 세 일정에 동일하게 적용합니다.';
   checkbox.disabled = !eligible;
   section.hidden = !eligible;
   guide.textContent = editingScheduleId
@@ -993,6 +1007,8 @@ function updateScheduleSeriesPreview(resetSelection = false) {
         ? '회식은 선택한 날짜에 한 번 등록되며 제목은 자동으로 정해집니다.'
         : '기타 일정은 선택한 날짜에 한 번만 등록됩니다.';
 
+  if (cycle) guide.textContent = '산업스터디 시작일을 선택하고 날짜별 발표자를 확인한 뒤 저장하세요. 기존 일정과 겹치면 등록하지 않습니다.';
+
   if (!eligible) {
     preview.textContent = '';
   } else if (!checkbox.checked) {
@@ -1000,7 +1016,16 @@ function updateScheduleSeriesPreview(resetSelection = false) {
   } else {
     const startDate = document.getElementById('s-date').value;
     if (!startDate) {
-      preview.textContent = '시작일을 선택하면 세 날짜를 미리 보여드립니다.';
+      preview.textContent = cycle ? '시작일을 선택하면 회차별 날짜와 발표자를 미리 보여드립니다.' : '시작일을 선택하면 세 날짜를 미리 보여드립니다.';
+    } else if (cycle) {
+      try {
+        const plan = planIndustryStudyCycle([], { category, event_date: startDate }, normalizePresentationOrder(members, presOrder));
+        preview.innerHTML = plan.sessions.map((session, index) =>
+          `<span class="schedule-series-date">${index + 1}회 · ${escapeHtml(formatScheduleDate(session.event_date))} · ${session.members.map(member => escapeHtml(member.name)).join(' → ')}</span>`
+        ).join('');
+      } catch (error) {
+        preview.textContent = error.message;
+      }
     } else {
       const plan = planBiweeklyPresentationSchedules([], {
         category,
@@ -1013,7 +1038,7 @@ function updateScheduleSeriesPreview(resetSelection = false) {
   }
 
   if (!saveButton.disabled) {
-    saveButton.textContent = isScheduleSeriesEnabled() ? '3회 일정 저장' : '일정 저장';
+    saveButton.textContent = isIndustryCycleEnabled() ? `${sessionCount}회 산업스터디 저장` : isScheduleSeriesEnabled() ? '3회 일정 저장' : '일정 저장';
   }
 }
 
@@ -1042,7 +1067,8 @@ function openForm(prefill={}) {
   }
   formReturnFocus = document.activeElement;
   editingScheduleId = prefill.id || null;
-  document.getElementById('formTitle').textContent = editingScheduleId ? '일정 수정' : '일정 추가';
+  industryCycleMode = !editingScheduleId && prefill.industryCycle === true;
+  document.getElementById('formTitle').textContent = editingScheduleId ? '일정 수정' : industryCycleMode ? '산업스터디 시작' : '일정 추가';
   showScheduleFormError('');
   const catVal = prefill.category || getPresentationTurnState(
     presentations, normalizePresentationOrder(members, presOrder), { schedules }
@@ -1133,8 +1159,9 @@ async function saveSchedule(event) {
   }
 
   const saveAsSeries = isScheduleSeriesEnabled();
+  const saveIndustryCycle = isIndustryCycleEnabled();
   const btn = document.getElementById('saveScheduleBtn');
-  btn.textContent = saveAsSeries ? '3회 일정 저장 중...' : '저장 중...';
+  btn.textContent = saveIndustryCycle ? '산업스터디 저장 중...' : saveAsSeries ? '3회 일정 저장 중...' : '저장 중...';
   btn.disabled = true;
 
   let reopenedDoneIds = [];
@@ -1188,16 +1215,35 @@ async function saveSchedule(event) {
       }
     } else if (saveAsSeries) {
       const latestSchedules = await fetchSchedules({ strict: true });
-      seriesPlan = planBiweeklyPresentationSchedules(latestSchedules, payload);
+      if (saveIndustryCycle) {
+        const [latestMembers, latestOrder] = await Promise.all([
+          fetchMembers({ strict: true }), getConfigStrict('pres_order'),
+        ]);
+        const ordered = normalizePresentationOrder(latestMembers, latestOrder);
+        if (JSON.stringify(ordered.map(m => String(m.id))) !==
+            JSON.stringify(normalizePresentationOrder(members, presOrder).map(m => String(m.id)))) {
+          members = latestMembers;
+          presOrder = ordered.map(m => m.id);
+          showScheduleFormError('발표 순서 또는 멤버가 변경됐습니다. 갱신된 미리보기를 확인한 뒤 다시 저장하세요.');
+          return;
+        }
+        seriesPlan = planIndustryStudyCycle(latestSchedules, payload, ordered);
+      } else {
+        seriesPlan = planBiweeklyPresentationSchedules(latestSchedules, payload);
+      }
       if (seriesPlan.conflicts.length) {
         const conflictDates = seriesPlan.conflicts
           .map(conflict => formatScheduleDate(conflict.event_date))
           .join(', ');
         showScheduleFormError(
-          `${conflictDates}에 이미 다른 일정이 있습니다. 시작일을 바꾸거나 3회 자동 등록을 해제하세요.`,
+          `${conflictDates}에 이미 다른 일정이 있습니다. 시작일을 바꾸거나 자동 등록을 해제하세요.`,
           document.getElementById('s-date')
         );
         return;
+      }
+      if (saveIndustryCycle) {
+        const latestPresentations = await reloadPresentations({ strict: true });
+        seriesPlan.rowsToCreate = await prepareIndustryCycleRosters(seriesPlan, latestPresentations);
       }
       if (seriesPlan.rowsToCreate.length) {
         seriesWriteAttempted = true;
@@ -1262,7 +1308,9 @@ async function saveSchedule(event) {
       const createdCount = seriesPlan?.rowsToCreate.length || 0;
       toast(reusedCount
         ? `기존 ${reusedCount}회 유지 · 새 ${createdCount}회 등록 후 발표 순서를 반영했습니다.`
-        : '3회 일정이 2주 간격으로 등록되고 발표 순서가 자동 반영되었습니다.');
+        : saveIndustryCycle
+          ? `${seriesPlan.sessions.length}회 산업스터디와 발표 순서를 등록했습니다.`
+          : '3회 일정이 2주 간격으로 등록되고 발표 순서가 자동 반영되었습니다.');
     } else {
       toast(wasEditing
         ? '일정과 발표 순서가 자동으로 조정되었습니다.'
@@ -1277,7 +1325,7 @@ async function saveSchedule(event) {
         ? '일정 저장은 완료됐지만 저장된 건수를 확인하지 못했습니다. 중복 등록하지 말고 새로고침해 주세요.'
         : '일정 저장은 완료됐지만 발표 순서를 반영하지 못했습니다. 중복 등록하지 말고 새로고침해 주세요.');
     } else if (saveAsSeries && seriesWriteAttempted && e?.code) {
-      showScheduleFormError('3회 일정은 저장되지 않았습니다. ' + (e.message || '입력값과 권한을 확인해 주세요.'));
+      showScheduleFormError((saveIndustryCycle ? '산업스터디 일정은 저장되지 않았습니다. ' : '3회 일정은 저장되지 않았습니다. ') + (e.message || '입력값과 권한을 확인해 주세요.'));
     } else if (saveAsSeries && seriesWriteAttempted) {
       keepFormLocked = true;
       lockScheduleData();

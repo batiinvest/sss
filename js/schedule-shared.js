@@ -1173,19 +1173,27 @@ function getCurrentCycleCompletedPresentations(
   );
   const cycleMarker = String(cycleState?.cycleMarker || 'initial');
   const category = String(opts.category || '');
+  const completedThrough = getScheduledPresentationTurnState(
+    allSchedules, orderedMembers, { untilDate: fromDate }
+  )?.completedThrough;
+  const scheduleById = new Map(allSchedules.map(schedule => [String(schedule.id), schedule]));
   const eligibleRows = (allPresentations || [])
     .filter(presentation => {
+      const linkedSchedule = scheduleById.get(String(presentation.schedule_id));
+      const effectiveCategory = isPresentationSchedule(linkedSchedule)
+        ? linkedSchedule.category : presentation.category;
       if (
         presentation.status !== 'done' ||
         !orderedIds.has(String(presentation.member_id || '')) ||
-        !['industry', 'stock'].includes(presentation.category)
+        !['industry', 'stock'].includes(effectiveCategory)
       ) {
         return false;
       }
-      if (category && presentation.category !== category) return false;
+      if (category && effectiveCategory !== category) return false;
       const date = getPresentationRotationDate(presentation, allSchedules);
       return !!date &&
         date <= fromDate &&
+        (!completedThrough || date > completedThrough) &&
         (cycleMarker === 'initial' || date > cycleMarker);
     })
     .sort((a, b) =>

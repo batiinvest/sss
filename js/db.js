@@ -5,8 +5,9 @@
 
 // ── 멤버
 async function fetchMembers(opts = {}) {
-  const { data, error } = await sb.from('members')
-    .select('*').eq('is_active', true).order('joined_at');
+  let query = sb.from('members').select('*');
+  if (!opts.includeInactive) query = query.eq('is_active', true);
+  const { data, error } = await query.order('joined_at');
   if (error) {
     if (opts.strict) throw error;
     console.error('fetchMembers:', error);
@@ -41,7 +42,10 @@ async function upsertMember(payload) {
 }
 
 async function deactivateMember(id) {
-  const { error } = await sb.from('members').update({ is_active: false }).eq('id', id);
+  const { error } = await sb.from('members').update({
+    is_active: false,
+    deactivated_at: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' }),
+  }).eq('id', id);
   if (error) throw error;
 }
 
@@ -234,9 +238,7 @@ async function submitTrade(payload) {
   if (typeof corporateBackendAvailable === 'function' && await corporateBackendAvailable()) {
     return submitCorporateTrade(payload);
   }
-  const { data, error } = await sb.from('trades').insert(payload).select().single();
-  if (error) throw error;
-  return data;
+  throw new Error('안전한 거래 저장 기능의 DB 업데이트가 필요합니다. 관리자에게 문의하세요.');
 }
 
 // ── 결산
@@ -463,14 +465,17 @@ async function searchStockPrices(q, limit = 12) {
 function bindStockSearch(input, ddEl, onSelect, options = {}) {
   const { delay = 250, limit = 12, showCap = true } = options;
   let timer = null;
+  let searchVersion = 0;
 
   input.addEventListener('input', () => {
+    const version = ++searchVersion;
     clearTimeout(timer);
     const q = input.value.trim();
     if (q.length < 2) { ddEl.style.display = 'none'; return; }
 
     timer = setTimeout(async () => {
       const stocks = await searchStockPrices(q, limit);
+      if (version !== searchVersion || input.value.trim() !== q) return;
       ddEl.innerHTML = '';
 
       if (!stocks.length) {
@@ -499,6 +504,7 @@ function bindStockSearch(input, ddEl, onSelect, options = {}) {
           </div>`;
 
         item.addEventListener('click', () => {
+          ++searchVersion;
           ddEl.style.display = 'none';
           onSelect(s);
         });
@@ -512,6 +518,8 @@ function bindStockSearch(input, ddEl, onSelect, options = {}) {
   // 외부 클릭 시 닫기
   document.addEventListener('click', (e) => {
     if (!input.contains(e.target) && !ddEl.contains(e.target)) {
+      ++searchVersion;
+      clearTimeout(timer);
       ddEl.style.display = 'none';
     }
   }, { passive: true });

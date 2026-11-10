@@ -57,7 +57,7 @@ test('investment lifecycle uses accessible buttons and exclusive tab panels', ()
   assert.match(picks, /params\.set\('view', view\)/);
   assert.match(picks, /class="investment-search"[\s\S]*?class="sr-only">투자 기록 검색/);
   assert.match(picks, /id="investmentSearch" aria-label="투자 기록 검색"/);
-  assert.match(picks, /<details class="investment-ledger-details">/);
+  assert.match(picks, /<details class="investment-ledger-details" open>/);
 });
 
 test('investment lifecycle classification keeps ideas, live holdings and completed records separate', () => {

@@ -5,8 +5,15 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261028.3">
+  <link rel="stylesheet" href="css/style.css?v=20261110.1">
   <!-- 스타일: css/style.css 참조 -->
+  <style>
+    #roundReadiness { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; margin-top:16px; }
+    #roundReadiness > section { border:1px solid var(--border); border-radius:var(--r-md); padding:16px; margin:0; overflow-wrap:anywhere; }
+    #roundReadiness h3 { margin:0 0 8px; font-size:15px; }
+    #roundReadiness p { line-height:1.6; }
+    #roundReadiness .btn { min-height:44px; }
+  </style>
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -27,6 +34,11 @@
 
   <div id="tabPresOrderContent" class="presentation-setup-shell">
     <section id="myPresentationCard" class="my-presentation-card" aria-label="내 발표 준비" hidden></section>
+    <section class="card mb-card" aria-labelledby="roundReadinessTitle">
+      <h2 id="roundReadinessTitle">회차별 준비 현황</h2>
+      <p class="muted">종목과 투자 의견·리스크의 입력 현황입니다. 실제 발표 완료 여부와는 별개입니다.</p>
+      <div id="roundReadiness" aria-live="polite">준비 현황을 불러오는 중...</div>
+    </section>
     <section class="card presentation-setup-card">
       <div class="presentation-turn-panel">
         <div class="presentation-turn-copy">
@@ -78,6 +90,7 @@
       <div id="presEditModalTitle" style="font-size:15px;font-weight:500;"></div>
       <button class="btn" onclick="closePresEditModal()" style="font-size:12px;">닫기</button>
     </div>
+    <p class="muted">종목과 내용은 아래 ‘저장’을 눌러야 반영됩니다.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
       <div>
         <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">현재 시총 (억원)</label>
@@ -98,7 +111,7 @@
       <textarea id="edit-risk" placeholder="주요 리스크 요인" style="font-size:13px;padding:7px 10px;width:100%;min-height:60px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;"></textarea>
     </div>
     <div style="display:flex;justify-content:space-between;gap:8px;">
-      <button class="btn" style="color:var(--up);border-color:var(--up);font-size:12px;" onclick="clearPresEditStock()">종목 변경</button>
+      <button class="btn" id="deletePresDraftBtn" style="color:var(--up);border-color:var(--up);font-size:12px;" onclick="clearPresEditStock()">종목 삭제</button>
       <div style="display:flex;gap:8px;">
         <button class="btn" onclick="closePresEditModal()">취소</button>
         <button class="btn btn-primary" onclick="savePresEditModal()" id="edit-save-btn">저장</button>
@@ -111,7 +124,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/db.js?v=20260921.3"></script>
+<script src="js/db.js?v=20261110.1"></script>
 <script src="js/schedule-shared.js?v=20261028.3"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
@@ -144,6 +157,7 @@ function lockPresentationSetup(message) {
     message || '발표 데이터를 불러오지 못했습니다. 새로고침해 주세요.';
   document.getElementById('memberPresPanel').innerHTML =
     '<div class="empty-state">이전 발표 종목과 섞이지 않도록 입력을 잠시 중단했습니다.</div>';
+  document.getElementById('roundReadiness').textContent = '준비 현황을 확인하지 못했습니다. 새로고침해 주세요.';
 }
 
 async function reloadPresentationSetupData() {
@@ -163,9 +177,19 @@ async function reloadPresentationSetupData() {
 // ════════════════════════════════════════
 let _editDraft = null;
 let _presEditReturnFocus = null;
+let _presEditInitial = '';
+let _presEditSaving = false;
+let _editStoragePayload = null;
 
-function openPresEditModal(member, draft) {
+function getPresEditValues() {
+  return ['edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']
+    .map(id => document.getElementById(id).value);
+}
+
+function openPresEditModal(member, draft, storagePayload = null) {
   _editDraft  = draft;
+  _editStoragePayload = storagePayload;
+  document.getElementById('deletePresDraftBtn').hidden = !draft.id;
   _presEditReturnFocus = document.activeElement;
 
   const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
@@ -174,6 +198,7 @@ function openPresEditModal(member, draft) {
   document.getElementById('edit-tgt-cap').value  = draft.target_cap    || '';
   document.getElementById('edit-reason').value   = draft.reason        || '';
   document.getElementById('edit-risk').value     = draft.risk          || '';
+  _presEditInitial = JSON.stringify(getPresEditValues());
 
   // 상승여력 미리보기
   const calcEditPreview = () => {
@@ -193,42 +218,63 @@ function openPresEditModal(member, draft) {
   document.getElementById('edit-cur-cap').focus();
 }
 
-function closePresEditModal() {
+function closePresEditModal(force = false) {
+  if (_presEditSaving && !force) return;
+  if (!force && (_editDraft && !_editDraft.id || JSON.stringify(getPresEditValues()) !== _presEditInitial) &&
+      !confirm('작성 중인 내용을 저장하지 않고 닫을까요?')) return;
   document.getElementById('presEditModal').style.display = 'none';
   _editDraft = null;
+  _editStoragePayload = null;
   _presEditReturnFocus?.focus?.();
   _presEditReturnFocus = null;
 }
 
 async function savePresEditModal() {
-  if (!_editDraft) return;
+  if (!_editDraft || _presEditSaving) return;
+  _presEditSaving = true;
   const btn = document.getElementById('edit-save-btn');
   btn.textContent = '저장 중...'; btn.disabled = true;
   try {
     const payload = {
+      ...(_editStoragePayload || {}),
       market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
       target_cap:    parseInt(document.getElementById('edit-tgt-cap').value) || null,
       reason:        document.getElementById('edit-reason').value.trim()     || null,
       risk:          document.getElementById('edit-risk').value.trim()       || null,
     };
-    const { error } = await sb.from('presentations').update(payload).eq('id', _editDraft.id);
+    const { data, error } = _editDraft.id
+      ? await sb.from('presentations').update(payload).eq('id', _editDraft.id).select().single()
+      : await sb.from('presentations').insert(payload).select().single();
     if (error) throw error;
+    _editDraft = data;
+    _editStoragePayload = null;
+    _presEditInitial = JSON.stringify(getPresEditValues());
+    const plan = getAutomaticPresentationPlan();
+    const item = getMemberPresentationPlanItem(plan, data.member_id, schedules, presentations);
+    await registerDraftForFutureCycleIfNeeded(data, item);
     await reloadPresentationSetupData();
     toast('✅ 저장 완료');
-    closePresEditModal();
+    closePresEditModal(true);
     refreshPresentationScheduleViews();
   } catch(e) {
     toast('저장 오류: ' + e.message);
   } finally {
+    _presEditSaving = false;
     btn.textContent = '저장'; btn.disabled = false;
   }
 }
 
 async function clearPresEditStock() {
+  if (_presEditSaving) return;
+  if (_editDraft && !_editDraft.id) {
+    closePresEditModal();
+    return;
+  }
   if (!_editDraft || !confirm('종목을 초기화하고 다시 입력하시겠습니까?')) return;
-  await sb.from('presentations').delete().eq('id', _editDraft.id);
+  const { error } = await sb.from('presentations').delete().eq('id', _editDraft.id);
+  if (error) { toast('종목 초기화 실패: ' + error.message); return; }
   await reloadPresentationSetupData();
-  closePresEditModal();
+  closePresEditModal(true);
   refreshPresentationScheduleViews();
 }
 
@@ -572,8 +618,15 @@ async function movePresentationOrder(memberId, offset) {
   }
 
   const previousOrder = [...presOrder];
+  const beforePlan = getAutomaticPresentationPlan();
   [presOrder[currentIndex], presOrder[targetIndex]] =
     [presOrder[targetIndex], presOrder[currentIndex]];
+  const afterPlan = getAutomaticPresentationPlan();
+  const impact = describePresentationPlanChanges(beforePlan, afterPlan);
+  if (!confirm('전체 기본 발표 순서를 변경합니다.\n' + impact + '\n변경을 적용할까요?')) {
+    presOrder = previousOrder;
+    return;
+  }
   presentationOrderSaving = true;
   renderMemberPresPanel();
   guessNextTurn();
@@ -597,6 +650,7 @@ async function movePresentationOrder(memberId, offset) {
     }
   } catch (error) {
     if (!orderSaved) presOrder = previousOrder;
+    toast('발표 순서를 저장하지 못했습니다. 다시 시도해 주세요.');
   } finally {
     presentationOrderSaving = false;
     renderMemberPresPanel();
@@ -611,6 +665,13 @@ async function changeMemberPresentationSchedule(memberId, sourceId, targetId) {
     await loadPresentationManualRosters();
     const plan = getAutomaticPresentationPlan();
     const rosters = movePresentationInPlan(plan, sourceId, targetId, memberId);
+    const member = members.find(m => String(m.id) === String(memberId));
+    const source = plan.items.find(item => String(item.schedule.id) === String(sourceId));
+    const target = plan.items.find(item => String(item.schedule.id) === String(targetId));
+    if (!confirm((member?.name || '발표자') + ' 발표일 변경\n' +
+      source?.schedule.event_date + ' → ' + target?.schedule.event_date +
+      '\n변경 후 인원: 기존 회차 ' + rosters[sourceId].length + '명 / 이동 회차 ' + rosters[targetId].length +
+      '명\n다른 멤버의 날짜는 유지됩니다. 적용할까요?')) return;
     const next = { ...presentationManualRosters, ...rosters };
     await setConfig(PRESENTATION_MANUAL_ROSTERS_KEY, next);
     presentationManualRosters = next;
@@ -775,7 +836,8 @@ function renderMemberPresPanel() {
         clearBtn.setAttribute('aria-label', m.name + ' 발표종목 초기화');
         clearBtn.onclick = async () => {
           if (!confirm(m.name + '의 발표종목을 초기화할까요?')) return;
-          await sb.from('presentations').delete().eq('id', draft.id);
+          const { error } = await sb.from('presentations').delete().eq('id', draft.id);
+          if (error) { toast('종목 초기화 실패: ' + error.message); return; }
           await reloadPresentationSetupData();
           refreshPresentationScheduleViews();
         };
@@ -867,28 +929,10 @@ function renderMemberPresPanel() {
           schedule_id: autoItem?.schedule.id || null,
           presented_at: autoItem?.schedule.event_date,
         }, { existingDate: draft?.presented_at });
-        const request = draft?.id
-          ? sb.from('presentations').update(payload).eq('id', draft.id)
-          : sb.from('presentations').insert(payload);
-        const { error } = await request;
-        if (error) { toast('저장 오류: ' + error.message); return; }
-        await reloadPresentationSetupData();
-        refreshPresentationScheduleViews();
-        const newDraft = findCurrentPresentationDraft(
-          presentations,
-          m.id,
-          {
-            scheduleId: autoItem?.schedule.id,
-            draftEpoch: presentationDraftEpoch,
-          }
-        );
-        if (newDraft) {
-          await registerDraftForFutureCycleIfNeeded(newDraft, autoItem);
-          openPresEditModal(m, newDraft);
-        }
+        openPresEditModal(m, { ...draft, ...payload }, payload);
       };
 
-      // 종목 선택 시 → draft 저장 후 재렌더
+      // 종목 선택은 임시 입력이며 상세 창의 저장 버튼으로 확정한다.
       bindStockSearch(input, dd, async s => {
         if (!await ensureIndustryNameSaved()) return;
         const entry = buildPresentationEntry(s.stock_name, autoItem, automaticPlan);
@@ -901,25 +945,7 @@ function renderMemberPresPanel() {
           schedule_id: autoItem?.schedule.id || null,
           presented_at: autoItem?.schedule.event_date,
         }, { existingDate: draft?.presented_at });
-        const request = draft?.id
-          ? sb.from('presentations').update(payload).eq('id', draft.id)
-          : sb.from('presentations').insert(payload);
-        const { error } = await request;
-        if (error) { toast('저장 오류: ' + error.message); return; }
-        await reloadPresentationSetupData();
-        refreshPresentationScheduleViews();
-        const newDraft = findCurrentPresentationDraft(
-          presentations,
-          m.id,
-          {
-            scheduleId: autoItem?.schedule.id,
-            draftEpoch: presentationDraftEpoch,
-          }
-        );
-        if (newDraft) {
-          await registerDraftForFutureCycleIfNeeded(newDraft, autoItem);
-          openPresEditModal(m, newDraft);
-        }
+        openPresEditModal(m, { ...draft, ...payload }, payload);
       }, { limit: 8 });
 
       searchWrap.appendChild(input);
@@ -960,6 +986,67 @@ function renderMemberPresPanel() {
   });
   renderLegacyDraftNotice();
   renderMyPresentationCard(automaticPlan);
+  renderRoundReadiness(automaticPlan);
+}
+
+function describePresentationPlanChanges(before, after) {
+  const changes = [];
+  for (const member of members) {
+    const dates = plan => (plan.items || [])
+      .filter(item => (item.memberIds || []).map(String).includes(String(member.id)))
+      .map(item => item.schedule.event_date).join(', ') || '미배정';
+    const oldDates = dates(before);
+    const newDates = dates(after);
+    if (oldDates !== newDates) changes.push(member.name + ': ' + oldDates + ' → ' + newDates);
+  }
+  return changes.length ? changes.join('\n') : '현재 등록된 회차의 발표 날짜는 유지됩니다.';
+}
+
+function getPresentationReadiness(draft) {
+  if (!draft?.topic?.trim()) return '종목 미입력';
+  return draft.reason?.trim() && draft.risk?.trim() ? '내용 입력 완료' : '내용 작성 중';
+}
+
+function renderRoundReadiness(plan) {
+  const container = document.getElementById('roundReadiness');
+  if (!container) return;
+  container.innerHTML = '';
+  if (!plan.items?.length) {
+    container.textContent = '예정된 발표 일정이 없습니다. 스터디 일정에서 날짜를 등록해 주세요.';
+    return;
+  }
+  for (const item of plan.items) {
+    const section = document.createElement('section');
+    section.className = 'mb-card';
+    const entries = (item.memberIds || []).map(id => {
+      const member = members.find(m => String(m.id) === String(id));
+      let draft = findCurrentPresentationDraft(presentations, id, {
+        scheduleId: item.schedule.id, draftEpoch: presentationDraftEpoch,
+      });
+      if (draft && !draft.schedule_id) {
+        const assigned = getNextPresentationInputPlanItem(plan, id, schedules, presentations);
+        if (String(assigned?.schedule.id) !== String(item.schedule.id)) draft = null;
+      }
+      return { member, draft, state: getPresentationReadiness(draft) };
+    });
+    const missing = entries.filter(entry => entry.state === '종목 미입력').length;
+    const complete = entries.filter(entry => entry.state === '내용 입력 완료').length;
+    section.innerHTML = '<h3>' + escapeHtml(item.schedule.event_date + ' · ' + (CAT_LABEL[item.schedule.category] || '발표')) + '</h3>' +
+      '<p class="muted">' + escapeHtml([item.schedule.event_time?.slice(0, 5), item.schedule.location].filter(Boolean).join(' · ') || '시간·장소 미정') +
+      ' · 총 ' + entries.length + '명 · 내용 입력 완료 ' + complete + '명 · 작성 중 ' + (entries.length - complete - missing) + '명 · 종목 미입력 ' + missing + '명</p>';
+    for (const entry of entries) {
+      const row = document.createElement('p');
+      row.textContent = (entry.member?.name || '발표자') + ' · ' + (entry.draft?.topic || '종목 미정') + ' · ' + entry.state;
+      section.appendChild(row);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn';
+    button.textContent = '이 회차 발표 준비';
+    button.onclick = () => goToSchedulePage('presentations?view=prepare&schedule=' + encodeURIComponent(item.schedule.id));
+    section.appendChild(button);
+    container.appendChild(section);
+  }
 }
 
 function renderMyPresentationCard(plan) {

@@ -412,7 +412,8 @@ test('schedule and presentation preparation pages have separate responsibilities
   assert.match(order, /id="memberPresPanel"/);
   assert.match(order, /getAutomaticPresentationPlan/);
   assert.match(order, /getNextPresentationInputPlanItem/);
-  assert.match(memberPanel, /\.insert\(payload\)/);
+  assert.doesNotMatch(memberPanel, /\.insert\(payload\)/);
+  assert.match(order, /\.insert\(payload\)/);
   assert.match(memberPanel, /schedule_id: autoItem\?\.schedule\.id \|\| null/);
   assert.doesNotMatch(order, /from\(['"]schedules['"]\)/);
   assert.doesNotMatch(order, /id="(?:calTitle2|calGrid2|filterCat2|scheduleListTbody2)"/);

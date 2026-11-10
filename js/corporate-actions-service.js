@@ -16,7 +16,7 @@ async function corporateRpc(name, args = {}) {
     throw new Error('운영 DB 연결 설정이 필요합니다. 아직 보유 수량에는 적용되지 않았습니다.');
   }
   const { data, error } = await sb.rpc(name, args);
-  if (error) throw new Error(error.message || '무상증자 정보를 처리하지 못했습니다.');
+  if (error) throw Object.assign(new Error(error.message || '무상증자 정보를 처리하지 못했습니다.'), { code: error.code });
   return data;
 }
 
@@ -76,13 +76,59 @@ function corporateHistoryMarkup(pick) {
     Number(position.pendingQuantity).toLocaleString('ko-KR') + '주</p></section>';
 }
 
-const corporateTradeRequests = new Map();
+async function corporateTradeStorageKey() {
+  const { data, error } = await sb.auth.getSession();
+  if (error) throw error;
+  const actor = data?.session?.user?.id;
+  if (!actor) throw new Error('로그인 후 거래를 저장하세요.');
+  return 'sss-pending-trade-v1:' + (typeof SUPABASE_URL === 'string' ? SUPABASE_URL : 'default') + ':' + actor;
+}
+
+function readPendingCorporateTrade(storageKey) {
+  const raw = localStorage.getItem(storageKey);
+  if (!raw) return null;
+  const request = JSON.parse(raw);
+  if (!request?.id || !request?.payload || !request?.key) {
+    throw new Error('미확인 거래 정보를 읽지 못했습니다. 관리자에게 확인을 요청하세요.');
+  }
+  return request;
+}
+
+async function getPendingCorporateTrade() {
+  return readPendingCorporateTrade(await corporateTradeStorageKey());
+}
+
+function corporateTradeKey(payload) {
+  const day = new Date(payload.traded_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+  return JSON.stringify(Object.fromEntries(Object.keys(payload).sort().map(key =>
+    [key, key === 'traded_at' ? day : payload[key]])));
+}
+
 async function submitCorporateTrade(payload) {
-  const key = JSON.stringify(payload);
-  if (!corporateTradeRequests.has(key)) corporateTradeRequests.set(key, crypto.randomUUID());
-  const data = await corporateRpc('sss_submit_trade', {
-    p_trade: payload, p_request_id: corporateTradeRequests.get(key),
-  });
-  corporateTradeRequests.delete(key);
+  const storageKey = await corporateTradeStorageKey();
+  const key = corporateTradeKey(payload);
+  let request = readPendingCorporateTrade(storageKey);
+  if (request && request.key !== key) {
+    throw new Error('처리 결과가 확인되지 않은 거래가 있습니다. 먼저 미확인 거래의 결과를 확인하세요.');
+  }
+  if (!request) {
+    request = { id: crypto.randomUUID(), key, payload: { ...payload } };
+    // Persist before sending: a reload must never turn an uncertain write into a new one.
+    // If browser storage is unavailable, fail before making any financial write.
+    localStorage.setItem(storageKey, JSON.stringify(request));
+  }
+  let data;
+  try {
+    data = await corporateRpc('sss_submit_trade', {
+      p_trade: request.payload, p_request_id: request.id,
+    });
+  } catch (error) {
+    // These database errors explicitly mean the transaction did not commit.
+    if (/^(22|23|42501|P0001|PGRST202|42883)/.test(error.code || '')) {
+      localStorage.removeItem(storageKey);
+    }
+    throw error;
+  }
+  localStorage.removeItem(storageKey);
   return data;
 }

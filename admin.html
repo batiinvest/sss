@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 사용자 관리</title>
-  <link rel="stylesheet" href="css/style.css?v=20261028.3">
+  <link rel="stylesheet" href="css/style.css?v=20261110.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -108,8 +108,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20260921.3"></script>
-<script src="js/db.js?v=20260921.3"></script>
+<script src="js/corporate-actions-service.js?v=20261110.1"></script>
+<script src="js/db.js?v=20261110.1"></script>
 <script>
 // 현재 수정 중인 멤버 ID를 전역 변수로 관리 (hidden input 대신)
 let editingMemberId = null;
@@ -118,6 +118,7 @@ let allPicks = [];
 let settlements = [];
 
 let currentUserIsAdmin = false;
+let editingMemberBase = null;
 
 async function init() {
   await requireAuth();
@@ -190,10 +191,13 @@ function openForm(prefill = {}) {
   const pwInput = document.getElementById('f-pw');
   if (pwInput) pwInput.value = '';
   editingMemberId = prefill.id || null;  // 전역 변수에 저장
+  editingMemberBase = prefill.base_amount ?? null;
   document.getElementById('formTitle').textContent = editingMemberId ? '참여자 수정' : '참여자 추가';
   document.getElementById('f-name').value   = prefill.name        || '';
   document.getElementById('f-email').value  = prefill.email       || '';
-  document.getElementById('f-base').value   = prefill.base_amount || (typeof BASE_AMOUNT !== "undefined" ? BASE_AMOUNT : 500000);
+  document.getElementById('f-email').readOnly = Boolean(prefill.id);
+  document.getElementById('f-email').title = prefill.id ? '로그인 연결에 사용하는 이메일입니다. 계정 이메일 변경은 별도 계정 관리가 필요합니다.' : '';
+  document.getElementById('f-base').value   = prefill.base_amount ?? (typeof BASE_AMOUNT !== "undefined" ? BASE_AMOUNT : 500000);
   document.getElementById('f-joined').value = prefill.joined_at   || new Date().toLocaleDateString('sv-SE');
   document.getElementById('f-note').value   = prefill.note        || '';
   document.getElementById('memberForm').style.display = 'block';
@@ -216,22 +220,30 @@ async function saveMember() {
   if (!currentUserIsAdmin) { toast('관리자만 저장할 수 있습니다.'); return; }
   const name   = document.getElementById('f-name').value.trim();
   const email  = document.getElementById('f-email').value.trim() || null;
-  const base   = parseInt(document.getElementById('f-base').value) || (typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000);
+  const baseInput = document.getElementById('f-base').value.trim();
+  const base = baseInput === '' ? (typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000) : Number(baseInput);
   const joined = document.getElementById('f-joined').value;
   const note   = document.getElementById('f-note').value.trim() || null;
 
   if (!name) { toast('이름을 입력하세요.'); return; }
+  if (!Number.isSafeInteger(base) || base < 0 || base > 2147483647) { toast('기준금액은 0 이상의 유효한 원 단위 정수로 입력하세요.'); return; }
 
   document.getElementById('saveBtn').textContent = '저장 중...';
   document.getElementById('saveBtn').disabled = true;
 
   try {
     if (editingMemberId) {
-      // 수정: ID를 명시적으로 전달
-      const { error } = await sb.from('members')
-        .update({ name, email, base_amount: base, joined_at: joined, note })
-        .eq('id', editingMemberId);
+      const patch = { name, joined_at: joined, note };
+      const originalBase = editingMemberBase ?? (typeof BASE_AMOUNT !== 'undefined' ? BASE_AMOUNT : 500000);
+      const changingBase = base !== Number(originalBase);
+      if (changingBase) patch.base_amount = base;
+      let query = sb.from('members').update(patch).eq('id', editingMemberId);
+      // One conditional UPDATE: PostgreSQL checks the balance under its row lock.
+      if (changingBase) query = editingMemberBase === null
+        ? query.is('base_amount', null) : query.eq('base_amount', editingMemberBase);
+      const { data, error } = await query.select('id').maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error('회원 또는 기준금액이 변경됐습니다. 최신 정보를 다시 불러온 뒤 수정하세요.');
       toast(`${name}님 정보가 수정되었습니다.`);
     } else {
       // 추가
@@ -244,19 +256,22 @@ async function saveMember() {
 
       // 이메일 + 비밀번호 입력 시 Supabase Auth 계정도 생성
       if (email && pw && pw.length >= 6) {
-        const { error: authErr } = await sb.auth.admin?.createUser({
-          email,
-          password: pw,
-          email_confirm: true,
-        });
-        if (authErr) {
-          // admin API 없으면 signUp으로 대체
-          // 별도 클라이언트로 signUp (현재 관리자 세션 유지)
-          const { createClient } = supabase;
-          const sbTemp = createClient(SUPABASE_URL, SUPABASE_ANON);
-          await sbTemp.auth.signUp({ email, password: pw });
+        try {
+          // 로그인 세션을 저장하지 않는 별도 클라이언트로 운영자 세션을 보존한다.
+          const sbTemp = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          });
+          const { data, error: authErr } = await sbTemp.auth.signUp({ email, password: pw });
+          if (authErr) throw authErr;
+          if (!data?.user || data.user.identities?.length === 0) {
+            throw new Error('계정 생성 여부를 확인하지 못했습니다. 기존 계정을 확인해 주세요.');
+          }
+          toast(data.session
+            ? `${name}님 추가 + 로그인 계정 생성 완료!`
+            : `${name}님 추가 완료. 로그인하려면 이메일 인증이 필요합니다.`);
+        } catch (authError) {
+          toast(`${name}님 정보는 저장됐지만 로그인 계정 생성은 완료하지 못했습니다: ${authError.message}`);
         }
-        toast(`${name}님 추가 + 로그인 계정 생성 완료!`);
       } else {
         toast(`${name}님이 추가되었습니다. 로그인 계정은 Supabase에서 별도 생성하세요.`);
       }

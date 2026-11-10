@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20261028.3">
+  <link rel="stylesheet" href="css/style.css?v=20261110.1">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -213,13 +213,13 @@
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20260921.3"></script>
-<script src="js/db.js?v=20260921.3"></script>
-  <script src="js/pwa.js?v=20261028.3"></script>
+<script src="js/corporate-actions-service.js?v=20261110.1"></script>
+<script src="js/db.js?v=20261110.1"></script>
+  <script src="js/pwa.js?v=20261110.1"></script>
 <script>
 (function reloadAfterServiceWorkerUpgrade() {
   if (!('serviceWorker' in navigator)) return;
-  const refreshKey = 'sss-sw-refresh-20261028.3';
+  const refreshKey = 'sss-sw-refresh-20261110.1';
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (refreshing || sessionStorage.getItem(refreshKey) === 'done') return;
@@ -291,7 +291,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20261028.3');
+  params.set('v', '20261110.1');
   const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
     ? 'schedule-order'
     : parsed.page;
@@ -434,6 +434,8 @@ function setSheetOpen(id, open) {
 }
 
 function closeAllSheets() {
+  clearTimeout(searchTimer);
+  searchRequestId++;
   ['globalSearch', 'quickAddSheet', 'moreMenuSheet'].forEach(id => setSheetOpen(id, false));
 }
 
@@ -446,6 +448,7 @@ function openGlobalSearch() {
 }
 
 function closeGlobalSearch() {
+  clearTimeout(searchTimer);
   searchRequestId++;
   setSheetOpen('globalSearch', false);
   document.querySelector('[data-search-nav]')?.classList.remove('active');
@@ -500,13 +503,13 @@ function investmentStateLabel(pick) {
 }
 
 async function runGlobalSearch(rawQuery) {
+  const requestId = ++searchRequestId;
   const results = document.getElementById('globalSearchResults');
   const query = rawQuery.trim();
   if (query.length < 2) { renderRecentSearches(); return; }
   const term = query.replace(/[%_,().]/g, ' ').trim();
   if (term.length < 2) return;
   results.innerHTML = '<div class="search-loading"><span class="loading-spinner"></span>검색 중…</div>';
-  const requestId = ++searchRequestId;
 
   try {
     const [stocks, presResult, pickResult] = await Promise.all([
@@ -560,6 +563,7 @@ async function runGlobalSearch(rawQuery) {
 }
 
 document.getElementById('globalSearchInput').addEventListener('input', event => {
+  searchRequestId++;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => runGlobalSearch(event.target.value), 280);
 });

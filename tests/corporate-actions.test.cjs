@@ -92,7 +92,12 @@ test('server position overrides raw trades once and rejects pre-ex quotes', () =
 });
 
 function serviceContext(rpc) {
-  const scope = vm.createContext({ sb: { rpc }, crypto: { randomUUID: () => 'stable-request-id' } });
+  const storage = new Map();
+  const scope = vm.createContext({
+    localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+    sb: { rpc, auth: { getSession: async () => ({ data: { session: { user: { id: 'actor' } } } }) } },
+    crypto: { randomUUID: () => 'stable-request-id' },
+  });
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../js/utils/corporate-actions.js'), 'utf8'), scope);
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname, '../js/corporate-actions-service.js'), 'utf8'), scope);
   return scope;

@@ -7,6 +7,7 @@ const outputDir = join(root, 'www');
 const entries = [
   'admin.html',
   'app.html',
+  'corporate-actions.html',
   'fees.html',
   'index.html',
   'members.html',

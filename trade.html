@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 매수·매도 등록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261028.3">
+  <link rel="stylesheet" href="css/style.css?v=20261110.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -24,6 +24,10 @@
     </div>
 
     <div id="tradeAuthNotice" class="info-banner mb-card" hidden></div>
+    <div id="pendingTradeNotice" class="info-banner mb-card" hidden>
+      <span id="pendingTradeText"></span>
+      <button type="button" class="btn" id="pendingTradeRetry" onclick="resolvePendingTrade()">미확인 거래 결과 확인</button>
+    </div>
 
     <div class="grid-2 mb-card trade-form-grid">
 
@@ -152,8 +156,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20260921.3"></script>
-<script src="js/db.js?v=20260921.3"></script>
+<script src="js/corporate-actions-service.js?v=20261110.1"></script>
+<script src="js/db.js?v=20261110.1"></script>
 <script>
 let members  = [];
 let allPicks = [];
@@ -167,7 +171,7 @@ async function init() {
   const session = await requireAuth();
   if (!session) return;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
   document.getElementById('buy-date').value = today;
   document.getElementById('sell-date').value = today;
 
@@ -214,6 +218,44 @@ async function init() {
   const requestedType = tradeParams.get('type') === 'sell' ? 'sell' : 'buy';
   showTradeForm(requestedType);
   await preselectRequestedPick(requestedType, tradeParams.get('pick'));
+  await showPendingTrade();
+}
+
+async function showPendingTrade() {
+  const notice = document.getElementById('pendingTradeNotice');
+  try {
+    const request = await getPendingCorporateTrade();
+    notice.hidden = !request;
+    if (request) {
+      const p = request.payload;
+      document.getElementById('pendingTradeText').textContent =
+        `${p.stock_name} ${p.trade_type === 'buy' ? '매수' : '매도'} ${p.quantity}주 · 처리 결과를 확인하지 못했습니다. 원래 요청으로 결과를 확인하세요.`;
+    }
+  } catch (error) {
+    notice.hidden = false;
+    document.getElementById('pendingTradeText').textContent = '거래 복구 정보를 읽지 못했습니다. ' + error.message;
+  }
+}
+
+async function resolvePendingTrade() {
+  const button = document.getElementById('pendingTradeRetry');
+  if (button.disabled) return;
+  button.disabled = true;
+  let saved = false;
+  try {
+    const request = await getPendingCorporateTrade();
+    if (!request) return;
+    await submitCorporateTrade(request.payload);
+    saved = true;
+    clearTradeInputs(request.payload.trade_type);
+    await reloadTradeState(request.payload.trade_type, request.payload.member_id);
+    toast('거래 저장 결과를 확인했습니다.');
+  } catch (error) {
+    toast(saved ? '거래는 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.' : error.message);
+  } finally {
+    button.disabled = false;
+    await showPendingTrade();
+  }
 }
 
 function showTradeForm(type) {
@@ -308,14 +350,14 @@ async function loadAvailableSellQuantity() {
 }
 
 function calcBuyAmount() {
-  const p = parseInt(document.getElementById('buy-price').value) || 0;
-  const q = parseInt(document.getElementById('buy-qty').value)   || 0;
+  const p = tradeInteger(document.getElementById('buy-price').value) || 0;
+  const q = tradeInteger(document.getElementById('buy-qty').value) || 0;
   document.getElementById('buyAmount').textContent = p && q ? won(p * q) : '—';
 }
 
 function calcSellReturn() {
-  const sp  = parseInt(document.getElementById('sell-price').value) || 0;
-  const sq  = parseInt(document.getElementById('sell-qty').value)   || 0;
+  const sp = tradeInteger(document.getElementById('sell-price').value) || 0;
+  const sq = tradeInteger(document.getElementById('sell-qty').value) || 0;
   const pickOpt = document.getElementById('sell-pick').selectedOptions[0];
   const bp  = Number(pickOpt?.dataset?.buy) || 0;
 
@@ -330,11 +372,17 @@ function calcSellReturn() {
   }
 }
 
+function tradeInteger(value) {
+  const number = Number(String(value).trim());
+  return Number.isSafeInteger(number) && number > 0 && number <= 2147483647 ? number : NaN;
+}
+
 async function submitBuy() {
+  if (document.getElementById('buySubmitBtn').disabled) return;
   const memberId = document.getElementById('buy-member').value;
   const pickId    = document.getElementById('buy-pick').value;
-  const price     = parseInt(document.getElementById('buy-price').value);
-  const quantity  = parseInt(document.getElementById('buy-qty').value);
+  const price = tradeInteger(document.getElementById('buy-price').value);
+  const quantity = tradeInteger(document.getElementById('buy-qty').value);
   const note      = document.getElementById('buy-note').value.trim();
   const date      = document.getElementById('buy-date').value;
   const pick      = allPicks.find(item => String(item.pick_id || item.id) === String(pickId));
@@ -349,26 +397,31 @@ async function submitBuy() {
   const button = document.getElementById('buySubmitBtn');
   button.disabled = true;
   button.textContent = '저장 중…';
+  let saved = false;
 
   try {
     await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'buy',
       stock_name: pick.stock_name, price, quantity, note: note || null,
       traded_at: tradeDateTime(date) });
+    saved = true;
+    clearTradeInputs('buy');
     await reloadTradeState('buy', memberId);
     toast('매수를 저장했습니다. 투자 화면의 보유 중 탭에서 확인할 수 있습니다.');
   } catch(e) {
-    setTradeError('buy', '매수를 저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도해 주세요.'));
+    setTradeError('buy', saved ? '매수는 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.' : '매수 처리 결과를 확인하지 못했습니다. 같은 입력으로 재시도해 주세요. ' + (e.message || ''));
   } finally {
     button.disabled = false;
     button.textContent = '매수 저장';
+    await showPendingTrade();
   }
 }
 
 async function submitSell() {
+  if (document.getElementById('sellSubmitBtn').disabled) return;
   const memberId = document.getElementById('sell-member').value;
   const pickId    = document.getElementById('sell-pick').value;
-  const price     = parseInt(document.getElementById('sell-price').value);
-  const quantity  = parseInt(document.getElementById('sell-qty').value);
+  const price = tradeInteger(document.getElementById('sell-price').value);
+  const quantity = tradeInteger(document.getElementById('sell-qty').value);
   const note      = document.getElementById('sell-note').value.trim();
   const date      = document.getElementById('sell-date').value;
   const pick      = allPicks.find(item => String(item.pick_id || item.id) === String(pickId));
@@ -379,26 +432,33 @@ async function submitSell() {
     return setTradeError('sell', '보유종목, 매도일, 매도가와 수량을 모두 확인해 주세요.');
   }
   if (!pick || pick.member_id !== memberId) return setTradeError('sell', '담당자와 보유종목 정보가 일치하지 않습니다.');
-  await loadAvailableSellQuantity();
-  if (quantity > availableSellQuantity) {
-    return setTradeError('sell', `보유수량 ${availableSellQuantity.toLocaleString('ko-KR')}주를 초과해 매도할 수 없습니다.`);
-  }
-
   const button = document.getElementById('sellSubmitBtn');
   button.disabled = true;
   button.textContent = '저장 중…';
+  let saved = false;
 
   try {
+    // The transactional RPC validates quantity and resolves uncertain retries
+    // before checking the now-reduced balance. Only legacy writes precheck here.
+    if (!await corporateBackendAvailable()) {
+      await loadAvailableSellQuantity();
+      if (quantity > availableSellQuantity) {
+        return setTradeError('sell', `보유수량 ${availableSellQuantity.toLocaleString('ko-KR')}주를 초과해 매도할 수 없습니다.`);
+      }
+    }
     await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'sell',
       stock_name: pick.stock_name, price, quantity, note: note || null,
       traded_at: tradeDateTime(date) });
+    saved = true;
+    clearTradeInputs('sell');
     await reloadTradeState('sell', memberId);
     toast('매도를 저장했습니다. 남은 보유수량을 다시 계산했습니다.');
   } catch(e) {
-    setTradeError('sell', '매도를 저장하지 못했습니다. ' + (e.message || '잠시 후 다시 시도해 주세요.'));
+    setTradeError('sell', saved ? '매도는 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.' : '매도 처리 결과를 확인하지 못했습니다. 같은 입력으로 재시도해 주세요. ' + (e.message || ''));
   } finally {
     button.disabled = false;
     button.textContent = '매도 저장';
+    await showPendingTrade();
   }
 }
 
@@ -412,6 +472,10 @@ function setTradeError(type, message) {
   const element = document.getElementById(type + '-error');
   element.textContent = message;
   if (message) element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function clearTradeInputs(type) {
+  ['price', 'qty', 'note'].forEach(suffix => { document.getElementById(type + '-' + suffix).value = ''; });
 }
 
 async function reloadTradeState(type, memberId) {

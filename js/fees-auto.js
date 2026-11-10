@@ -37,7 +37,11 @@
     const targetMonth = normalizeMonth(month);
     if (!targetMonth) return [];
     return (members || []).filter(member => {
-      if (!member || !member.id || member.is_active === false) return false;
+      if (!member || !member.id) return false;
+      const lastMonth = normalizeMonth(member.deactivated_at);
+      // The departure month remains payable; later months stop accruing.
+      // Legacy inactive rows without a known departure date are not guessed.
+      if (member.is_active === false && (!lastMonth || targetMonth > lastMonth)) return false;
       const joinedMonth = normalizeMonth(member.joined_at);
       return !joinedMonth || joinedMonth <= targetMonth;
     });

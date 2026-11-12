@@ -755,7 +755,7 @@ const ModalPres = (() => {
 })();
 
 // ── 전역 편의 함수 (기존 호출부 하위호환)
-function openPresModal()      { ModalPres.open(); }
+function openPresModal()      { navigateToAppRoute('presentations?view=prepare'); }
 function closePresModal()     { ModalPres.close(); }
 function onPmCategoryChange() { ModalPres.onCategoryChange(); }
 function pmClearStock()       { ModalPres.clearStock(); }

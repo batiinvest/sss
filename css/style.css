@@ -2253,6 +2253,7 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .mobile-stock-card-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
 .mobile-stock-code { color: var(--muted); font-size: 11px; }
 .mobile-stock-card-meta { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.presentation-topic-summary { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; overflow-wrap:anywhere; }
 .mobile-stock-card-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3359,8 +3360,9 @@ button:disabled { cursor: wait; opacity: 0.62; }
 
 /* Mobile presentation input and fund overview */
 .presentation-member-fields { flex:1; min-width:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.presentation-stock-search { flex:1; min-width:180px; position:relative; display:flex; gap:8px; align-items:center; }
-.presentation-stock-search-field { flex:1; min-width:0; position:relative; }
+.presentation-stock-search { flex:1; min-width:180px; position:relative; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.presentation-stock-search-field { flex:1 1 160px; min-width:0; position:relative; }
+.presentation-stock-search > button { flex-shrink:0; white-space:nowrap; }
 .presentation-date-field { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
 .presentation-date-select { width:auto; min-width:170px; }
 .my-presentation-card { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px; margin-bottom:16px; background:var(--surface); border:1px solid var(--accent); border-radius:12px; }

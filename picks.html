@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 투자</title>
-  <link rel="stylesheet" href="css/style.css?v=20261110.1">
+  <link rel="stylesheet" href="css/style.css?v=20261112.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 
 </head>
@@ -135,9 +135,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261110.1"></script>
-<script src="js/db.js?v=20261110.1"></script>
+<script src="js/corporate-actions-service.js?v=20261112.1"></script>
+<script src="js/db.js?v=20261112.1"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
+<script src="js/utils/presentation.js?v=20261112.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
 <script>
 let allPicks = [];
@@ -615,7 +616,11 @@ async function openPickFromPresentation(presentationId) {
     openPickForm();
     return;
   }
-  const stockName = String(presentation.topic || '').split('>').pop().trim();
+  if (isFreePresentation(presentation)) {
+    toast('자유 주제 발표입니다. 투자종목은 종목을 선택해 별도로 등록해 주세요.');
+    return;
+  }
+  const stockName = parsePresentationStockName(presentation);
   let stock = null;
   if (presentation.stock_code) {
     const { data } = await sb.from('stock_prices')

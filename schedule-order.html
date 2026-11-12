@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261110.1">
+  <link rel="stylesheet" href="css/style.css?v=20261112.1">
   <!-- 스타일: css/style.css 참조 -->
   <style>
     #roundReadiness { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; margin-top:16px; }
@@ -36,7 +36,7 @@
     <section id="myPresentationCard" class="my-presentation-card" aria-label="내 발표 준비" hidden></section>
     <section class="card mb-card" aria-labelledby="roundReadinessTitle">
       <h2 id="roundReadinessTitle">회차별 준비 현황</h2>
-      <p class="muted">종목과 투자 의견·리스크의 입력 현황입니다. 실제 발표 완료 여부와는 별개입니다.</p>
+      <p class="muted">종목 또는 자유 주제의 준비 현황입니다. 자유 주제는 핵심 내용까지 입력하면 준비 완료로 표시됩니다.</p>
       <div id="roundReadiness" aria-live="polite">준비 현황을 불러오는 중...</div>
     </section>
     <section class="card presentation-setup-card">
@@ -53,12 +53,12 @@
             <option value="industry">산업 분석</option>
           </select>
           <div id="industryNameWrap" style="display:none;">
-            <label class="sr-only" for="thisTurnIndustry">산업명</label>
+            <label class="sr-only" for="thisTurnIndustry">공통 주제 / 산업명</label>
             <div class="presentation-industry-input-row">
               <input
                 type="text"
                 id="thisTurnIndustry"
-                placeholder="산업명 입력"
+                placeholder="공통 주제 / 산업명 (예: 2027년 전망)"
                 oninput="onIndustryNameInput()"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();saveTurnIndustryName();}"
               />
@@ -72,7 +72,7 @@
 
       <div class="presentation-members-head">
         <div>
-          <h2>발표 순서와 종목</h2>
+          <h2>발표 순서와 주제</h2>
           <div id="panelGuide">위아래 버튼으로 순서를 조정하고 발표종목을 입력하세요.</div>
         </div>
       </div>
@@ -90,8 +90,19 @@
       <div id="presEditModalTitle" style="font-size:15px;font-weight:500;"></div>
       <button class="btn" onclick="closePresEditModal()" style="font-size:12px;">닫기</button>
     </div>
-    <p class="muted">종목과 내용은 아래 ‘저장’을 눌러야 반영됩니다.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+    <p class="muted">산업·기업 발표 모두 발표별로 입력 방식을 선택할 수 있습니다. 변경 내용은 ‘저장’을 눌러야 반영됩니다.</p>
+    <div class="form-group">
+      <label for="edit-format">발표 방식</label>
+      <select id="edit-format" onchange="updatePresEditFormat()">
+        <option value="stock">종목 발표</option>
+        <option value="free">자유 주제 발표 (산업 전망 등)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label id="edit-topic-label" for="edit-topic">종목명</label>
+      <input type="text" id="edit-topic" maxlength="200" placeholder="예: 클라우드 산업의 2027년 전망" />
+    </div>
+    <div id="edit-stock-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
       <div>
         <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">현재 시총 (억원)</label>
         <input type="number" id="edit-cur-cap" placeholder="자동 입력됨" style="font-size:13px;padding:7px 10px;width:100%;">
@@ -103,11 +114,11 @@
     </div>
     <div id="edit-cap-preview" style="display:none;padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:13px;color:var(--green);margin-bottom:10px;"></div>
     <div style="margin-bottom:10px;">
-      <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 사유</label>
+      <label id="edit-reason-label" for="edit-reason" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 사유</label>
       <textarea id="edit-reason" placeholder="매수 근거, 투자 thesis 등" style="font-size:13px;padding:7px 10px;width:100%;min-height:80px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;"></textarea>
     </div>
     <div style="margin-bottom:14px;">
-      <label style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 리스크</label>
+      <label id="edit-risk-label" for="edit-risk" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">투자 리스크</label>
       <textarea id="edit-risk" placeholder="주요 리스크 요인" style="font-size:13px;padding:7px 10px;width:100%;min-height:60px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;"></textarea>
     </div>
     <div style="display:flex;justify-content:space-between;gap:8px;">
@@ -124,7 +135,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/db.js?v=20261110.1"></script>
+<script src="js/db.js?v=20261112.1"></script>
+<script src="js/utils/presentation.js?v=20261112.1"></script>
 <script src="js/schedule-shared.js?v=20261028.3"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
@@ -182,7 +194,7 @@ let _presEditSaving = false;
 let _editStoragePayload = null;
 
 function getPresEditValues() {
-  return ['edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']
+  return ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']
     .map(id => document.getElementById(id).value);
 }
 
@@ -192,8 +204,10 @@ function openPresEditModal(member, draft, storagePayload = null) {
   document.getElementById('deletePresDraftBtn').hidden = !draft.id;
   _presEditReturnFocus = document.activeElement;
 
-  const topicName = draft.topic?.includes('>') ? draft.topic.split('>')[1].trim() : (draft.topic||'');
+  const topicName = parsePresentationStockName(draft);
   document.getElementById('presEditModalTitle').textContent = member.name + ' — ' + topicName;
+  document.getElementById('edit-format').value = isFreePresentation(draft) ? 'free' : 'stock';
+  document.getElementById('edit-topic').value = topicName;
   document.getElementById('edit-cur-cap').value  = draft.market_cap_at || '';
   document.getElementById('edit-tgt-cap').value  = draft.target_cap    || '';
   document.getElementById('edit-reason').value   = draft.reason        || '';
@@ -213,9 +227,25 @@ function openPresEditModal(member, draft, storagePayload = null) {
   document.getElementById('edit-cur-cap').oninput = calcEditPreview;
   document.getElementById('edit-tgt-cap').oninput = calcEditPreview;
   calcEditPreview();
+  updatePresEditFormat();
 
   document.getElementById('presEditModal').style.display = 'flex';
-  document.getElementById('edit-cur-cap').focus();
+  document.getElementById(isFreePresentation(draft) ? 'edit-topic' : 'edit-cur-cap').focus();
+}
+
+function updatePresEditFormat() {
+  const free = document.getElementById('edit-format').value === 'free';
+  document.getElementById('edit-topic-label').textContent = free ? '발표 주제 / 산업명' : '종목명';
+  document.getElementById('edit-topic').readOnly = !free && !isFreePresentation(_editDraft);
+  document.getElementById('edit-topic').placeholder = free ? '예: 클라우드 산업의 2027년 전망' : '종목명 입력';
+  document.getElementById('edit-stock-fields').style.display = free ? 'none' : 'grid';
+  document.getElementById('edit-reason-label').textContent = free ? '핵심 전망 / 발표 내용' : '투자 사유';
+  document.getElementById('edit-reason').placeholder = free ? '예: 2027년 수요 전망, 성장 동력, 주요 변화와 근거' : '매수 근거, 투자 thesis 등';
+  document.getElementById('edit-risk-label').textContent = free ? '주요 변수 / 토론할 질문 (선택)' : '투자 리스크';
+  document.getElementById('edit-risk').placeholder = free ? '전망의 전제 조건, 불확실성, 함께 논의할 질문' : '주요 리스크 요인';
+  if (free) document.getElementById('edit-cap-preview').style.display = 'none';
+  else document.getElementById('edit-cur-cap').oninput?.();
+  document.getElementById('deletePresDraftBtn').textContent = free ? '발표 삭제' : '종목 삭제';
 }
 
 function closePresEditModal(force = false) {
@@ -237,10 +267,14 @@ async function savePresEditModal() {
   try {
     const payload = {
       ...(_editStoragePayload || {}),
-      market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
-      target_cap:    parseInt(document.getElementById('edit-tgt-cap').value) || null,
-      reason:        document.getElementById('edit-reason').value.trim()     || null,
-      risk:          document.getElementById('edit-risk').value.trim()       || null,
+      ...presentationContentPayload(_editDraft, {
+        format: document.getElementById('edit-format').value,
+        title: document.getElementById('edit-topic').value,
+        market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
+        target_cap:    parseInt(document.getElementById('edit-tgt-cap').value) || null,
+        reason:        document.getElementById('edit-reason').value.trim()     || null,
+        risk:          document.getElementById('edit-risk').value.trim()       || null,
+      }),
     };
     const { data, error } = _editDraft.id
       ? await sb.from('presentations').update(payload).eq('id', _editDraft.id).select().single()
@@ -270,9 +304,9 @@ async function clearPresEditStock() {
     closePresEditModal();
     return;
   }
-  if (!_editDraft || !confirm('종목을 초기화하고 다시 입력하시겠습니까?')) return;
+  if (!_editDraft || !confirm('이 발표 내용을 삭제하고 다시 입력하시겠습니까?')) return;
   const { error } = await sb.from('presentations').delete().eq('id', _editDraft.id);
-  if (error) { toast('종목 초기화 실패: ' + error.message); return; }
+  if (error) { toast('발표 삭제 실패: ' + error.message); return; }
   await reloadPresentationSetupData();
   closePresEditModal(true);
   refreshPresentationScheduleViews();
@@ -316,7 +350,7 @@ function onIndustryNameInput() {
   setIndustryNameSaveStatus(
     value
       ? (input.dataset.dirty === 'true' ? '저장 필요' : '저장됨')
-      : '산업명을 입력해 주세요.'
+      : '공통 주제나 산업명을 입력해 주세요.'
   );
 }
 
@@ -429,7 +463,7 @@ async function loadIndustryNameForContext(plan, category) {
   setIndustryNameSaveStatus(
     input.dataset.dirty === 'true'
       ? '저장 필요'
-      : (savedName ? '저장됨' : '산업명을 입력해 주세요.')
+      : (savedName ? '저장됨' : '공통 주제나 산업명을 입력해 주세요.')
   );
 }
 
@@ -448,7 +482,7 @@ function saveTurnIndustryName(opts = {}) {
 
   const name = input?.value?.trim() || '';
   if (!name) {
-    setIndustryNameSaveStatus('산업명을 입력해 주세요.', true);
+    setIndustryNameSaveStatus('공통 주제나 산업명을 입력해 주세요.', true);
     input?.focus();
     return Promise.resolve(false);
   }
@@ -516,7 +550,7 @@ async function persistTurnIndustryName(request) {
       );
     });
     const updates = targets.map(presentation => {
-      const stockName = presentation.topic.split('>').pop().trim();
+      const stockName = presentationTopicTail(presentation);
       const topic = name + ' > ' + stockName;
       return {
         presentation,
@@ -803,7 +837,7 @@ function renderMemberPresPanel() {
 
     if (displayRow?.topic) {
       // 종목 선택됨 → 칩으로 표시
-      const topicName = displayRow.topic?.includes('>') ? displayRow.topic.split('>')[1].trim() : (displayRow.topic||'');
+      const topicName = parsePresentationStockName(displayRow);
       const upside    = displayRow.target_cap && displayRow.market_cap_at
         ? ((displayRow.target_cap - displayRow.market_cap_at) / displayRow.market_cap_at * 100).toFixed(0) : null;
 
@@ -835,9 +869,9 @@ function renderMemberPresPanel() {
         clearBtn.textContent = '×';
         clearBtn.setAttribute('aria-label', m.name + ' 발표종목 초기화');
         clearBtn.onclick = async () => {
-          if (!confirm(m.name + '의 발표종목을 초기화할까요?')) return;
+          if (!confirm(m.name + '의 발표 내용을 삭제할까요?')) return;
           const { error } = await sb.from('presentations').delete().eq('id', draft.id);
-          if (error) { toast('종목 초기화 실패: ' + error.message); return; }
+          if (error) { toast('발표 삭제 실패: ' + error.message); return; }
           await reloadPresentationSetupData();
           refreshPresentationScheduleViews();
         };
@@ -952,6 +986,23 @@ function renderMemberPresPanel() {
       searchWrap.appendChild(dd);
       wrap.appendChild(searchWrap);
       wrap.appendChild(manualBtn);
+      const freeBtn = document.createElement('button');
+      freeBtn.type = 'button';
+      freeBtn.className = 'btn';
+      freeBtn.textContent = '자유 주제';
+      freeBtn.setAttribute('aria-label', m.name + ' 자유 주제 발표 입력');
+      freeBtn.onclick = async () => {
+        if (!await ensureIndustryNameSaved()) return;
+        const entry = buildPresentationEntry(FREE_PRESENTATION_PREFIX + input.value.trim(), autoItem, automaticPlan);
+        const payload = buildPresentationDraftStoragePayload({
+          member_id: m.id, status: 'planned', topic: entry.topic, category: entry.category,
+          stock_code: null, price_at: null, market_cap_at: null, target_cap: null,
+          schedule_id: autoItem?.schedule.id || null,
+          presented_at: autoItem?.schedule.event_date,
+        }, { existingDate: draft?.presented_at });
+        openPresEditModal(m, { ...draft, ...payload }, payload);
+      };
+      wrap.appendChild(freeBtn);
       rightArea.appendChild(wrap);
     }
 
@@ -1003,7 +1054,8 @@ function describePresentationPlanChanges(before, after) {
 }
 
 function getPresentationReadiness(draft) {
-  if (!draft?.topic?.trim()) return '종목 미입력';
+  if (!parsePresentationStockName(draft).trim()) return '주제 미입력';
+  if (isFreePresentation(draft)) return draft.reason?.trim() ? '내용 입력 완료' : '내용 작성 중';
   return draft.reason?.trim() && draft.risk?.trim() ? '내용 입력 완료' : '내용 작성 중';
 }
 
@@ -1029,14 +1081,14 @@ function renderRoundReadiness(plan) {
       }
       return { member, draft, state: getPresentationReadiness(draft) };
     });
-    const missing = entries.filter(entry => entry.state === '종목 미입력').length;
+    const missing = entries.filter(entry => entry.state === '주제 미입력').length;
     const complete = entries.filter(entry => entry.state === '내용 입력 완료').length;
     section.innerHTML = '<h3>' + escapeHtml(item.schedule.event_date + ' · ' + (CAT_LABEL[item.schedule.category] || '발표')) + '</h3>' +
       '<p class="muted">' + escapeHtml([item.schedule.event_time?.slice(0, 5), item.schedule.location].filter(Boolean).join(' · ') || '시간·장소 미정') +
-      ' · 총 ' + entries.length + '명 · 내용 입력 완료 ' + complete + '명 · 작성 중 ' + (entries.length - complete - missing) + '명 · 종목 미입력 ' + missing + '명</p>';
+      ' · 총 ' + entries.length + '명 · 내용 입력 완료 ' + complete + '명 · 작성 중 ' + (entries.length - complete - missing) + '명 · 주제 미입력 ' + missing + '명</p>';
     for (const entry of entries) {
       const row = document.createElement('p');
-      row.textContent = (entry.member?.name || '발표자') + ' · ' + (entry.draft?.topic || '종목 미정') + ' · ' + entry.state;
+      row.textContent = (entry.member?.name || '발표자') + ' · ' + (entry.draft?.topic || '주제 미정') + ' · ' + entry.state;
       section.appendChild(row);
     }
     const button = document.createElement('button');
@@ -1059,13 +1111,13 @@ function renderMyPresentationCard(plan) {
   }) : null;
   card.hidden = false;
   card.innerHTML = '<div><span class="presentation-order-eyebrow">내 발표 준비</span>' +
-    '<h2>' + escapeHtml(getPresentationDisplayInfo(draft, schedules).topic || '발표종목을 입력해 주세요') + '</h2>' +
+    '<h2>' + escapeHtml(getPresentationDisplayInfo(draft, schedules).topic || '발표 종목 또는 자유 주제를 입력해 주세요') + '</h2>' +
     '<p>' + escapeHtml(item ? item.schedule.event_date + ' · ' + CAT_LABEL[item.schedule.category] : '등록된 발표 일정이 없습니다.') + '</p></div>';
   if (!item) return;
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'btn btn-primary';
-  button.textContent = draft?.topic ? '내 종목 수정' : '내 종목 입력';
+  button.textContent = draft?.topic ? '내 발표 수정' : '내 발표 입력';
   button.onclick = () => {
     if (draft?.topic) { openPresEditModal(member, draft); return; }
     const row = [...document.querySelectorAll('.pres-member-row')].find(el => String(el.dataset.memberId) === String(member.id));

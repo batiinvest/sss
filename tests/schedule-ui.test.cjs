@@ -657,7 +657,7 @@ test('presentation preparation preserves pending input and uses each automatic s
   assert.match(memberPanel, /category: entry\.category/);
   assert.equal(
     (memberPanel.match(/buildPresentationDraftStoragePayload\(/g) || []).length,
-    2,
+    3,
   );
   assert.doesNotMatch(memberPanel, /presented_at:\s*autoItem\?\.schedule\.event_date\s*\|\|\s*null/);
   assert.match(modal, /const storagePayload = buildPresentationDraftStoragePayload\(/);

@@ -34,6 +34,7 @@ function modal() {
     refreshPresentationScheduleViews() {}, schedules: [], presentations: [],
   };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/utils/presentation.js'), 'utf8'), context);
   vm.runInContext(section('let _editDraft = null;', "document.getElementById('presEditModal').addEventListener"), context);
   return { context, elements, writes, fail: value => { failure = value; } };
 }
@@ -84,12 +85,13 @@ test('successful insert followed by refresh failure retries as update, preventin
 test('impact names changed members and readiness requires substantive topic, reason and risk', () => {
   const context = { members: [{ id: 'a', name: '가' }, { id: 'b', name: '나' }] };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/utils/presentation.js'), 'utf8'), context);
   vm.runInContext(section('function describePresentationPlanChanges', 'function renderRoundReadiness'), context);
   const plan = ids => ({ items: ids.map((id, i) => ({ memberIds: [id], schedule: { event_date: `2026-10-${10 + i}` } })) });
   const message = context.describePresentationPlanChanges(plan(['a', 'b']), plan(['b', 'a']));
   assert.match(message, /가: 2026-10-10 → 2026-10-11/);
   assert.match(message, /나: 2026-10-11 → 2026-10-10/);
-  assert.equal(context.getPresentationReadiness({ topic: ' ' }), '종목 미입력');
+  assert.equal(context.getPresentationReadiness({ topic: ' ' }), '주제 미입력');
   assert.equal(context.getPresentationReadiness({ topic: '삼성전자', reason: '분석', risk: ' ' }), '내용 작성 중');
   assert.equal(context.getPresentationReadiness({ topic: '삼성전자', reason: '분석', risk: '경쟁' }), '내용 입력 완료');
 });
@@ -106,8 +108,84 @@ test('unassigned draft appears only in its next round, not every future round', 
     getNextPresentationInputPlanItem: () => items[0],
   };
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/utils/presentation.js'), 'utf8'), context);
   vm.runInContext(section('function getPresentationReadiness', 'function renderMyPresentationCard'), context);
   context.renderRoundReadiness({ items });
   assert.match(container.children[0].children[0].textContent, /삼성전자 · 내용 입력 완료/);
-  assert.match(container.children[1].children[0].textContent, /종목 미정 · 종목 미입력/);
+  assert.match(container.children[1].children[0].textContent, /주제 미정 · 주제 미입력/);
+});
+
+test('an industry stock switches to free topic atomically and reopens with its contents', async () => {
+  const { context, elements, writes } = modal();
+  const original = { id: 'old', category: 'industry', topic: '2027년 전망 > 삼성전자',
+    stock_code: '005930', price_at: 70000, market_cap_at: 100, target_cap: 200 };
+  context.openPresEditModal({ name: '회원' }, original);
+  assert.equal(elements.get('edit-format').value, 'stock');
+  elements.get('edit-format').value = 'free';
+  context.updatePresEditFormat();
+  assert.equal(elements.get('edit-stock-fields').style.display, 'none');
+  elements.get('edit-topic').value = '클라우드';
+  elements.get('edit-reason').value = '2027년 수요 전망\n성장 근거';
+  await context.savePresEditModal();
+  const saved = { ...original, ...writes[0].payload };
+  assert.equal(saved.topic, '2027년 전망 > [자유 주제] 클라우드');
+  assert.equal(saved.category, 'industry');
+  for (const field of ['stock_code', 'price_at', 'market_cap_at', 'target_cap']) assert.equal(saved[field], null);
+  context.openPresEditModal({ name: '회원' }, saved);
+  assert.equal(elements.get('edit-format').value, 'free');
+  assert.equal(elements.get('edit-topic').value, '클라우드');
+  assert.equal(elements.get('edit-reason').value, '2027년 수요 전망\n성장 근거');
+});
+
+test('changing format without saving leaves the original stock unchanged', () => {
+  const { context, elements, writes } = modal();
+  const original = { id: 'old', topic: '반도체 > 삼성전자', category: 'industry', stock_code: '005930' };
+  context.openPresEditModal({ name: '회원' }, original);
+  elements.get('edit-format').value = 'free';
+  context.updatePresEditFormat();
+  context.confirm = () => false;
+  context.closePresEditModal();
+  assert.equal(elements.get('presEditModal').style.display, 'flex');
+  assert.equal(writes.length, 0);
+  assert.equal(original.stock_code, '005930');
+  assert.equal(original.topic, '반도체 > 삼성전자');
+});
+
+test('new free topic requires a title and retains its selected industry round', async () => {
+  const { context, elements, writes } = modal();
+  const payload = { member_id: 'm', status: 'planned', category: 'industry', schedule_id: 'round',
+    presented_at: '2026-11-16', topic: '2027년 전망 > [자유 주제] ' };
+  context.openPresEditModal({ name: '회원' }, payload, payload);
+  await context.savePresEditModal();
+  assert.equal(writes.length, 0);
+  elements.get('edit-topic').value = '반도체';
+  elements.get('edit-reason').value = '업황 전망';
+  await context.savePresEditModal();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].payload.schedule_id, 'round');
+  assert.equal(writes[0].payload.category, 'industry');
+  assert.equal(writes[0].payload.presented_at, '2026-11-16');
+});
+
+test('industry free topic can switch back to a manually entered stock', async () => {
+  const { context, elements, writes } = modal();
+  context.openPresEditModal({ name: '회원' }, { id: 'free', topic: '2027년 전망 > [자유 주제] 클라우드', category: 'industry' });
+  elements.get('edit-format').value = 'stock';
+  context.updatePresEditFormat();
+  assert.equal(elements.get('edit-stock-fields').style.display, 'grid');
+  assert.equal(elements.get('edit-topic').readOnly, false);
+  elements.get('edit-topic').value = 'Microsoft';
+  elements.get('edit-tgt-cap').value = '5000';
+  await context.savePresEditModal();
+  assert.equal(writes[0].payload.topic, '2027년 전망 > Microsoft');
+  assert.equal(writes[0].payload.target_cap, 5000);
+});
+
+test('free readiness needs core contents but optional questions do not block completion', () => {
+  const { context } = modal();
+  vm.runInContext(section('function getPresentationReadiness', 'function renderRoundReadiness'), context);
+  const free = { category: 'industry', topic: '2027년 전망 > [자유 주제] 반도체' };
+  assert.equal(context.getPresentationReadiness(free), '내용 작성 중');
+  assert.equal(context.getPresentationReadiness({ ...free, reason: '수요 전망' }), '내용 입력 완료');
+  assert.equal(context.getPresentationReadiness({ ...free, topic: '반도체', reason: '투자 의견' }), '내용 작성 중');
 });

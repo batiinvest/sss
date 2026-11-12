@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 내 정보</title>
-  <link rel="stylesheet" href="css/style.css?v=20261110.1">
+  <link rel="stylesheet" href="css/style.css?v=20261112.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -184,11 +184,11 @@
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261110.1"></script>
+<script src="js/corporate-actions-service.js?v=20261112.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20260922"></script>
+<script src="js/utils/presentation.js?v=20261112.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261110.1"></script>
+<script src="js/db.js?v=20261112.1"></script>
 <script>
 let myMember    = null;
 let myPriceMap  = {};
@@ -379,14 +379,14 @@ async function renderMyPresentations() {
       const curPrice = cur?.price;
       const retNum = calcReturnRate(getPresentationReturnBase(p), curPrice);
       const ret = retNum !== null ? retNum.toFixed(1) : null;
-      const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : p.topic;
+      const topicName = parsePresentationStockName(p);
       const catBadge  = p.category === 'industry'
         ? '<span class="badge" style="background:#e8f4fd;color:#0c447c;">산업</span>'
         : '<span class="badge b-hold">기업</span>';
       return `<tr>
         <td class="muted" style="white-space:nowrap;">${p.presented_at}</td>
         <td>${catBadge}</td>
-        <td style="font-weight:500;">${topicName}</td>
+        <td style="font-weight:500;">${escapeHtml(topicName)}${isFreePresentation(p) ? ' · 자유 주제' : ''}</td>
         <td>${p.price_at ? p.price_at.toLocaleString()+'원' : '—'}</td>
         <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
         <td class="${ret !== null ? rCls(ret) : ''}">${ret !== null ? (ret>=0?'+':'')+ret+'%' : '—'}</td>

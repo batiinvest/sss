@@ -54,6 +54,7 @@ test('a scheduled next presentation retains its input and date selector despite 
   const start=html.indexOf('function renderMemberPresPanel()');
   // The next top-level section differs between the deployed and pending local versions.
   const end=html.indexOf('\n}\n',start)+3;
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/utils/presentation.js'), 'utf8'), context);
   vm.runInContext(html.slice(start,end),context);
   context.renderMemberPresPanel();
   const input=elements.find(el=>el.tag==='input' && el.dataset.memberId==='4');

@@ -862,6 +862,55 @@ function getPresentationIndustryConfigKey(
     : null;
 }
 
+// Resolve the whole turn, including sessions that have already taken place.
+// Do not use today's draft epoch: it changes as sessions are completed.
+function getPresentationIndustryCycle(scheduleId, allSchedules, orderedMembers, opts = {}) {
+  const rosters = opts.manualRosters || presentationManualRosters;
+  const groupSize = Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE);
+  let group = [];
+  let consumed = 0;
+  let capacity = 0;
+  const groups = [];
+  for (const schedule of sortPresentationSchedules(allSchedules || [])) {
+    if (!group.length || group[0].category !== schedule.category || consumed >= capacity) {
+      group = [];
+      groups.push(group);
+      consumed = 0;
+      const participants = (orderedMembers || []).filter(member => member?.id &&
+        (!member.joined_at || String(member.joined_at).slice(0, 10) <= schedule.event_date));
+      capacity = participants.length || (orderedMembers || []).length || groupSize;
+    }
+    group.push(schedule);
+    const roster = rosters[String(schedule.id)];
+    consumed += Array.isArray(roster) ? new Set(roster.map(String)).size : groupSize;
+  }
+  const rows = groups.find(items => items.some(row => String(row.id) === String(scheduleId))) || [];
+  return {
+    scheduleIds: rows.map(row => String(row.id)),
+    key: rows.length ? PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'cycle:schedules:' + rows[0].id : null,
+  };
+}
+
+function resolvePresentationIndustryTitle(schedule, allSchedules, allPresentations, orderedMembers, configs, opts = {}) {
+  if (schedule?.category !== 'industry') return '';
+  const cycle = getPresentationIndustryCycle(schedule.id, allSchedules, orderedMembers, opts);
+  const read = key => typeof configs?.get(key) === 'string' ? configs.get(key).trim() : '';
+  const shared = read(cycle.key);
+  if (shared) return shared;
+  const own = read(getPresentationIndustryConfigKey(schedule.id));
+  const names = [...new Set(cycle.scheduleIds.map(id => read(getPresentationIndustryConfigKey(id))).filter(Boolean))];
+  // Existing per-date names can be inherited without a database migration.
+  // Keep conflicting historical names local until the user explicitly saves a shared name.
+  if (own) return own;
+  if (names.length === 1) return names[0];
+  if (names.length > 1) return '';
+  const inferred = [...new Set((allPresentations || [])
+    .filter(row => cycle.scheduleIds.includes(String(row.schedule_id)) && row.category === 'industry' &&
+      !String(row.topic || '').trim().startsWith('[자유 주제]'))
+    .map(row => getPresentationScheduleTopicParts(row).industry).filter(Boolean))];
+  return inferred.length === 1 ? inferred[0] : '';
+}
+
 function classifyPastScheduledPresentationRows(
   allSchedules = [],
   allPresentations = [],

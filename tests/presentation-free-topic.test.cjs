@@ -106,6 +106,7 @@ test('renaming a shared outlook preserves mixed presentation formats and individ
     { id: 'other', category: 'industry', status: 'planned', schedule_id: 'other', topic: '다른 회차 > 원익IPS' },
   ];
   const ctx = context({ presentations: rows, industrySaveToken: 0, setConfig: async () => {},
+    presOrder: [], notifyPresentationOrderChanged() {},
     document: { getElementById: () => null },
     sb: { from: () => ({ update: () => ({ eq: async () => ({ error: null }) }) }) },
   });

@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261112.1">
+  <link rel="stylesheet" href="css/style.css?v=20261112.2">
   <!-- 스타일: css/style.css 참조 -->
   <style>
     #roundReadiness { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; margin-top:16px; }
@@ -58,7 +58,7 @@
               <input
                 type="text"
                 id="thisTurnIndustry"
-                placeholder="공통 주제 / 산업명 (예: 2027년 전망)"
+                placeholder="사이클 공통 주제 (예: 2027년 전망)"
                 oninput="onIndustryNameInput()"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();saveTurnIndustryName();}"
               />
@@ -135,9 +135,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/db.js?v=20261112.1"></script>
-<script src="js/utils/presentation.js?v=20261112.1"></script>
-<script src="js/schedule-shared.js?v=20261028.3"></script>
+<script src="js/db.js?v=20261112.2"></script>
+<script src="js/utils/presentation.js?v=20261112.2"></script>
+<script src="js/schedule-shared.js?v=20261112.2"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -395,11 +395,9 @@ async function loadIndustryNameForContext(plan, category) {
     getOrderedCycleMembers(),
     { fromDate: toDateStr(new Date()) }
   );
-  const key = getPresentationIndustryConfigKey(
-    visibleItem?.schedule?.id,
-    presentationDraftEpoch,
-    draftCycle.cycleKey
-  );
+  const topicCycle = visibleItem?.schedule
+    ? getPresentationIndustryCycle(visibleItem.schedule.id, schedules, getOrderedCycleMembers()) : null;
+  const key = topicCycle?.key || getPresentationIndustryConfigKey(null, presentationDraftEpoch, draftCycle.cycleKey);
   if (!key) return;
   if (
     input.dataset.contextKey === key &&
@@ -420,19 +418,15 @@ async function loadIndustryNameForContext(plan, category) {
   }
   setIndustryNameSaveStatus('불러오는 중...');
   let saved;
-  let savedForCycle;
   try {
-    saved = await getConfigStrict(key);
-    const cycleKey = visibleItem?.schedule?.id
-      ? getPresentationIndustryConfigKey(
-          null,
-          presentationDraftEpoch,
-          draftCycle.cycleKey
-        )
-      : null;
-    savedForCycle = !saved && cycleKey
-      ? await getConfigStrict(cycleKey)
-      : null;
+    if (visibleItem?.schedule) {
+      const keys = [key, ...topicCycle.scheduleIds.map(id => getPresentationIndustryConfigKey(id))];
+      const values = await Promise.all(keys.map(async configKey => [configKey, await getConfigStrict(configKey)]));
+      saved = resolvePresentationIndustryTitle(visibleItem.schedule, schedules, presentations,
+        getOrderedCycleMembers(), new Map(values));
+    } else {
+      saved = await getConfigStrict(key);
+    }
   } catch (error) {
     console.error('산업명 불러오기 오류:', error);
     if (token === industryLoadToken && input.dataset.contextKey === key) {
@@ -445,9 +439,7 @@ async function loadIndustryNameForContext(plan, category) {
   }
   if (token !== industryLoadToken || input.dataset.contextKey !== key) return;
 
-  const savedName = typeof saved === 'string' && saved.trim()
-    ? saved.trim()
-    : (typeof savedForCycle === 'string' ? savedForCycle.trim() : '');
+  const savedName = typeof saved === 'string' ? saved.trim() : '';
   const inferredName = savedName ? '' : inferIndustryNameForContext(plan);
   const name = savedName || inferredName;
   const wasDirty = input.dataset.dirty === 'true';
@@ -496,18 +488,16 @@ function saveTurnIndustryName(opts = {}) {
     getOrderedCycleMembers(),
     { fromDate: toDateStr(new Date()) }
   );
-  const key = getPresentationIndustryConfigKey(
-    scheduleId,
-    presentationDraftEpoch,
-    draftCycle.cycleKey
-  );
+  const topicCycle = scheduleId
+    ? getPresentationIndustryCycle(scheduleId, schedules, getOrderedCycleMembers()) : null;
+  const key = topicCycle?.key || getPresentationIndustryConfigKey(null, presentationDraftEpoch, draftCycle.cycleKey);
   if (!key) {
     setIndustryNameSaveStatus('저장할 발표 회차를 확인하지 못했습니다.', true);
     return Promise.resolve(false);
   }
 
   const requestToken = ++industrySaveToken;
-  const request = { key, name, scheduleId, requestToken, opts };
+  const request = { key, name, scheduleId, scheduleIds: topicCycle?.scheduleIds, requestToken, opts };
   const button = document.getElementById('saveIndustryNameBtn');
   industrySavePending += 1;
   button && (button.disabled = true);
@@ -529,7 +519,7 @@ function saveTurnIndustryName(opts = {}) {
 }
 
 async function persistTurnIndustryName(request) {
-  const { key, name, scheduleId, requestToken, opts } = request;
+  const { key, name, scheduleId, scheduleIds, requestToken, opts } = request;
   const input = document.getElementById('thisTurnIndustry');
   try {
     await setConfig(key, name);
@@ -542,7 +532,7 @@ async function persistTurnIndustryName(request) {
         return false;
       }
       if (scheduleId) {
-        return String(presentation.schedule_id || '') === String(scheduleId);
+        return (scheduleIds || [String(scheduleId)]).includes(String(presentation.schedule_id || ''));
       }
       return isCurrentUnassignedPresentationDraft(
         presentation,
@@ -573,19 +563,20 @@ async function persistTurnIndustryName(request) {
     ) {
       input.dataset.savedValue = name;
       input.dataset.persisted = 'true';
-      input.dataset.dirty = 'false';
+      input.dataset.dirty = String(failedCount > 0);
       input.dataset.loaded = 'true';
       setIndustryNameSaveStatus(
-        failedCount ? '산업명 저장됨 · 일부 종목 반영 대기' : '저장됨',
+        failedCount ? '공통 주제 저장됨 · 일부 발표 반영 대기' : '사이클 전체에 저장됨',
         Boolean(failedCount)
       );
     }
     if (!opts.silent) {
       toast(failedCount
         ? '산업명은 저장됐지만 일부 종목에는 아직 반영되지 않았습니다.'
-        : '산업명이 저장되었습니다.');
+        : '같은 사이클 전체에 공통 주제가 저장되었습니다.');
     }
-    return true;
+    notifyPresentationOrderChanged(presOrder);
+    return failedCount === 0;
   } catch (error) {
     console.error('산업명 저장 오류:', error);
     if (requestToken === industrySaveToken) {
@@ -1200,7 +1191,8 @@ function buildPresentationEntry(stockName, autoItem, plan) {
   const category = autoItem?.schedule.category || fallbackCategory;
   const contextItem = getFocusedPresentationPlanItem(plan) || plan?.items?.[0] || null;
   const matchesVisibleContext = !autoItem?.schedule || !contextItem?.schedule ||
-    String(autoItem.schedule.id) === String(contextItem.schedule.id);
+    getPresentationIndustryCycle(contextItem.schedule.id, schedules, getOrderedCycleMembers())
+      .scheduleIds.includes(String(autoItem.schedule.id));
   const industry = category === 'industry' && matchesVisibleContext
     ? (currentIndustryName || document.getElementById('thisTurnIndustry')?.value?.trim() || '')
     : '';

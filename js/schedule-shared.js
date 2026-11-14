@@ -1931,6 +1931,6 @@ function getPresentationDisplayInfo(presentation, allSchedules = []) {
   return {
     category: linked?.category || presentation?.category,
     date: linked?.event_date || presentation?.presented_at || null,
-    topic: String(presentation?.topic || '').split('>').pop().trim(),
+    topic: String(presentation?.topic || '').split('>').pop().trim().replace('[자유 주제]', '[기타]'),
   };
 }

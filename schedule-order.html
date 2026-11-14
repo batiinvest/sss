@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261112.2">
+  <link rel="stylesheet" href="css/style.css?v=20261114.1">
   <!-- 스타일: css/style.css 참조 -->
   <style>
     #roundReadiness { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; margin-top:16px; }
@@ -36,7 +36,7 @@
     <section id="myPresentationCard" class="my-presentation-card" aria-label="내 발표 준비" hidden></section>
     <section class="card mb-card" aria-labelledby="roundReadinessTitle">
       <h2 id="roundReadinessTitle">회차별 준비 현황</h2>
-      <p class="muted">종목 또는 자유 주제의 준비 현황입니다. 자유 주제는 핵심 내용까지 입력하면 준비 완료로 표시됩니다.</p>
+      <p class="muted">종목·기타 발표의 준비 현황입니다. 기타 발표는 핵심 내용까지 입력하면 준비 완료로 표시됩니다.</p>
       <div id="roundReadiness" aria-live="polite">준비 현황을 불러오는 중...</div>
     </section>
     <section class="card presentation-setup-card">
@@ -95,7 +95,7 @@
       <label for="edit-format">발표 방식</label>
       <select id="edit-format" onchange="updatePresEditFormat()">
         <option value="stock">종목 발표</option>
-        <option value="free">자유 주제 발표 (산업 전망 등)</option>
+        <option value="free">기타 발표 (산업 전망 등)</option>
       </select>
     </div>
     <div class="form-group">
@@ -135,9 +135,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/db.js?v=20261112.2"></script>
-<script src="js/utils/presentation.js?v=20261112.2"></script>
-<script src="js/schedule-shared.js?v=20261112.2"></script>
+<script src="js/db.js?v=20261114.1"></script>
+<script src="js/utils/presentation.js?v=20261114.1"></script>
+<script src="js/schedule-shared.js?v=20261114.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -888,8 +888,8 @@ function renderMemberPresPanel() {
         historyBtn.className = 'pres-stock-chip chip-completed';
         historyBtn.style.flexBasis = '100%';
         historyBtn.textContent = '최근 발표 완료 · ' +
-          getPresentationRotationDate(latestCompleted, schedules) + ' · ' + latestCompleted.topic;
-        historyBtn.setAttribute('aria-label', m.name + ' 최근 완료 발표 보기: ' + latestCompleted.topic);
+          getPresentationRotationDate(latestCompleted, schedules) + ' · ' + latestCompleted.topic.replace('[자유 주제]', '[기타]');
+        historyBtn.setAttribute('aria-label', m.name + ' 최근 완료 발표 보기: ' + latestCompleted.topic.replace('[자유 주제]', '[기타]'));
         historyBtn.onclick = () => goToSchedulePage(
           'presentations?view=history&id=' + encodeURIComponent(latestCompleted.id)
         );
@@ -980,8 +980,8 @@ function renderMemberPresPanel() {
       const freeBtn = document.createElement('button');
       freeBtn.type = 'button';
       freeBtn.className = 'btn';
-      freeBtn.textContent = '자유 주제';
-      freeBtn.setAttribute('aria-label', m.name + ' 자유 주제 발표 입력');
+      freeBtn.textContent = '기타';
+      freeBtn.setAttribute('aria-label', m.name + ' 기타 발표 입력');
       freeBtn.onclick = async () => {
         if (!await ensureIndustryNameSaved()) return;
         const entry = buildPresentationEntry(FREE_PRESENTATION_PREFIX + input.value.trim(), autoItem, automaticPlan);
@@ -1079,7 +1079,7 @@ function renderRoundReadiness(plan) {
       ' · 총 ' + entries.length + '명 · 내용 입력 완료 ' + complete + '명 · 작성 중 ' + (entries.length - complete - missing) + '명 · 주제 미입력 ' + missing + '명</p>';
     for (const entry of entries) {
       const row = document.createElement('p');
-      row.textContent = (entry.member?.name || '발표자') + ' · ' + (entry.draft?.topic || '주제 미정') + ' · ' + entry.state;
+      row.textContent = (entry.member?.name || '발표자') + ' · ' + (entry.draft?.topic || '주제 미정').replace('[자유 주제]', '[기타]') + ' · ' + entry.state;
       section.appendChild(row);
     }
     const button = document.createElement('button');
@@ -1102,7 +1102,7 @@ function renderMyPresentationCard(plan) {
   }) : null;
   card.hidden = false;
   card.innerHTML = '<div><span class="presentation-order-eyebrow">내 발표 준비</span>' +
-    '<h2>' + escapeHtml(getPresentationDisplayInfo(draft, schedules).topic || '발표 종목 또는 자유 주제를 입력해 주세요') + '</h2>' +
+    '<h2>' + escapeHtml(getPresentationDisplayInfo(draft, schedules).topic || '발표할 종목이나 주제를 입력해 주세요') + '</h2>' +
     '<p>' + escapeHtml(item ? item.schedule.event_date + ' · ' + CAT_LABEL[item.schedule.category] : '등록된 발표 일정이 없습니다.') + '</p></div>';
   if (!item) return;
   const button = document.createElement('button');

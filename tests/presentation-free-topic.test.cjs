@@ -96,7 +96,7 @@ test('direct investment conversion also rejects a free topic without stock searc
   }) } });
   vm.runInContext(section('picks.html', 'async function openPickFromPresentation', 'function toggleInvestmentFilters'), ctx);
   await ctx.openPickFromPresentation('free');
-  assert.match(messages[0], /자유 주제/);
+  assert.match(messages[0], /기타 발표/);
 });
 
 test('renaming a shared outlook preserves mixed presentation formats and individual titles', async () => {

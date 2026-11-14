@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 발표 기록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261112.2">
+  <link rel="stylesheet" href="css/style.css?v=20261114.1">
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
@@ -129,9 +129,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261112.2"></script>
+<script src="js/utils/presentation.js?v=20261114.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261112.2"></script>
+<script src="js/db.js?v=20261114.1"></script>
 <script>
 let allData  = [];
 let members  = [];
@@ -362,7 +362,7 @@ function renderPresentationCards(data) {
     return `<button type="button" class="mobile-stock-card" onclick="openPresentationDetail('${escapeHtml(item.id)}')">
       <span class="mobile-stock-card-head"><strong>${escapeHtml(stockName)}</strong><span class="badge ${item.status === 'planned' ? 'b-warn' : 'b-sold'}">${status}</span></span>
       <span class="mobile-stock-card-meta">${escapeHtml(memberName)} · ${escapeHtml(item.presented_at || '날짜 미정')} ${item.stock_code ? '· ' + escapeHtml(item.stock_code) : ''}</span>
-      ${isFreePresentation(item) ? `<span class="mobile-stock-card-meta presentation-topic-summary">자유 주제 · ${escapeHtml(item.reason || '발표 내용 미입력')}</span>` : `<span class="mobile-stock-card-metrics">
+      ${isFreePresentation(item) ? `<span class="mobile-stock-card-meta presentation-topic-summary">기타 · ${escapeHtml(item.reason || '발표 내용 미입력')}</span>` : `<span class="mobile-stock-card-metrics">
         <span title="${escapeHtml(getPresentationPriceTitle(item))}">발표일 종가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : isAutomaticPresentationPrice(item) ? '확인 대기' : '—'}</strong></span>
         <span>현재가<strong>${current?.price ? Number(current.price).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>발표 후 수익률<strong class="${rate === null ? '' : rate >= 0 ? 'up' : 'dn'}">${rate === null ? '—' : (rate >= 0 ? '+' : '') + rate.toFixed(1) + '%'}</strong></span>
@@ -520,7 +520,7 @@ async function openPresentationDetail(id) {
   document.getElementById('presentationConvertBtn').hidden = isFreePresentation(item);
   if (isFreePresentation(item)) {
     body.innerHTML = `
-      <section class="detail-section"><h3>자유 주제 발표</h3><p>${escapeHtml(parseIndustry(item) || parseStockName(item))}</p></section>
+      <section class="detail-section"><h3>기타 발표</h3><p>${escapeHtml(parseIndustry(item) || parseStockName(item))}</p></section>
       <section class="detail-section"><h3>핵심 전망 / 발표 내용</h3><p style="white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(item.reason || '아직 등록된 발표 내용이 없습니다.')}</p></section>
       <section class="detail-section"><h3>주요 변수 / 토론할 질문</h3><p style="white-space:pre-wrap;overflow-wrap:anywhere;">${escapeHtml(item.risk || '등록된 내용이 없습니다.')}</p></section>`;
     return;
@@ -660,7 +660,7 @@ function renderTable(data) {
       </td>
       <td style="font-weight:500;">
         <button type="button" class="btn" onclick="openPresentationDetail('${escapeHtml(p.id)}')">${escapeHtml(stockName)}</button>
-        ${isFreePresentation(p) ? '<div class="muted">자유 주제</div>' : ''}
+        ${isFreePresentation(p) ? '<div class="muted">기타</div>' : ''}
         ${p.stock_code ? `<div style="font-size:11px;color:var(--muted);">${escapeHtml(p.stock_code)}</div>` : ''}
       </td>
       <td style="text-align:right;">

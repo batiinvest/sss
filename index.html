@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20261112.2">
+  <link rel="stylesheet" href="css/style.css?v=20261114.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -330,15 +330,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261112.2"></script>
+<script src="js/corporate-actions-service.js?v=20261114.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261112.2"></script>
+<script src="js/utils/presentation.js?v=20261114.1"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261112.2"></script>
-<script src="js/schedule-shared.js?v=20261112.2"></script>
+<script src="js/db.js?v=20261114.1"></script>
+<script src="js/schedule-shared.js?v=20261114.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20261112.2"></script>
+<script src="js/modal-pres.js?v=20261114.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -533,7 +533,7 @@ function renderMobileRecentPresentations(items) {
     return `<button type="button" class="mobile-stock-card" onclick="navigateToAppRoute('${route}')">
       <span class="mobile-stock-card-head"><strong>${escapeHtml(name)}</strong><span class="badge ${item.status === 'planned' ? 'b-warn' : 'b-sold'}">${status}</span></span>
       <span class="mobile-stock-card-meta">${escapeHtml(item.members?.name || '발표자 미정')} · ${escapeHtml(presentationDate)}</span>
-      ${isFreePresentation(item) ? `<span class="mobile-stock-card-meta presentation-topic-summary">자유 주제 · ${escapeHtml(item.reason || '발표 내용 미입력')}</span>` : `<span class="mobile-stock-card-metrics">
+      ${isFreePresentation(item) ? `<span class="mobile-stock-card-meta presentation-topic-summary">기타 · ${escapeHtml(item.reason || '발표 내용 미입력')}</span>` : `<span class="mobile-stock-card-metrics">
         <span>발표가<strong>${item.price_at ? Number(item.price_at).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>현재가<strong>${current ? Number(current).toLocaleString('ko-KR') + '원' : '—'}</strong></span>
         <span>발표 후 수익률<strong class="${rCls(rate)}">${rate === null ? '—' : pct(rate)}</strong></span>
@@ -1173,7 +1173,7 @@ async function renderMyPresData(me, presData, priceMap) {
   if (planned.length) {
     plannedEl.style.display = 'block';
     plannedEl.innerHTML = planned.map(p => {
-      const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
+      const topicName = (p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—')).replace('[자유 주제]', '[기타]');
       const display = getPresentationDisplayInfo(p, dashboardPresentationSchedules);
       const catBadge  = display.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
       const scheduleText = p.schedule_id ? (display.date || '일정 미정') : '일정 미정';
@@ -1205,7 +1205,7 @@ async function renderMyPresData(me, presData, priceMap) {
   }
 
   tbody.innerHTML = done.slice(0, 6).map(p => {
-    const topicName = p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—');
+    const topicName = (p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—')).replace('[자유 주제]', '[기타]');
     const cur       = p.stock_code ? mergedMap[p.stock_code] : null;
     const curPrice  = cur?.price;
     const ret       = calcReturnRate(getPresentationReturnBase(p), curPrice);

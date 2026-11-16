@@ -8,6 +8,8 @@ const plain = value => JSON.parse(JSON.stringify(value));
 function helpers(overrides = {}) {
   const context = vm.createContext({ console, Date, Map, Set, ...overrides });
   vm.runInContext(fs.readFileSync(path.join(root, 'js/schedule-shared.js'), 'utf8'), context);
+  // Cycle persistence has its own storage/concurrency integration tests.
+  context.ensurePresentationCycleRegistry = overrides.ensurePresentationCycleRegistry || (async () => {});
   return context;
 }
 const members = Array.from({length: 8}, (_, i) => ({id: String(i + 1), name: `Member ${i + 1}`, is_active: true}));

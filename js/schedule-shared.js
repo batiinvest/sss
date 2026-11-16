@@ -322,6 +322,11 @@ async function prepareStudyCycleRosters(plan, allPresentations = [], opts = {}) 
   // cannot leave newly created schedules assigned to the wrong presenters.
   await setConfig(PRESENTATION_MANUAL_ROSTERS_KEY, rosters);
   presentationManualRosters = rosters;
+  await ensurePresentationCycleRegistry([], [], [{
+    scheduleIds: plan.sessions.map(session => String(rows.find(row => row.event_date === session.event_date).id)),
+    category: plan.category || plan.sessions[0]?.category,
+    participantIds: [...new Set(plan.sessions.flatMap(session => session.members.map(member => String(member.id))))],
+  }]);
   return newRows;
 }
 
@@ -867,7 +872,7 @@ function getPresentationIndustryConfigKey(
 
 // Resolve the whole turn, including sessions that have already taken place.
 // Do not use today's draft epoch: it changes as sessions are completed.
-function getPresentationIndustryCycle(scheduleId, allSchedules, orderedMembers, opts = {}) {
+function inferPresentationIndustryCycle(scheduleId, allSchedules, orderedMembers, opts = {}) {
   const rosters = opts.manualRosters || presentationManualRosters;
   const groupSize = Math.max(1, Number(opts.groupSize) || PRESENTATION_GROUP_SIZE);
   let group = [];
@@ -894,6 +899,101 @@ function getPresentationIndustryCycle(scheduleId, allSchedules, orderedMembers, 
   };
 }
 
+const PRESENTATION_CYCLE_REGISTRY_KEY = 'presentation_cycles_v1';
+let presentationCycleRegistry = null;
+
+function validatePresentationCycleRegistry(value) {
+  if (!value || value.version !== 1 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
+      !Array.isArray(value.cycles)) throw new Error('저장된 스터디 사이클 정보를 확인하지 못했습니다.');
+  const ids = new Set();
+  const schedulesSeen = new Set();
+  for (const cycle of value.cycles) {
+    if (!cycle?.id || ids.has(cycle.id) || !['industry', 'stock'].includes(cycle.category) ||
+        !Array.isArray(cycle.scheduleIds) || !cycle.scheduleIds.length || !cycle.topicKey ||
+        !Array.isArray(cycle.participantIds)) throw new Error('스터디 사이클 연결 정보가 올바르지 않습니다.');
+    ids.add(cycle.id);
+    for (const id of cycle.scheduleIds) {
+      if (typeof id !== 'string' || !id || schedulesSeen.has(id)) throw new Error('한 일정이 여러 사이클에 연결되어 있습니다.');
+      schedulesSeen.add(id);
+    }
+  }
+  return value;
+}
+
+function getPresentationIndustryCycle(scheduleId, allSchedules, orderedMembers, opts = {}) {
+  const registry = opts.registry || presentationCycleRegistry;
+  const cycle = registry?.cycles.find(item => item.scheduleIds.includes(String(scheduleId)));
+  if (cycle) {
+    const existing = new Set((allSchedules || []).filter(isPresentationSchedule).map(row => String(row.id)));
+    return { id: cycle.id, key: cycle.topicKey, scheduleIds: cycle.scheduleIds.filter(id => existing.has(id)),
+      topicScheduleIds: [...cycle.scheduleIds] };
+  }
+  return inferPresentationIndustryCycle(scheduleId, allSchedules, orderedMembers, opts);
+}
+
+function extendPresentationCycleRegistry(saved, allSchedules, allMembers, explicitCycles = [], topicKeys = []) {
+  const cycles = saved.cycles.map(cycle => ({ ...cycle, scheduleIds: [...cycle.scheduleIds] }));
+  const find = id => cycles.find(cycle => cycle.scheduleIds.includes(String(id)));
+  const add = (proposal, explicit) => {
+    const scheduleIds = [...new Set(proposal.scheduleIds.map(String))];
+    const owners = [...new Set(scheduleIds.map(find).filter(Boolean))];
+    if (explicit && (owners.length > 1 || owners.some(cycle => cycle.category !== proposal.category))) {
+      throw new Error('기존의 서로 다른 사이클을 합칠 수 없습니다. 일정을 다시 확인해 주세요.');
+    }
+    const missing = scheduleIds.filter(id => !find(id));
+    if (!missing.length) return;
+    if (explicit && owners.length === 1) {
+      owners[0].scheduleIds.push(...missing);
+      return;
+    }
+    const legacyKeys = missing.map(id => PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'cycle:schedules:' + id)
+      .filter(key => topicKeys.includes(key));
+    if (legacyKeys.length > 1) throw new Error('기존 공통 주제의 사이클 경계가 모호합니다. 일정 연결을 확인해 주세요.');
+    const id = missing[0];
+    cycles.push({ id, category: proposal.category, scheduleIds: missing,
+      participantIds: proposal.participantIds || [],
+      topicKey: legacyKeys[0] || PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'cycle:schedules:' + id });
+  };
+  explicitCycles.forEach(proposal => add(proposal, true));
+  // Infer only during first registration. Bound schedules are never regrouped.
+  for (const row of sortPresentationSchedules(allSchedules)) {
+    if (find(row.id)) continue;
+    const inferred = inferPresentationIndustryCycle(row.id, allSchedules, allMembers);
+    add({ scheduleIds: inferred.scheduleIds, category: row.category,
+      participantIds: allMembers.filter(member => !member.joined_at || String(member.joined_at).slice(0, 10) <= row.event_date)
+        .map(member => String(member.id)) }, false);
+  }
+  return validatePresentationCycleRegistry({ version: 1, revision: saved.revision + 1, cycles });
+}
+
+async function ensurePresentationCycleRegistry(allSchedules, allMembers, explicitCycles = []) {
+  const { error: insertError } = await sb.from('app_config').upsert({
+    key: PRESENTATION_CYCLE_REGISTRY_KEY, value: { version: 1, revision: 0, cycles: [] },
+  }, { onConflict: 'key', ignoreDuplicates: true });
+  if (insertError) throw insertError;
+  const { data: topicRows, error: topicError } = await sb.from('app_config').select('key')
+    .like('key', PRESENTATION_INDUSTRY_CONFIG_PREFIX + 'cycle:schedules:%');
+  if (topicError) throw topicError;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const saved = validatePresentationCycleRegistry(await getConfigStrict(PRESENTATION_CYCLE_REGISTRY_KEY));
+    const next = extendPresentationCycleRegistry(saved, allSchedules, allMembers, explicitCycles,
+      (topicRows || []).map(row => row.key));
+    if (JSON.stringify(next.cycles) === JSON.stringify(saved.cycles)) {
+      presentationCycleRegistry = saved;
+      return saved;
+    }
+    const { data, error } = await sb.from('app_config').update({ value: next })
+      .eq('key', PRESENTATION_CYCLE_REGISTRY_KEY).eq('value->>revision', String(saved.revision))
+      .select('value').maybeSingle();
+    if (error) throw error;
+    if (data) {
+      presentationCycleRegistry = validatePresentationCycleRegistry(data.value);
+      return presentationCycleRegistry;
+    }
+  }
+  throw new Error('다른 창에서 사이클이 변경되었습니다. 새로고침 후 다시 시도해 주세요.');
+}
+
 function resolvePresentationIndustryTitle(schedule, allSchedules, allPresentations, orderedMembers, configs, opts = {}) {
   if (schedule?.category !== 'industry') return '';
   const cycle = getPresentationIndustryCycle(schedule.id, allSchedules, orderedMembers, opts);
@@ -901,7 +1001,8 @@ function resolvePresentationIndustryTitle(schedule, allSchedules, allPresentatio
   const shared = read(cycle.key);
   if (shared) return shared;
   const own = read(getPresentationIndustryConfigKey(schedule.id));
-  const names = [...new Set(cycle.scheduleIds.map(id => read(getPresentationIndustryConfigKey(id))).filter(Boolean))];
+  const names = [...new Set((cycle.topicScheduleIds || cycle.scheduleIds)
+    .map(id => read(getPresentationIndustryConfigKey(id))).filter(Boolean))];
   // Existing per-date names can be inherited without a database migration.
   // Keep conflicting historical names local until the user explicitly saves a shared name.
   if (own) return own;
@@ -1875,15 +1976,17 @@ function getPresentationTurnState(allPresentations, orderedMembers, opts = {}) {
 
 // ── 공통 데이터 로드 (schedules + members + presentations 동시 조회)
 async function loadSharedData() {
-  const [s, m, p] = await Promise.all([
+  const [s, m, p, cycleMembers] = await Promise.all([
     fetchSchedules({ strict: true }),
     fetchMembers({ strict: true }),
-    reloadPresentations({ strict: true })
+    reloadPresentations({ strict: true }),
+    fetchMembers({ strict: true, includeInactive: true })
   ]);
   await loadPresentationManualRosters();
   schedules     = s;
   members       = m;
   presentations = p;
+  await ensurePresentationCycleRegistry(s, cycleMembers);
 }
 
 async function syncLoadedPastPresentations(orderedMembers) {

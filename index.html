@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20261114.1">
+  <link rel="stylesheet" href="css/style.css?v=20261116.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -330,15 +330,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261114.1"></script>
+<script src="js/corporate-actions-service.js?v=20261116.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261114.1"></script>
+<script src="js/utils/presentation.js?v=20261116.1"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261114.1"></script>
-<script src="js/schedule-shared.js?v=20261114.1"></script>
+<script src="js/db.js?v=20261116.1"></script>
+<script src="js/schedule-shared.js?v=20261116.1"></script>
 <script src="js/modal-pick.js?v=20260723.1"></script>
-<script src="js/modal-pres.js?v=20261114.1"></script>
+<script src="js/modal-pres.js?v=20261116.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -508,9 +508,7 @@ async function activatePresentationDraftCycle(memberRows, turnData) {
 }
 
 function mobilePresentationName(item) {
-  return typeof parsePresentationStockName === 'function'
-    ? parsePresentationStockName(item)
-    : String(item.topic || '종목 미입력').split('>').pop().trim();
+  return parsePresentationStockName(item);
 }
 
 function renderMobileRecentPresentations(items) {
@@ -1173,12 +1171,12 @@ async function renderMyPresData(me, presData, priceMap) {
   if (planned.length) {
     plannedEl.style.display = 'block';
     plannedEl.innerHTML = planned.map(p => {
-      const topicName = (p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—')).replace('[자유 주제]', '[기타]');
+      const topicName = formatPresentationTopicLabel(p, '—');
       const display = getPresentationDisplayInfo(p, dashboardPresentationSchedules);
       const catBadge  = display.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
       const scheduleText = p.schedule_id ? (display.date || '일정 미정') : '일정 미정';
       return `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;align-items:center;gap:8px;">
-        📋 ${catBadge} <strong style="color:var(--text);">${topicName}</strong>
+        📋 ${catBadge} <strong style="color:var(--text);">${escapeHtml(topicName)}</strong>
         <span style="color:var(--muted);">${scheduleText} 예정</span>
       </div>`;
     }).join('');
@@ -1205,14 +1203,14 @@ async function renderMyPresData(me, presData, priceMap) {
   }
 
   tbody.innerHTML = done.slice(0, 6).map(p => {
-    const topicName = (p.topic?.includes('>') ? p.topic.split('>')[1].trim() : (p.topic || '—')).replace('[자유 주제]', '[기타]');
+    const topicName = formatPresentationTopicLabel(p, '—');
     const cur       = p.stock_code ? mergedMap[p.stock_code] : null;
     const curPrice  = cur?.price;
     const ret       = calcReturnRate(getPresentationReturnBase(p), curPrice);
     const catBadge  = p.category === 'industry' ? '<span class="industry-tag">산업</span>' : '<span class="stock-tag">기업</span>';
     return `<tr>
       <td class="muted" style="white-space:nowrap;font-size:12px;">${p.presented_at || '—'}</td>
-      <td>${catBadge} <span style="font-weight:500;">${topicName}</span></td>
+      <td>${catBadge} <span style="font-weight:500;">${escapeHtml(topicName)}</span></td>
       <td>${p.price_at ? p.price_at.toLocaleString()+'원' : '—'}</td>
       <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
       <td class="${ret !== null ? rCls(ret) : ''}" style="font-weight:500;">

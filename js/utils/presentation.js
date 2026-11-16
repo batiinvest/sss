@@ -20,6 +20,12 @@ function isFreePresentation(p) {
   return title === FREE_PRESENTATION_PREFIX.trim() || title.startsWith(FREE_PRESENTATION_PREFIX);
 }
 
+// Display the legacy storage marker as the current label without changing data.
+// Callers inserting this string into HTML must still escape it.
+function formatPresentationTopicLabel(p, fallback = '') {
+  return presentationTopicTail(p).replace('[자유 주제]', '[기타]') || fallback;
+}
+
 function presentationContentPayload(draft, values) {
   const free = values.format === 'free';
   const title = String(values.title || '').trim();

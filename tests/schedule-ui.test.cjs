@@ -740,7 +740,7 @@ test('schedule UI cache versions stay aligned', () => {
     assert.equal(matches[0][1], canonical, `${file}: CSS cache key`);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20261114\.1/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20261116\.1/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
   const serviceWorker = read('sw.js');
@@ -789,6 +789,7 @@ test('schedule table shows escaped presentation topics from the effective roster
   );
   const context = {};
   vm.createContext(context);
+  vm.runInContext(read('js/utils/presentation.js'), context);
   vm.runInContext(topicHelper, context);
 
   assert.match(source, /<th>발표자·종목<\/th>/);

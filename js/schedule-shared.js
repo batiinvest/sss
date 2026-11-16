@@ -112,13 +112,16 @@ function uniqueScheduleTitleParts(values = []) {
 function getPresentationScheduleTopicParts(presentation) {
   const topic = String(presentation?.topic || '').trim();
   if (!topic) return { industry: '', subject: '' };
-  const parts = topic.split('>').map(part => part.trim()).filter(Boolean);
+  if (topic === '[자유 주제]' || topic.startsWith('[자유 주제] ')) {
+    return { industry: '', subject: topic };
+  }
+  const parts = topic.split('>');
   return {
     industry:
       presentation?.category === 'industry' && parts.length > 1
-        ? parts[0]
+        ? parts[0].trim()
         : '',
-    subject: parts[parts.length - 1] || '',
+    subject: (parts.length > 1 ? parts.slice(1).join('>') : parts[0]).trim(),
   };
 }
 
@@ -1931,6 +1934,6 @@ function getPresentationDisplayInfo(presentation, allSchedules = []) {
   return {
     category: linked?.category || presentation?.category,
     date: linked?.event_date || presentation?.presented_at || null,
-    topic: String(presentation?.topic || '').split('>').pop().trim().replace('[자유 주제]', '[기타]'),
+    topic: getPresentationScheduleTopicParts(presentation).subject.replace('[자유 주제]', '[기타]'),
   };
 }

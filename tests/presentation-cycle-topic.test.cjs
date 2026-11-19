@@ -70,9 +70,10 @@ test('saving a cycle updates each planned topic and retains each format and indi
   const rows = rounds.map((round, i) => ({ id: String(i), category: 'industry', status: 'planned', schedule_id: round.id,
     topic: ['구주제 > [자유 주제] 클라우드', '[자유 주제] 로봇', '삼성전자'][i] }));
   rows.push({ id: 'other', category: 'industry', status: 'planned', schedule_id: 'next-industry', topic: '다른 주제 > 원익IPS' });
+  rows.forEach(row => { row.edit_revision = 0; });
   const ctx = context({ inputRows: rows, industrySaveToken: 1, presOrder: [],
     document: { getElementById: () => null }, setConfig: async (key, name) => configWrites.push([key, name]),
-    sb: { from: () => ({ update: payload => ({ eq: async (_, id) => { writes.push([id, payload]); return { error: null }; } }) }) },
+    sb: { from: () => ({ update: payload => ({ eq(key, value) { if (key === 'id') writes.push([value, payload]); return this; }, select() { return this; }, maybeSingle: async () => ({ data: { ...payload, edit_revision: 1 } }) }) }) },
   });
   vm.runInContext('presentations = inputRows;', ctx);
   vm.runInContext(section('schedule-order.html', 'async function persistTurnIndustryName', 'async function ensureIndustryNameSaved'), ctx);
@@ -119,9 +120,9 @@ test('partial topic write failure stays retryable rather than reporting a comple
   let fail = true;
   const ctx = context({ industrySaveToken: 1, presOrder: [],
     document: { getElementById: () => input }, setIndustryNameSaveStatus() {}, setConfig: async () => {},
-    sb: { from: () => ({ update: () => ({ eq: async () => ({ error: fail ? new Error('offline') : null }) }) }) },
+    sb: { from: () => ({ update: payload => ({ eq() { return this; }, select() { return this; }, maybeSingle: async () => fail ? { error: new Error('offline') } : { data: { ...payload, edit_revision: 1 } } }) }) },
   });
-  vm.runInContext("presentations = [{ id: 'p', status: 'planned', category: 'industry', topic: '[자유 주제] 로봇', schedule_id: 'industry-1' }];", ctx);
+  vm.runInContext("presentations = [{ id: 'p', edit_revision: 0, status: 'planned', category: 'industry', topic: '[자유 주제] 로봇', schedule_id: 'industry-1' }];", ctx);
   vm.runInContext(section('schedule-order.html', 'async function persistTurnIndustryName', 'async function ensureIndustryNameSaved'), ctx);
   const request = { key: 'cycle-key', name: '27년전망', scheduleId: rounds[0].id, scheduleIds: rounds.map(row => row.id), requestToken: 1, opts: { silent: true } };
   assert.equal(await ctx.persistTurnIndustryName(request), false);

@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 스터디 일정</title>
-  <link rel="stylesheet" href="css/style.css?v=20261116.2">
+  <link rel="stylesheet" href="css/style.css?v=20261119.1">
   <!-- 스타일: css/style.css 참조 -->
 <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
@@ -220,9 +220,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/utils/presentation.js?v=20261116.2"></script>
-<script src="js/db.js?v=20261116.2"></script>
-<script src="js/schedule-shared.js?v=20261116.2"></script>
+<script src="js/utils/presentation.js?v=20261119.1"></script>
+<script src="js/db.js?v=20261119.1"></script>
+<script src="js/schedule-shared.js?v=20261119.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 
@@ -425,9 +425,10 @@ async function reconcileAutomaticPresentationAssignments(fromDate = toDateStr(ne
 function buildScheduleClipboardText(s) {
   const lines = [
     '[SSS 스터디 일정]',
-    ['stock', 'industry'].includes(s.category) ? CAT_LABEL[s.category] : getRenderedScheduleTitle(s),
+    getRenderedScheduleTitle(s),
     `일시: ${s.event_date} ${s.event_time ? s.event_time.slice(0, 5) : '시간 미정'}`,
   ];
+  if (s.location?.trim()) lines.push('장소: ' + s.location.trim());
   const pres = getSchedulePresentations(s.id, s.event_date);
   if (pres.length) {
     lines.push('', '발표 순서');

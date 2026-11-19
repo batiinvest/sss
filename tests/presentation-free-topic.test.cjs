@@ -105,10 +105,11 @@ test('renaming a shared outlook preserves mixed presentation formats and individ
     { id: 'stock', category: 'industry', status: 'planned', schedule_id: 'round', topic: '전망 > 삼성전자' },
     { id: 'other', category: 'industry', status: 'planned', schedule_id: 'other', topic: '다른 회차 > 원익IPS' },
   ];
+  rows.forEach(row => { row.edit_revision = 0; });
   const ctx = context({ presentations: rows, industrySaveToken: 0, setConfig: async () => {},
     presOrder: [], notifyPresentationOrderChanged() {},
     document: { getElementById: () => null },
-    sb: { from: () => ({ update: () => ({ eq: async () => ({ error: null }) }) }) },
+    sb: { from: () => ({ update: payload => ({ eq() { return this; }, select() { return this; }, maybeSingle: async () => ({ data: { ...payload, edit_revision: 1 } }) }) }) },
   });
   vm.runInContext(section('schedule-order.html', 'async function persistTurnIndustryName', 'async function ensureIndustryNameSaved'), ctx);
   assert.equal(await ctx.persistTurnIndustryName({ key: 'round-theme', name: '2027년 전망', scheduleId: 'round', requestToken: 1, opts: { silent: true } }), true);

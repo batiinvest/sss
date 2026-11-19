@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 발표 기록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261116.2">
+  <link rel="stylesheet" href="css/style.css?v=20261119.1">
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
@@ -21,7 +21,7 @@
 </head>
 <body>
 
-<div class="layout layout-page"><main class="main">
+<div class="layout layout-page"><main class="main" id="presentationHistoryContent">
     <div id="db-banner" class="db-banner pending">DB 연결 확인 중...</div>
 
     <div class="topbar schedule-topbar">
@@ -36,6 +36,7 @@
     </div>
 
     <div class="presentation-history-controls desktop-filter-controls" aria-label="발표 기록 필터">
+      <input type="search" id="presentationDesktopSearch" aria-label="발표 기록 검색" placeholder="주제·종목·발표자 검색" autocomplete="off" />
       <select id="filterMember" aria-label="발표자 필터" onchange="applyFilter()">
         <option value="">전체 발표자</option>
       </select>
@@ -44,6 +45,9 @@
         <option value="industry">산업 분석</option>
         <option value="stock">기업 분석</option>
       </select>
+      <select id="filterFormat" aria-label="발표 방식 필터" onchange="applyFilter()"><option value="">전체 방식</option><option value="stock">종목 발표</option><option value="free">기타 발표</option></select>
+      <select id="filterCycle" aria-label="발표 사이클 필터" onchange="applyFilter()"><option value="">전체 사이클</option></select>
+      <button type="button" class="btn" onclick="resetPresentationFilters()">초기화</button>
     </div>
 
     <div class="mobile-only mobile-page-tools">
@@ -53,8 +57,11 @@
     <div id="presentationMobileFilters" class="mobile-only mobile-filter-panel" hidden>
       <label>발표자<select id="mobileFilterMember" onchange="applyMobilePresentationFilters()"><option value="">전체 발표자</option></select></label>
       <label>구분<select id="mobileFilterCategory" onchange="applyMobilePresentationFilters()"><option value="">전체 구분</option><option value="industry">산업 분석</option><option value="stock">기업 분석</option></select></label>
+      <label>발표 방식<select id="mobileFilterFormat" onchange="applyMobilePresentationFilters()"><option value="">전체 방식</option><option value="stock">종목 발표</option><option value="free">기타 발표</option></select></label>
+      <label>사이클<select id="mobileFilterCycle" onchange="applyMobilePresentationFilters()"><option value="">전체 사이클</option></select></label>
       <button type="button" class="btn" onclick="resetPresentationFilters()">필터 초기화</button>
     </div>
+    <p id="presentationCycleStatus" class="muted" role="status" hidden></p>
     <div id="mobilePresentationList" class="mobile-stock-list" aria-live="polite"><div class="mobile-list-skeleton"></div><div class="mobile-list-skeleton"></div></div>
 
     <!-- 요약 카드 -->
@@ -129,14 +136,15 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261116.2"></script>
+<script src="js/utils/presentation.js?v=20261119.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261116.2"></script>
+<script src="js/db.js?v=20261119.1"></script>
 <script>
 let allData  = [];
 let members  = [];
 let priceMap = {};
 let presentationSearchTerm = '';
+let presentationHistoryCycles = [];
 let presentationDetailId = null;
 let presentationDetailReturnFocus = null;
 
@@ -165,6 +173,7 @@ async function init() {
     members = pageData.members || [];
     populateMemberFilter(members);
     populateMobileMemberFilter(members);
+    await loadPresentationHistoryCycles();
 
     if (!allData.length) {
       renderAll([]);
@@ -183,6 +192,7 @@ async function init() {
   if (search) {
     presentationSearchTerm = search.trim().toLowerCase();
     document.getElementById('presentationSearch').value = search;
+    document.getElementById('presentationDesktopSearch').value = search;
   }
   renderAll(getFilteredData());
 
@@ -216,6 +226,27 @@ function populateMobileMemberFilter(memberRows) {
   ).join('');
 }
 
+async function loadPresentationHistoryCycles() {
+  try {
+    const registry = await getConfigStrict('presentation_cycles_v1');
+    const { data: scheduleRows, error } = await sb.from('schedules').select('id,event_date');
+    if (error) throw error;
+    const configEntries = await Promise.all((registry?.cycles || []).map(async cycle =>
+      [cycle.topicKey, await getConfigStrict(cycle.topicKey)]));
+    presentationHistoryCycles = buildPresentationHistoryCycles(registry, scheduleRows, Object.fromEntries(configEntries), allData);
+    const options = '<option value="">전체 사이클</option>' + presentationHistoryCycles.map(cycle =>
+      '<option value="' + escapeHtml(cycle.id) + '">' + escapeHtml(cycle.label) + '</option>').join('') +
+      '<option value="__unassigned__">사이클 미연결 기록</option>';
+    for (const id of ['filterCycle', 'mobileFilterCycle']) document.getElementById(id).innerHTML = options;
+  } catch (error) {
+    console.warn('발표 사이클 필터 불러오기 실패:', error);
+    for (const id of ['filterCycle', 'mobileFilterCycle']) document.getElementById(id).disabled = true;
+    const status = document.getElementById('presentationCycleStatus');
+    status.hidden = false;
+    status.textContent = '사이클 목록을 불러오지 못했습니다. 다른 필터는 사용할 수 있습니다. 새로고침해 다시 시도하세요.';
+  }
+}
+
 function togglePresentationFilters() {
   const panel = document.getElementById('presentationMobileFilters');
   const button = document.querySelector('.mobile-filter-toggle');
@@ -227,14 +258,19 @@ function togglePresentationFilters() {
 function applyMobilePresentationFilters() {
   document.getElementById('filterMember').value = document.getElementById('mobileFilterMember').value;
   document.getElementById('filterCategory').value = document.getElementById('mobileFilterCategory').value;
+  document.getElementById('filterFormat').value = document.getElementById('mobileFilterFormat').value;
+  document.getElementById('filterCycle').value = document.getElementById('mobileFilterCycle').value;
   renderAll(getFilteredData());
 }
 
 function resetPresentationFilters() {
   presentationSearchTerm = '';
   document.getElementById('presentationSearch').value = '';
+  document.getElementById('presentationDesktopSearch').value = '';
   document.getElementById('mobileFilterMember').value = '';
   document.getElementById('mobileFilterCategory').value = '';
+  document.getElementById('mobileFilterFormat').value = '';
+  document.getElementById('mobileFilterCycle').value = '';
   applyMobilePresentationFilters();
 }
 
@@ -294,6 +330,8 @@ async function loadPresentationPriceContext() {
 function applyFilter() {
   document.getElementById('mobileFilterMember').value = document.getElementById('filterMember').value;
   document.getElementById('mobileFilterCategory').value = document.getElementById('filterCategory').value;
+  document.getElementById('mobileFilterFormat').value = document.getElementById('filterFormat').value;
+  document.getElementById('mobileFilterCycle').value = document.getElementById('filterCycle').value;
   renderAll(getFilteredData());
 }
 
@@ -334,8 +372,10 @@ function parseStockName(p) {
 }
 
 function renderAll(data) {
+  const otherOnly = document.getElementById('filterFormat').value === 'free';
+  document.getElementById('presentationHistoryContent').classList.toggle('other-presentations', otherOnly);
   renderPresentationCards(data);
-  if (window.matchMedia('(max-width: 768px)').matches) return;
+  if (otherOnly || window.matchMedia('(max-width: 768px)').matches) return;
   renderSummary(data);
   renderIndustryCards(data);
   renderMemberCards(data);
@@ -346,7 +386,7 @@ function renderPresentationCards(data) {
   const container = document.getElementById('mobilePresentationList');
   if (!container) return;
   if (!data.length) {
-    const hasFilter = presentationSearchTerm || document.getElementById('filterMember').value || document.getElementById('filterCategory').value;
+    const hasFilter = presentationSearchTerm || ['filterMember', 'filterCategory', 'filterFormat', 'filterCycle'].some(id => document.getElementById(id).value);
     container.innerHTML = hasFilter
       ? '<div class="mobile-empty-state"><strong>조건에 맞는 발표가 없습니다.</strong><span>필터를 초기화하거나 다른 주제를 검색해 보세요.</span><button type="button" class="btn" onclick="resetPresentationFilters()">필터 초기화</button></div>'
       : '<div class="mobile-empty-state"><strong>아직 완료된 발표 기록이 없습니다.</strong><span>준비 중 화면에서 다음 발표를 확인해 보세요.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'presentations?view=prepare\')">준비 중 보기</button></div>';
@@ -780,16 +820,11 @@ async function savePriceAt(id, priceVal, cell) {
 }
 
 function getFilteredData() {
-  const member = document.getElementById('filterMember').value;
-  const cat    = document.getElementById('filterCategory').value;
-  return allData.filter(p => {
-    const haystack = [parseStockName(p), p.stock_code, p.topic, p.members?.name]
-      .filter(Boolean).join(' ').toLowerCase();
-    return (p.status || 'done') === 'done' &&
-      (!member || p.member_id === member) &&
-      (!cat || p.category === cat) &&
-      (!presentationSearchTerm || haystack.includes(presentationSearchTerm));
-  });
+  const filters = { member: document.getElementById('filterMember').value,
+    category: document.getElementById('filterCategory').value,
+    format: document.getElementById('filterFormat').value,
+    cycle: document.getElementById('filterCycle').value, search: presentationSearchTerm };
+  return allData.filter(row => matchesPresentationHistoryFilters(row, filters, presentationHistoryCycles));
 }
 
 // 행의 수익률·시총 셀을 재계산해서 업데이트
@@ -835,8 +870,10 @@ function updateRowStats(row, id) {
   }
 }
 
-document.getElementById('presentationSearch').addEventListener('input', event => {
+for (const id of ['presentationSearch', 'presentationDesktopSearch']) document.getElementById(id).addEventListener('input', event => {
   presentationSearchTerm = event.target.value.trim().toLowerCase();
+  document.getElementById('presentationSearch').value = event.target.value;
+  document.getElementById('presentationDesktopSearch').value = event.target.value;
   renderAll(getFilteredData());
 });
 document.addEventListener('keydown', event => {

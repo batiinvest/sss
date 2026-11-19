@@ -11,6 +11,7 @@ function modal() {
   const elements = new Map();
   const writes = [];
   let failure = false;
+  let savedRow = null;
   const context = {
     console, confirm: () => true, toast() {},
     document: {
@@ -23,11 +24,15 @@ function modal() {
     sb: { from() {
       const request = (kind, payload) => {
         writes.push({ kind, payload });
-        return { eq() { return this; }, select() { return this; }, async single() {
-          return failure ? { error: new Error('offline') } : { data: { ...payload, id: 'saved', member_id: 'm' } };
-        } };
+        return { eq() { return this; }, select() { return this; },
+          async single() {
+            if (failure) return { error: new Error('offline') };
+            savedRow = { ...payload, id: 'saved', member_id: 'm', edit_revision: kind === 'insert' ? 0 : 1 };
+            return { data: savedRow };
+          }, async maybeSingle() { return this.single(); } };
       };
-      return { insert: p => request('insert', p), update: p => request('update', p) };
+      return { insert: p => request('insert', p), update: p => request('update', p),
+        select() { return { eq() { return this; }, maybeSingle: async () => ({ data: savedRow }) }; } };
     } },
     getAutomaticPresentationPlan: () => ({}), getMemberPresentationPlanItem: () => null,
     registerDraftForFutureCycleIfNeeded: async () => {}, reloadPresentationSetupData: async () => {},
@@ -72,15 +77,16 @@ test('failed save keeps input and permits retry with topic and details together'
   assert.equal(writes[1].payload.reason, '투자 근거');
   assert.equal(writes[1].payload.schedule_id, 'round1');
 });
-test('successful insert followed by refresh failure retries as update, preventing duplicates', async () => {
-  const { context, writes } = modal();
+test('successful insert followed by refresh failure retries without a duplicate insert', async () => {
+  const { context, writes, elements } = modal();
   const payload = { topic: '삼성전자', member_id: 'm', status: 'planned' };
   context.openPresEditModal({ name: '회원' }, payload, payload);
   context.reloadPresentationSetupData = async () => { throw new Error('refresh failed'); };
   await context.savePresEditModal();
   context.reloadPresentationSetupData = async () => {};
   await context.savePresEditModal();
-  assert.deepEqual(writes.map(w => w.kind), ['insert', 'update']);
+  assert.deepEqual(writes.map(w => w.kind), ['insert']);
+  assert.equal(elements.get('presEditModal').style.display, 'none');
 });
 test('impact names changed members and readiness requires substantive topic, reason and risk', () => {
   const context = { members: [{ id: 'a', name: '가' }, { id: 'b', name: '나' }] };
@@ -117,7 +123,7 @@ test('unassigned draft appears only in its next round, not every future round', 
 
 test('an industry stock switches to free topic atomically and reopens with its contents', async () => {
   const { context, elements, writes } = modal();
-  const original = { id: 'old', category: 'industry', topic: '2027년 전망 > 삼성전자',
+  const original = { id: 'old', edit_revision: 0, category: 'industry', topic: '2027년 전망 > 삼성전자',
     stock_code: '005930', price_at: 70000, market_cap_at: 100, target_cap: 200 };
   context.openPresEditModal({ name: '회원' }, original);
   assert.equal(elements.get('edit-format').value, 'stock');
@@ -169,7 +175,7 @@ test('new free topic requires a title and retains its selected industry round', 
 
 test('industry free topic can switch back to a manually entered stock', async () => {
   const { context, elements, writes } = modal();
-  context.openPresEditModal({ name: '회원' }, { id: 'free', topic: '2027년 전망 > [자유 주제] 클라우드', category: 'industry' });
+  context.openPresEditModal({ name: '회원' }, { id: 'free', edit_revision: 0, topic: '2027년 전망 > [자유 주제] 클라우드', category: 'industry' });
   elements.get('edit-format').value = 'stock';
   context.updatePresEditFormat();
   assert.equal(elements.get('edit-stock-fields').style.display, 'grid');

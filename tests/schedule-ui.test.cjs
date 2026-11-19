@@ -99,8 +99,9 @@ test('schedule copy writes a complete paste-ready notice to the clipboard', asyn
   assert.deepEqual(clipboardWrites, [
     [
       '[SSS 스터디 일정]',
-      '기업 분석',
+      '기업 분석 · AI 반도체',
       '일시: 2026-08-30 20:00',
+      '장소: 강남 스터디룸',
       '',
       '발표 순서',
       '1. 김정훈 - 삼성전자',
@@ -413,7 +414,7 @@ test('schedule and presentation preparation pages have separate responsibilities
   assert.match(order, /getAutomaticPresentationPlan/);
   assert.match(order, /getNextPresentationInputPlanItem/);
   assert.doesNotMatch(memberPanel, /\.insert\(payload\)/);
-  assert.match(order, /\.insert\(payload\)/);
+  assert.match(order, /savePresentationEdit\(sb,/);
   assert.match(memberPanel, /schedule_id: autoItem\?\.schedule\.id \|\| null/);
   assert.doesNotMatch(order, /from\(['"]schedules['"]\)/);
   assert.doesNotMatch(order, /id="(?:calTitle2|calGrid2|filterCat2|scheduleListTbody2)"/);
@@ -511,7 +512,7 @@ test('presentation management uses prepare and history views without a duplicate
   assert.match(history, /presentations\?view=prepare/);
   assert.match(history, /class="active" aria-current="page">발표 기록<\/button>/);
   assert.doesNotMatch(history, /tabPlanned|tabDone|mobilePresentationStatus|switchTab/);
-  assert.match(history, /\(p\.status \|\| 'done'\) === 'done'/);
+  assert.match(history, /matchesPresentationHistoryFilters/);
   assert.match(history, /if \(item\.status === 'planned'\)[\s\S]*presentations\?view=prepare/);
 
   assert.match(dashboard, /presentations\?view=prepare/);
@@ -740,7 +741,7 @@ test('schedule UI cache versions stay aligned', () => {
     assert.equal(matches[0][1], canonical, `${file}: CSS cache key`);
   }
   for (const file of ['index.html', 'schedule-calendar.html', 'schedule-order.html']) {
-    assert.match(read(file), /js\/schedule-shared\.js\?v=20261116\.2/);
+    assert.match(read(file), /js\/schedule-shared\.js\?v=20261119\.1/);
   }
   assert.doesNotMatch(read('app.html'), /js\/schedule-shared\.js/);
   const serviceWorker = read('sw.js');

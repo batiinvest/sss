@@ -2661,10 +2661,16 @@ button:disabled { cursor: wait; opacity: 0.62; }
 .schedule-view-tabs button.active { background: var(--accent); color: #fff; }
 .presentation-history-controls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
   margin: -6px 0 14px;
 }
+.presentation-history-controls input { flex: 1 1 220px; min-width: 180px; }
+.presentation-history-controls #filterCycle { max-width: 100%; }
+.other-presentations #mobilePresentationList { display: block; }
+.other-presentations .desktop-summary-on-mobile,
+.other-presentations .desktop-history-shell-on-mobile { display: none; }
 .presentation-history-controls select {
   width: auto;
   min-width: 140px;

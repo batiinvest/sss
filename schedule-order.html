@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261116.2">
+  <link rel="stylesheet" href="css/style.css?v=20261119.1">
   <!-- 스타일: css/style.css 참조 -->
   <style>
     #roundReadiness { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; margin-top:16px; }
@@ -91,6 +91,12 @@
       <button class="btn" onclick="closePresEditModal()" style="font-size:12px;">닫기</button>
     </div>
     <p class="muted">산업·기업 발표 모두 발표별로 입력 방식을 선택할 수 있습니다. 변경 내용은 ‘저장’을 눌러야 반영됩니다.</p>
+    <p id="edit-draft-status" class="muted" role="status" aria-live="polite"></p>
+    <div id="edit-conflict" hidden style="padding:12px;border:1px solid var(--border2);margin-bottom:12px;">
+      <p>다른 곳에서 변경된 내용이 있습니다. 현재 입력은 그대로 유지됩니다.</p>
+      <pre id="edit-conflict-latest" style="white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;"></pre>
+      <button type="button" class="btn" id="edit-conflict-reload" onclick="reloadConflictedPresentation()">최신 내용으로 다시 열기</button>
+    </div>
     <div class="form-group">
       <label for="edit-format">발표 방식</label>
       <select id="edit-format" onchange="updatePresEditFormat()">
@@ -135,9 +141,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/db.js?v=20261116.2"></script>
-<script src="js/utils/presentation.js?v=20261116.2"></script>
-<script src="js/schedule-shared.js?v=20261116.2"></script>
+<script src="js/db.js?v=20261119.1"></script>
+<script src="js/utils/presentation.js?v=20261119.1"></script>
+<script src="js/schedule-shared.js?v=20261119.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -192,6 +198,11 @@ let _presEditReturnFocus = null;
 let _presEditInitial = '';
 let _presEditSaving = false;
 let _editStoragePayload = null;
+let _editBaseline = null;
+let _editLocalKey = null;
+let _editMember = null;
+let _editConflictLatest = null;
+let presentationEditorAccountId = null;
 
 function getPresEditValues() {
   return ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']
@@ -199,8 +210,14 @@ function getPresEditValues() {
 }
 
 function openPresEditModal(member, draft, storagePayload = null) {
-  _editDraft  = draft;
-  _editStoragePayload = storagePayload;
+  _editBaseline = { ...(presentations.find(row => row.id && row.id === draft.id) || draft) };
+  _editDraft = { ...draft };
+  _editStoragePayload = storagePayload ? { ...storagePayload } : null;
+  _editMember = member;
+  _editConflictLatest = null;
+  _editLocalKey = presentationLocalDraftKey(presentationEditorAccountId, draft, typeof presentationDraftEpoch === 'undefined' ? null : presentationDraftEpoch);
+  document.getElementById('edit-conflict').hidden = true;
+  document.getElementById('edit-draft-status').textContent = '';
   document.getElementById('deletePresDraftBtn').hidden = !draft.id;
   _presEditReturnFocus = document.activeElement;
 
@@ -229,8 +246,67 @@ function openPresEditModal(member, draft, storagePayload = null) {
   calcEditPreview();
   updatePresEditFormat();
 
+  let recovered = null;
+  try { recovered = readPresentationLocalDraft(localStorage, _editLocalKey); } catch (_) {}
+  if (recovered) {
+    if (confirm('이 기기에 저장하지 않은 발표 내용이 있습니다. 복구할까요? 취소하면 해당 임시저장 내용을 지웁니다.')) {
+      _editBaseline = recovered.baseline;
+      _editDraft = recovered.draft;
+      _editStoragePayload = recovered.storagePayload;
+      ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']
+        .forEach((id, index) => { document.getElementById(id).value = recovered.values[index]; });
+      updatePresEditFormat();
+      document.getElementById('edit-draft-status').textContent = '임시저장 내용을 복구했습니다. 서버에 반영하려면 저장하세요.';
+    } else clearPresentationLocalDraft();
+  }
+
   document.getElementById('presEditModal').style.display = 'flex';
   document.getElementById(isFreePresentation(draft) ? 'edit-topic' : 'edit-cur-cap').focus();
+}
+
+function clearPresentationLocalDraft() {
+  try { if (_editLocalKey) localStorage.removeItem(_editLocalKey); } catch (_) {}
+}
+
+function persistPresentationLocalDraft() {
+  if (!_editDraft || !_editLocalKey || _presEditSaving) return;
+  try {
+    const savedAt = new Date().toISOString();
+    localStorage.setItem(_editLocalKey, JSON.stringify({ version: 1, savedAt,
+      draft: _editDraft, baseline: _editBaseline, storagePayload: _editStoragePayload,
+      values: getPresEditValues(),
+    }));
+    document.getElementById('edit-draft-status').textContent = '이 기기에 임시저장됨 · ' + new Date(savedAt).toLocaleTimeString('ko-KR') + ' · 서버 저장 전';
+  } catch (_) {
+    document.getElementById('edit-draft-status').textContent = '이 기기에 임시저장할 수 없습니다. 이동하기 전에 저장하세요.';
+  }
+}
+
+async function showPresentationEditConflict() {
+  document.getElementById('edit-conflict').hidden = false;
+  document.getElementById('edit-conflict-reload').disabled = true;
+  const output = document.getElementById('edit-conflict-latest');
+  output.textContent = '최신 내용을 확인하는 중...';
+  try {
+    const { data, error } = await sb.from('presentations').select('*').eq('id', _editBaseline.id).maybeSingle();
+    if (error) throw error;
+    _editConflictLatest = data;
+    output.textContent = data ? ['최신 주제: ' + formatPresentationTopicLabel(data),
+      '발표일: ' + (data.presented_at || '미정'),
+      '현재 시총: ' + (data.market_cap_at ?? '미입력') + ' / 목표 시총: ' + (data.target_cap ?? '미입력'),
+      '내용: ' + (data.reason || '미입력'), '리스크 / 질문: ' + (data.risk || '미입력')].join('\n\n')
+      : '발표가 삭제되었거나 접근할 수 없습니다. 현재 입력을 복사해 보관한 뒤 목록을 새로고침해 주세요.';
+    document.getElementById('edit-conflict-reload').disabled = !data;
+  } catch (_) { output.textContent = '최신 내용을 불러오지 못했습니다. 입력은 유지됩니다. 연결을 확인한 뒤 다시 저장해 주세요.'; }
+}
+
+function reloadConflictedPresentation() {
+  if (!_editConflictLatest || _presEditSaving || !confirm('현재 입력을 최신 서버 내용으로 바꿀까요? 필요한 입력은 먼저 복사해 주세요.')) return;
+  const latest = _editConflictLatest;
+  clearPresentationLocalDraft();
+  const index = presentations.findIndex(row => row.id === latest.id);
+  if (index >= 0) presentations[index] = latest;
+  openPresEditModal(_editMember, latest);
 }
 
 function updatePresEditFormat() {
@@ -253,6 +329,9 @@ function closePresEditModal(force = false) {
   if (!force && (_editDraft && !_editDraft.id || JSON.stringify(getPresEditValues()) !== _presEditInitial) &&
       !confirm('작성 중인 내용을 저장하지 않고 닫을까요?')) return;
   document.getElementById('presEditModal').style.display = 'none';
+  clearPresentationLocalDraft();
+  _editLocalKey = null;
+  _editBaseline = null;
   _editDraft = null;
   _editStoragePayload = null;
   _presEditReturnFocus?.focus?.();
@@ -261,26 +340,23 @@ function closePresEditModal(force = false) {
 
 async function savePresEditModal() {
   if (!_editDraft || _presEditSaving) return;
+  persistPresentationLocalDraft();
   _presEditSaving = true;
+  for (const id of ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']) document.getElementById(id).disabled = true;
   const btn = document.getElementById('edit-save-btn');
   btn.textContent = '저장 중...'; btn.disabled = true;
   try {
-    const payload = {
-      ...(_editStoragePayload || {}),
-      ...presentationContentPayload(_editDraft, {
+    const data = await savePresentationEdit(sb, _editBaseline, _editDraft, {
         format: document.getElementById('edit-format').value,
         title: document.getElementById('edit-topic').value,
         market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
         target_cap:    parseInt(document.getElementById('edit-tgt-cap').value) || null,
         reason:        document.getElementById('edit-reason').value.trim()     || null,
         risk:          document.getElementById('edit-risk').value.trim()       || null,
-      }),
-    };
-    const { data, error } = _editDraft.id
-      ? await sb.from('presentations').update(payload).eq('id', _editDraft.id).select().single()
-      : await sb.from('presentations').insert(payload).select().single();
-    if (error) throw error;
+      }, _editStoragePayload);
     _editDraft = data;
+    _editBaseline = { ...data };
+    clearPresentationLocalDraft();
     _editStoragePayload = null;
     _presEditInitial = JSON.stringify(getPresEditValues());
     const plan = getAutomaticPresentationPlan();
@@ -292,8 +368,10 @@ async function savePresEditModal() {
     refreshPresentationScheduleViews();
   } catch(e) {
     toast('저장 오류: ' + e.message);
+    if (e.code === 'PRESENTATION_CONFLICT') await showPresentationEditConflict();
   } finally {
     _presEditSaving = false;
+    for (const id of ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']) document.getElementById(id).disabled = false;
     btn.textContent = '저장'; btn.disabled = false;
   }
 }
@@ -315,6 +393,8 @@ async function clearPresEditStock() {
 document.getElementById('presEditModal').addEventListener('click', e => {
   if (e.target === document.getElementById('presEditModal')) closePresEditModal();
 });
+document.getElementById('presEditModal').addEventListener('input', persistPresentationLocalDraft);
+document.getElementById('presEditModal').addEventListener('change', persistPresentationLocalDraft);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && document.getElementById('presEditModal').style.display === 'flex') {
     closePresEditModal();
@@ -545,13 +625,16 @@ async function persistTurnIndustryName(request) {
       return {
         presentation,
         topic,
-        request: sb.from('presentations').update({ topic }).eq('id', presentation.id),
+        request: presentation.edit_revision == null
+          ? Promise.resolve({ error: new Error('DB 수정 버전 적용이 필요합니다.') })
+          : sb.from('presentations').update({ topic }).eq('id', presentation.id)
+            .eq('edit_revision', presentation.edit_revision).select().maybeSingle(),
       };
     });
     const results = await Promise.all(updates.map(update => update.request));
-    const failedCount = results.filter(result => result.error).length;
+    const failedCount = results.filter(result => result.error || !result.data).length;
     updates.forEach((update, index) => {
-      if (!results[index].error) update.presentation.topic = update.topic;
+      if (!results[index].error && results[index].data) Object.assign(update.presentation, results[index].data);
     });
 
     currentIndustryConfigKey = key;
@@ -572,7 +655,7 @@ async function persistTurnIndustryName(request) {
     }
     if (!opts.silent) {
       toast(failedCount
-        ? '산업명은 저장됐지만 일부 종목에는 아직 반영되지 않았습니다.'
+        ? '공통 주제는 저장됐지만 일부 발표가 변경되어 반영하지 못했습니다. 새로고침 후 다시 저장해 주세요.'
         : '같은 사이클 전체에 공통 주제가 저장되었습니다.');
     }
     notifyPresentationOrderChanged(presOrder);
@@ -1276,7 +1359,8 @@ function guessNextTurn() {
 }
 
 async function init() {
-  await requireAuth();
+  const session = await requireAuth();
+  presentationEditorAccountId = session?.user?.id || null;
   checkDBConnection();
 
   try {

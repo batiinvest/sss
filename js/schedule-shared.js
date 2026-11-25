@@ -115,6 +115,11 @@ function getPresentationScheduleTopicParts(presentation) {
   if (topic === '[자유 주제]' || topic.startsWith('[자유 주제] ')) {
     return { industry: '', subject: topic };
   }
+  const marker = topic.match(/>\s*(\[자유 주제\](?:\s|$))/);
+  if (marker) {
+    return { industry: presentation?.category === 'industry' ? topic.slice(0, marker.index).trim() : '',
+      subject: topic.slice(marker.index + marker[0].indexOf('[')).trim() };
+  }
   const parts = topic.split('>');
   return {
     industry:

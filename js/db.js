@@ -56,12 +56,12 @@ async function fetchPicksByMonth(month) {
   return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
 }
 
-async function fetchAllPicks(filters = {}) {
+async function fetchAllPicks(filters = {}, opts = {}) {
   let q = sb.from('picks_with_trades').select('*');
   if (filters.member_id) q = q.eq('member_id', filters.member_id);
   if (filters.status)    q = q.eq('status', filters.status);
   const { data, error } = await q.order('month', { ascending: false });
-  if (error) { console.error('fetchAllPicks:', error); return []; }
+  if (error) { if (opts.strict) throw error; console.error('fetchAllPicks:', error); return []; }
   return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
 }
 
@@ -217,12 +217,12 @@ async function fetchPicksByMonthWithCarryFallback(month, opts = {}) {
 }
 
 // ── 거래
-async function fetchTrades(limit = 30) {
+async function fetchTrades(limit = 30, opts = {}) {
   const { data, error } = await sb.from('trades')
     .select('*, members(name), picks(stock_name, month)')
     .order('traded_at', { ascending: false })
     .limit(limit);
-  if (error) { console.error('fetchTrades:', error); return []; }
+  if (error) { if (opts.strict) throw error; console.error('fetchTrades:', error); return []; }
   return data;
 }
 

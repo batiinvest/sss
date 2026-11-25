@@ -135,6 +135,7 @@ for (const type of ['buy', 'sell']) {
       document: { getElementById: id => nodes[id] ||= { value: values[id] || '', disabled: false } },
       setTradeError: (type, error) => errors.push(error), submitTrade: async data => writes.push(data),
       corporateBackendAvailable: async () => true, clearTradeInputs() {}, reloadTradeState: async () => {},
+      setTradeFormBusy() {},
       showPendingTrade: async () => {}, toast() {}, tradeDateTime: date => date,
     });
     const source = read('trade.html');

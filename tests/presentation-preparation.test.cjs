@@ -13,6 +13,7 @@ function modal() {
   let failure = false;
   let savedRow = null;
   const context = {
+    crypto: require('node:crypto').webcrypto,
     console, confirm: () => true, toast() {},
     document: {
       activeElement: { focus() {} },

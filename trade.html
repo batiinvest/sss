@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 매수·매도 등록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261119.1">
+  <link rel="stylesheet" href="css/style.css?v=20261125.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -43,8 +43,10 @@
             <select id="buy-member"><option value="">선택</option></select>
           </div>
           <div class="form-group">
-            <label for="buy-pick">투자 아이디어</label>
+            <label for="buy-pick">매수 종목</label>
             <select id="buy-pick"><option value="">추천자 먼저 선택</option></select>
+            <p id="buyPickHelp" class="muted" role="status">등록된 투자종목을 선택하거나 새 종목을 검색·등록하세요.</p>
+            <button type="button" class="btn" id="buyRegisterPick" onclick="openTradePickRegistration()">종목 검색·등록</button>
           </div>
           <div class="form-group">
             <label for="buy-date">매수일</label>
@@ -86,6 +88,7 @@
           <div class="form-group">
             <label for="sell-pick">보유 종목</label>
             <select id="sell-pick"><option value="">추천자 먼저 선택</option></select>
+            <p id="sellPickHelp" class="muted" role="status">선택한 매도일 기준으로 매도 가능 수량을 확인합니다.</p>
           </div>
           <div class="form-group">
             <label for="sell-date">매도일</label>
@@ -156,8 +159,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261119.1"></script>
-<script src="js/db.js?v=20261119.1"></script>
+<script src="js/corporate-actions-service.js?v=20261125.1"></script>
+<script src="js/db.js?v=20261125.1"></script>
+<script src="js/modal-pick.js?v=20261125.1"></script>
 <script>
 let members  = [];
 let allPicks = [];
@@ -165,6 +169,7 @@ let allTrades = [];
 let me    = null;
 let admin = false;
 let availableSellQuantity = 0;
+let sellBalanceRequest = 0;
 const tradeParams = new URLSearchParams(location.search);
 
 async function init() {
@@ -176,13 +181,21 @@ async function init() {
   document.getElementById('sell-date').value = today;
 
   // 멤버·탑픽·거래내역·본인정보 병렬 로드
-  [members, allPicks, allTrades, me, admin] = await Promise.all([
-    fetchMembers(),
-    fetchAllPicks(),
-    fetchTrades(50),
+  try {
+    [members, allPicks, allTrades, me, admin] = await Promise.all([
+    fetchMembers({ strict: true }),
+    fetchAllPicks({}, { strict: true }),
+    fetchTrades(50, { strict: true }),
     getCurrentMember(),
     isAdmin(),
   ]);
+  } catch (error) {
+    const notice = document.getElementById('tradeAuthNotice');
+    notice.hidden = false;
+    notice.textContent = '매매 정보를 불러오지 못했습니다. 새로고침해 다시 시도하세요. ' + error.message;
+    document.querySelectorAll('.trade-form-card input, .trade-form-card select, .trade-form-card button').forEach(el => { el.disabled = true; });
+    return;
+  }
 
   // 셀렉트 채우기
   ['buy-member','sell-member'].forEach(id => {
@@ -282,17 +295,16 @@ async function preselectRequestedPick(type, pickId) {
 function updatePickSelect(type) {
   const memberId = document.getElementById(`${type}-member`).value;
   const pickSel  = document.getElementById(`${type}-pick`);
+  const previous = pickSel.value;
   pickSel.innerHTML = '<option value="">선택</option>';
-
-  const thisMonth = currentMonth();
 
   const filtered = allPicks.filter(p => {
     if (p.member_id !== memberId) return false;
     if (type === 'buy') {
-      // 최초·추가 매수 모두 허용하되 매도 완료 종목은 제외한다.
-      return p.status !== 'sold';
+      // Completed holdings may be bought again; the server calculates new cost.
+      return true;
     } else {
-      return p.status === 'hold' && p.buy_price && Number(p.buy_quantity) > 0;
+      return Number(p.buy_price) > 0 && (Number(p.buy_quantity) > 0 || p.status === 'sold');
     }
   });
 
@@ -300,26 +312,59 @@ function updatePickSelect(type) {
     pickSel.innerHTML += type === 'buy'
       ? '<option value="" disabled>매수 가능한 아이디어 없음</option>'
       : '<option value="" disabled>보유 중인 종목 없음</option>';
+    document.getElementById(type + 'PickHelp').textContent = !memberId ? '담당자를 먼저 선택하세요.' : type === 'buy'
+      ? '이 담당자의 등록 종목이 없습니다. 종목 검색·등록을 눌러 추가하세요.'
+      : '이 담당자에게 매수 기록이 있는 종목이 없습니다.';
+    if (type === 'sell') loadAvailableSellQuantity();
     return;
   }
 
   filtered.forEach(p => {
     const label = type === 'buy'
-      ? `${p.stock_name}${p.buy_price ? ' (추가 매수)' : ''}`
-      : `${p.stock_name} (매수가 ${p.buy_price ? p.buy_price.toLocaleString() + '원' : '—'})`;
+      ? `${p.stock_name} · ${p.month || ''}${p.status === 'sold' ? ' (재매수)' : p.buy_price ? ' (추가 매수)' : ''}`
+      : `${p.stock_name} · ${p.month || ''} (${p.status === 'sold' ? '현재 잔고 없음 · 과거 거래 확인' : '평균 매수가 ' + Number(p.buy_price).toLocaleString() + '원'})`;
     pickSel.innerHTML += `<option value="${escapeHtml(p.pick_id || p.id)}" data-buy="${p.buy_price||''}" data-qty="${p.buy_quantity||''}">${escapeHtml(label)}</option>`;
   });
+  if (filtered.some(p => String(p.pick_id || p.id) === String(previous))) pickSel.value = previous;
+  document.getElementById(type + 'PickHelp').textContent = type === 'buy'
+    ? '등록된 종목을 선택하세요. 새 종목은 검색·등록 후 매수를 저장합니다.'
+    : '현재 잔고가 없는 종목도 과거 매도일의 잔고를 확인할 수 있습니다.';
+  if (type === 'sell') loadAvailableSellQuantity();
+}
+
+async function openTradePickRegistration() {
+  const memberId = document.getElementById('buy-member').value;
+  const member = members.find(row => row.id === memberId);
+  if (!member || (!admin && memberId !== me?.id)) return setTradeError('buy', '등록할 담당자를 먼저 선택하세요.');
+  try {
+    const date = document.getElementById('buy-date').value;
+    tradeDateTime(date);
+    ModalPick._onSubmit = async saved => {
+      allPicks = await fetchAllPicks({}, { strict: true });
+      document.getElementById('buy-member').value = memberId;
+      updatePickSelect('buy'); updatePickSelect('sell');
+      document.getElementById('buy-pick').value = saved.id;
+      document.getElementById('buy-price').focus();
+      toast('종목을 선택했습니다. 실제 매수가와 수량을 입력해 매수를 저장하세요.');
+    };
+    await ModalPick.open({ member, month: date.slice(0, 7) });
+  } catch (error) { setTradeError('buy', error.message); }
 }
 
 async function loadAvailableSellQuantity() {
+  const token = ++sellBalanceRequest;
   const pickId = document.getElementById('sell-pick').value;
+  const date = document.getElementById('sell-date').value;
   const message = document.getElementById('sellAvailable');
   availableSellQuantity = 0;
+  document.getElementById('sell-qty').max = '0';
+  const option = document.getElementById('sell-pick').selectedOptions[0];
+  if (option) option.dataset.buy = '';
+  calcSellReturn();
   if (!pickId) { message.textContent = '매도 가능 수량: 종목을 선택하세요.'; return; }
   message.textContent = '매도 가능 수량을 확인하는 중…';
-  if (await corporateBackendAvailable()) {
     try {
-      const date = document.getElementById('sell-date').value;
+      if (!await corporateBackendAvailable()) throw new Error('거래일 기준 잔고를 확인할 수 없습니다. 관리자에게 문의하세요.');
       if (!date) throw new Error('매도일을 선택하세요.');
       const rows = await corporateRpc('sss_corporate_positions', {
         p_pick_ids: [pickId], p_as_of: tradeDateTime(date),
@@ -327,7 +372,8 @@ async function loadAvailableSellQuantity() {
       // Server returns all selected positions, including positions without actions.
       const position = (rows || []).find(row => String(row.pick_id) === String(pickId));
       if (!position) throw new Error('거래일 기준 잔고를 확인하지 못했습니다.');
-      if (document.getElementById('sell-pick').value !== pickId || document.getElementById('sell-date').value !== date) return;
+      if (token !== sellBalanceRequest || document.getElementById('sell-pick').value !== pickId || document.getElementById('sell-date').value !== date) return;
+      if (!Number.isFinite(Number(position.tradableQuantity)) || Number(position.tradableQuantity) < 0) throw new Error('매도 가능 수량이 올바르지 않습니다.');
       availableSellQuantity = Number(position.tradableQuantity);
       document.getElementById('sell-qty').max = String(availableSellQuantity);
       document.getElementById('sell-pick').selectedOptions[0].dataset.buy = String(position.averagePrice);
@@ -335,18 +381,11 @@ async function loadAvailableSellQuantity() {
       calcSellReturn();
       return;
     } catch (error) {
+      if (token !== sellBalanceRequest) return;
       message.textContent = error.message;
       document.getElementById('sell-qty').max = '0';
       return;
     }
-  }
-  const { data, error } = await sb.from('trades').select('trade_type,quantity').eq('pick_id', pickId);
-  if (error) { message.textContent = '매도 가능 수량을 확인하지 못했습니다.'; return; }
-  availableSellQuantity = (data || []).reduce((sum, trade) =>
-    sum + (trade.trade_type === 'buy' ? Number(trade.quantity || 0) : -Number(trade.quantity || 0)), 0);
-  availableSellQuantity = Math.max(0, availableSellQuantity);
-  document.getElementById('sell-qty').max = String(availableSellQuantity);
-  message.textContent = `매도 가능 수량: ${availableSellQuantity.toLocaleString('ko-KR')}주`;
 }
 
 function calcBuyAmount() {
@@ -372,6 +411,11 @@ function calcSellReturn() {
   }
 }
 
+function setTradeFormBusy(type, busy) {
+  document.querySelectorAll('#' + type + 'FormCard input, #' + type + 'FormCard select, #' + type + 'FormCard button')
+    .forEach(element => { element.disabled = busy; });
+}
+
 function tradeInteger(value) {
   const number = Number(String(value).trim());
   return Number.isSafeInteger(number) && number > 0 && number <= 2147483647 ? number : NaN;
@@ -395,6 +439,7 @@ async function submitBuy() {
   if (!pick || pick.member_id !== memberId) return setTradeError('buy', '담당자와 투자 아이디어 정보가 일치하지 않습니다.');
 
   const button = document.getElementById('buySubmitBtn');
+  setTradeFormBusy('buy', true);
   button.disabled = true;
   button.textContent = '저장 중…';
   let saved = false;
@@ -410,6 +455,7 @@ async function submitBuy() {
   } catch(e) {
     setTradeError('buy', saved ? '매수는 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.' : '매수 처리 결과를 확인하지 못했습니다. 같은 입력으로 재시도해 주세요. ' + (e.message || ''));
   } finally {
+    setTradeFormBusy('buy', false);
     button.disabled = false;
     button.textContent = '매수 저장';
     await showPendingTrade();
@@ -433,6 +479,7 @@ async function submitSell() {
   }
   if (!pick || pick.member_id !== memberId) return setTradeError('sell', '담당자와 보유종목 정보가 일치하지 않습니다.');
   const button = document.getElementById('sellSubmitBtn');
+  setTradeFormBusy('sell', true);
   button.disabled = true;
   button.textContent = '저장 중…';
   let saved = false;
@@ -456,6 +503,7 @@ async function submitSell() {
   } catch(e) {
     setTradeError('sell', saved ? '매도는 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.' : '매도 처리 결과를 확인하지 못했습니다. 같은 입력으로 재시도해 주세요. ' + (e.message || ''));
   } finally {
+    setTradeFormBusy('sell', false);
     button.disabled = false;
     button.textContent = '매도 저장';
     await showPendingTrade();
@@ -464,7 +512,9 @@ async function submitSell() {
 
 function tradeDateTime(date) {
   const time = new Date(date + 'T12:00:00+09:00').getTime();
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(time) || new Date(time).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' }) !== date) throw new Error('올바른 거래일을 선택하세요.');
+  if (date > today) throw new Error('미래 날짜의 거래는 등록할 수 없습니다.');
   return new Date(date === today ? Math.min(time, Date.now()) : time).toISOString();
 }
 
@@ -479,17 +529,14 @@ function clearTradeInputs(type) {
 }
 
 async function reloadTradeState(type, memberId) {
-  [allPicks, allTrades] = await Promise.all([fetchAllPicks(), fetchTrades(50)]);
-  renderTrades(allTrades);
+  [allPicks, allTrades] = await Promise.all([fetchAllPicks({}, { strict: true }), fetchTrades(50, { strict: true })]);
+  filterTrades();
   document.getElementById(type + '-member').value = memberId;
-  updatePickSelect(type);
+  updatePickSelect('buy');
+  updatePickSelect('sell');
   ['price', 'qty', 'note'].forEach(suffix => { document.getElementById(type + '-' + suffix).value = ''; });
   if (type === 'buy') calcBuyAmount();
-  else {
-    availableSellQuantity = 0;
-    document.getElementById('sellAvailable').textContent = '매도 가능 수량: 종목을 선택하세요.';
-    calcSellReturn();
-  }
+  else calcSellReturn();
 }
 
 function renderTrades(trades) {

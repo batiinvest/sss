@@ -5,7 +5,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23185fa5'/><text y='75' font-size='70' font-family='sans-serif' font-weight='bold' fill='white' x='50' text-anchor='middle'>S</text></svg>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 준비 중</title>
-  <link rel="stylesheet" href="css/style.css?v=20261119.1">
+  <link rel="stylesheet" href="css/style.css?v=20261125.1">
   <!-- 스타일: css/style.css 참조 -->
   <style>
     #roundReadiness { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:12px; margin-top:16px; }
@@ -141,9 +141,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js?v=20260921.3"></script>
-<script src="js/db.js?v=20261119.1"></script>
-<script src="js/utils/presentation.js?v=20261119.1"></script>
-<script src="js/schedule-shared.js?v=20261119.1"></script>
+<script src="js/db.js?v=20261125.1"></script>
+<script src="js/utils/presentation.js?v=20261125.1"></script>
+<script src="js/schedule-shared.js?v=20261125.1"></script>
 <script>
 // ← 공통 변수는 js/schedule-shared.js 참조
 let presOrder   = [];   // 발표자 순서 (DB app_config 'pres_order'에 저장)
@@ -202,6 +202,7 @@ let _editBaseline = null;
 let _editLocalKey = null;
 let _editMember = null;
 let _editConflictLatest = null;
+let _editInsertRequest = null;
 let presentationEditorAccountId = null;
 
 function getPresEditValues() {
@@ -215,6 +216,7 @@ function openPresEditModal(member, draft, storagePayload = null) {
   _editStoragePayload = storagePayload ? { ...storagePayload } : null;
   _editMember = member;
   _editConflictLatest = null;
+  _editInsertRequest = null;
   _editLocalKey = presentationLocalDraftKey(presentationEditorAccountId, draft, typeof presentationDraftEpoch === 'undefined' ? null : presentationDraftEpoch);
   document.getElementById('edit-conflict').hidden = true;
   document.getElementById('edit-draft-status').textContent = '';
@@ -247,16 +249,32 @@ function openPresEditModal(member, draft, storagePayload = null) {
   updatePresEditFormat();
 
   let recovered = null;
-  try { recovered = readPresentationLocalDraft(localStorage, _editLocalKey); } catch (_) {}
+  try {
+    recovered = readPresentationLocalDraft(localStorage, _editLocalKey);
+    // A committed INSERT may have become visible after reload, while its local
+    // draft is still stored under the pre-insert (no presentation ID) key.
+    if (!recovered && draft.id) {
+      const pendingKey = presentationLocalDraftKey(presentationEditorAccountId, { ...draft, id: null }, typeof presentationDraftEpoch === 'undefined' ? null : presentationDraftEpoch);
+      const pending = readPresentationLocalDraft(localStorage, pendingKey);
+      if (pending?.insertRequest?.payload.id === draft.id) {
+        _editLocalKey = pendingKey;
+        recovered = pending;
+      }
+    }
+  } catch (_) {}
   if (recovered) {
-    if (confirm('이 기기에 저장하지 않은 발표 내용이 있습니다. 복구할까요? 취소하면 해당 임시저장 내용을 지웁니다.')) {
+    if (recovered.insertRequest || confirm('이 기기에 저장하지 않은 발표 내용이 있습니다. 복구할까요? 취소하면 해당 임시저장 내용을 지웁니다.')) {
       _editBaseline = recovered.baseline;
       _editDraft = recovered.draft;
       _editStoragePayload = recovered.storagePayload;
+      _editInsertRequest = recovered.insertRequest || null;
       ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']
         .forEach((id, index) => { document.getElementById(id).value = recovered.values[index]; });
       updatePresEditFormat();
-      document.getElementById('edit-draft-status').textContent = '임시저장 내용을 복구했습니다. 서버에 반영하려면 저장하세요.';
+      document.getElementById('deletePresDraftBtn').hidden = !_editDraft.id;
+      document.getElementById('edit-draft-status').textContent = _editInsertRequest
+        ? '결과가 확인되지 않은 저장 요청을 복구했습니다. 저장을 눌러 결과를 확인하세요.'
+        : '임시저장 내용을 복구했습니다. 서버에 반영하려면 저장하세요.';
     } else clearPresentationLocalDraft();
   }
 
@@ -274,11 +292,14 @@ function persistPresentationLocalDraft() {
     const savedAt = new Date().toISOString();
     localStorage.setItem(_editLocalKey, JSON.stringify({ version: 1, savedAt,
       draft: _editDraft, baseline: _editBaseline, storagePayload: _editStoragePayload,
+      insertRequest: _editInsertRequest,
       values: getPresEditValues(),
     }));
     document.getElementById('edit-draft-status').textContent = '이 기기에 임시저장됨 · ' + new Date(savedAt).toLocaleTimeString('ko-KR') + ' · 서버 저장 전';
+    return true;
   } catch (_) {
     document.getElementById('edit-draft-status').textContent = '이 기기에 임시저장할 수 없습니다. 이동하기 전에 저장하세요.';
+    return false;
   }
 }
 
@@ -288,7 +309,7 @@ async function showPresentationEditConflict() {
   const output = document.getElementById('edit-conflict-latest');
   output.textContent = '최신 내용을 확인하는 중...';
   try {
-    const { data, error } = await sb.from('presentations').select('*').eq('id', _editBaseline.id).maybeSingle();
+    const { data, error } = await sb.from('presentations').select('*').eq('id', _editBaseline.id || _editInsertRequest?.payload.id).maybeSingle();
     if (error) throw error;
     _editConflictLatest = data;
     output.textContent = data ? ['최신 주제: ' + formatPresentationTopicLabel(data),
@@ -329,7 +350,8 @@ function closePresEditModal(force = false) {
   if (!force && (_editDraft && !_editDraft.id || JSON.stringify(getPresEditValues()) !== _presEditInitial) &&
       !confirm('작성 중인 내용을 저장하지 않고 닫을까요?')) return;
   document.getElementById('presEditModal').style.display = 'none';
-  clearPresentationLocalDraft();
+  // Keep an uncertain INSERT's identity even if the editor is closed.
+  if (force || !_editInsertRequest) clearPresentationLocalDraft();
   _editLocalKey = null;
   _editBaseline = null;
   _editDraft = null;
@@ -340,22 +362,30 @@ function closePresEditModal(force = false) {
 
 async function savePresEditModal() {
   if (!_editDraft || _presEditSaving) return;
-  persistPresentationLocalDraft();
+  const values = {
+    format: document.getElementById('edit-format').value,
+    title: document.getElementById('edit-topic').value,
+    market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
+    target_cap: parseInt(document.getElementById('edit-tgt-cap').value) || null,
+    reason: document.getElementById('edit-reason').value.trim() || null,
+    risk: document.getElementById('edit-risk').value.trim() || null,
+  };
+  try {
+    if (!_editBaseline.id && !_editInsertRequest) _editInsertRequest = createPresentationInsertRequest(_editDraft, values, _editStoragePayload);
+  } catch (error) { toast(error.message); return; }
+  if (persistPresentationLocalDraft() === false && !_editBaseline.id) {
+    toast('신규 발표의 저장 정보를 보관하지 못했습니다. 기기의 저장 공간과 브라우저 저장 허용 설정을 확인해 주세요.');
+    return;
+  }
   _presEditSaving = true;
   for (const id of ['edit-format', 'edit-topic', 'edit-cur-cap', 'edit-tgt-cap', 'edit-reason', 'edit-risk']) document.getElementById(id).disabled = true;
   const btn = document.getElementById('edit-save-btn');
   btn.textContent = '저장 중...'; btn.disabled = true;
   try {
-    const data = await savePresentationEdit(sb, _editBaseline, _editDraft, {
-        format: document.getElementById('edit-format').value,
-        title: document.getElementById('edit-topic').value,
-        market_cap_at: parseInt(document.getElementById('edit-cur-cap').value) || null,
-        target_cap:    parseInt(document.getElementById('edit-tgt-cap').value) || null,
-        reason:        document.getElementById('edit-reason').value.trim()     || null,
-        risk:          document.getElementById('edit-risk').value.trim()       || null,
-      }, _editStoragePayload);
+    const data = await savePresentationEdit(sb, _editBaseline, _editDraft, values, _editStoragePayload, _editInsertRequest);
     _editDraft = data;
     _editBaseline = { ...data };
+    _editInsertRequest = null;
     clearPresentationLocalDraft();
     _editStoragePayload = null;
     _presEditInitial = JSON.stringify(getPresEditValues());
@@ -461,7 +491,7 @@ function inferIndustryNameForContext(plan) {
     .sort((a, b) =>
       String(b.created_at || '').localeCompare(String(a.created_at || ''))
     )
-    .map(presentation => presentation.topic.split('>')[0].trim())
+    .map(parsePresentationIndustry)
     .find(Boolean) || '';
 }
 
@@ -558,6 +588,8 @@ function saveTurnIndustryName(opts = {}) {
     input?.focus();
     return Promise.resolve(false);
   }
+  try { validatePresentationSharedTheme(name); }
+  catch (error) { setIndustryNameSaveStatus(error.message, true); input?.focus(); return Promise.resolve(false); }
 
   const plan = getAutomaticPresentationPlan();
   const visibleItem = getVisiblePresentationPlanItem(plan);
@@ -602,6 +634,7 @@ async function persistTurnIndustryName(request) {
   const { key, name, scheduleId, scheduleIds, requestToken, opts } = request;
   const input = document.getElementById('thisTurnIndustry');
   try {
+    validatePresentationSharedTheme(name);
     await setConfig(key, name);
     const targets = presentations.filter(presentation => {
       if (
@@ -1279,6 +1312,7 @@ function buildPresentationEntry(stockName, autoItem, plan) {
   const industry = category === 'industry' && matchesVisibleContext
     ? (currentIndustryName || document.getElementById('thisTurnIndustry')?.value?.trim() || '')
     : '';
+  if (industry) validatePresentationSharedTheme(industry);
   return {
     category,
     topic: industry ? industry + ' > ' + stockName : stockName,

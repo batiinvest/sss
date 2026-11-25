@@ -10,6 +10,7 @@
 const ModalPick = (() => {
   let _dirty = false;
   let _returnFocus = null;
+  let _submitting = false;
 
   // ── 팝업 HTML 마운트 (페이지에 없으면 자동 생성)
   function mount() {
@@ -42,7 +43,14 @@ const ModalPick = (() => {
     document.getElementById('pickModal').style.display = 'flex';
     document.getElementById('pick-panel').innerHTML =
       '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">불러오는 중...</div>';
-    const me = await getCurrentMember();
+    let me = await getCurrentMember();
+    if (opts.member && opts.member.id !== me?.id) {
+      if (!await isAdmin()) {
+        document.getElementById('pick-panel').textContent = '다른 담당자의 투자종목은 관리자만 등록할 수 있습니다.';
+        return;
+      }
+      me = opts.member;
+    }
     if (!me) {
       document.getElementById('pick-panel').innerHTML =
         '<div style="font-size:13px;color:var(--muted);padding:1rem;text-align:center;">멤버 정보를 찾을 수 없습니다.</div>';
@@ -67,10 +75,12 @@ const ModalPick = (() => {
       : carrySources.find(p => p.member_id === me.id) || null;
 
     renderPanel(me, { ...opts, prevPick, thisMonth });
+    document.getElementById('pick-modal-title').textContent = me.name + ' · 투자종목 등록';
   }
 
   // ── 닫기
   function close() {
+    if (_submitting) return;
     if (_dirty && !confirm('입력 중인 내용이 있습니다. 닫을까요?')) return;
     _dirty = false;
     document.getElementById('pickModal').style.display = 'none';
@@ -315,6 +325,12 @@ const ModalPick = (() => {
 
   // ── 제출
   async function submit(memberId) {
+    if (_submitting) return;
+    _submitting = true;
+    const locked = Array.from(document.querySelectorAll('#pick-panel input, #pick-panel select, #pick-panel button'))
+      .map(element => [element, element.disabled]);
+    locked.forEach(([element]) => { element.disabled = true; });
+    try {
     const inp = document.getElementById('pick-input');
     if (!inp?.value.trim() || !inp?.dataset.stockCode) { toast('종목을 검색해서 선택하세요.'); return; }
 
@@ -336,12 +352,14 @@ const ModalPick = (() => {
       return;
     }
 
-    const { data: already } = await sb.from('picks')
+    const { data: already, error: lookupError } = await sb.from('picks')
       .select('id,stock_code,stock_name').eq('member_id', memberId).eq('month', month).maybeSingle();
+    if (lookupError) throw lookupError;
     let hasLinkedTrades = false;
     if (already) {
       const changingStock = already.stock_code !== inp.dataset.stockCode;
-      const { data: linkedTrades } = await sb.from('trades').select('id').eq('pick_id', already.id).limit(1);
+      const { data: linkedTrades, error: tradeError } = await sb.from('trades').select('id').eq('pick_id', already.id).limit(1);
+      if (tradeError) throw tradeError;
       hasLinkedTrades = Boolean(linkedTrades?.length);
       if (changingStock && hasLinkedTrades) {
           toast('매매내역이 있는 투자종목은 종목을 바꿀 수 없습니다. 목표가와 투자 의견만 수정해 주세요.');
@@ -368,24 +386,32 @@ const ModalPick = (() => {
     if (btn) { btn.textContent = '저장 중…'; btn.disabled = true; }
 
     try {
+      let saved;
       if (already) {
         const safeUpdate = hasLinkedTrades
           ? { target_price: tgtPrice, current_cap: curCap, target_cap: tgtCap, reason }
           : payload;
         const { error } = await sb.from('picks').update(safeUpdate).eq('id', already.id);
         if (error) throw error;
+        saved = { ...payload, id: already.id };
       } else {
-        await submitPick(payload);
+        saved = await submitPick(payload);
       }
       toast('투자종목을 저장했습니다.');
       _dirty = false;
+      _submitting = false;
       close();
-      if (typeof ModalPick._onSubmit === 'function') ModalPick._onSubmit();
+      if (typeof ModalPick._onSubmit === 'function') {
+        try { await ModalPick._onSubmit(saved); }
+        catch (_) { toast('종목은 저장됐지만 목록을 갱신하지 못했습니다. 새로고침해 주세요.'); }
+      }
     } catch(e) {
       toast('오류: ' + (e.message || '제출 실패'));
     } finally {
       if (btn) { btn.textContent = '투자종목 저장'; btn.disabled = false; }
     }
+    } catch (error) { toast('종목 정보를 확인하지 못했습니다. ' + error.message); }
+    finally { _submitting = false; locked.forEach(([element, disabled]) => { element.disabled = disabled; }); }
   }
 
   return { mount, open, close, clearStock, submit, carryOver };

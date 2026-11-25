@@ -11,8 +11,26 @@ const FREE_PRESENTATION_PREFIX = '[자유 주제] ';
 function presentationTopicTail(p) {
   const topic = String(p?.topic || '').trim();
   if (topic.startsWith(FREE_PRESENTATION_PREFIX) || topic === FREE_PRESENTATION_PREFIX.trim()) return topic;
+  // Recover legacy other-topic rows whose shared theme itself contained '>'.
+  const marker = topic.match(/>\s*(\[자유 주제\](?:\s|$))/);
+  if (marker) return topic.slice(marker.index + marker[0].indexOf('[')).trim();
   const parts = topic.split('>');
   return (parts.length > 1 ? parts.slice(1).join('>') : parts[0]).trim();
+}
+
+function validatePresentationSharedTheme(value) {
+  const name = String(value || '').trim();
+  if (!name) throw new Error('공통 주제나 산업명을 입력해 주세요.');
+  if (name.includes('>') || name.includes(FREE_PRESENTATION_PREFIX.trim())) {
+    throw new Error('공통 주제에는 > 또는 [자유 주제]를 사용할 수 없습니다. 구분에는 · 또는 /를 사용해 주세요. 개별 발표 제목에는 >를 사용할 수 있습니다.');
+  }
+  return name;
+}
+
+function presentationTopicPrefix(p) {
+  const topic = String(p?.topic || '').trim();
+  const tail = presentationTopicTail(p);
+  return topic === tail ? '' : topic.slice(0, topic.length - tail.length).replace(/>\s*$/, '').trim();
 }
 
 function isFreePresentation(p) {
@@ -30,8 +48,9 @@ function presentationContentPayload(draft, values) {
   const free = values.format === 'free';
   const title = String(values.title || '').trim();
   if (!title) throw new Error(free ? '발표 주제나 산업명을 입력하세요.' : '종목명을 입력하세요.');
-  const prefix = !String(draft.topic || '').trim().startsWith(FREE_PRESENTATION_PREFIX.trim()) && String(draft.topic || '').includes('>')
-    ? String(draft.topic).split('>')[0].trim() + ' > ' : '';
+  const sharedTheme = presentationTopicPrefix(draft);
+  const prefix = sharedTheme ? sharedTheme + ' > ' : '';
+  if (sharedTheme && !free) validatePresentationSharedTheme(sharedTheme);
   const result = {
     topic: prefix + (free ? FREE_PRESENTATION_PREFIX : '') + title,
     market_cap_at: free ? null : values.market_cap_at,
@@ -47,11 +66,7 @@ function presentationContentPayload(draft, values) {
 }
 
 function parsePresentationIndustry(p) {
-  if (String(p?.topic || '').trim().startsWith(FREE_PRESENTATION_PREFIX.trim())) return null;
-  if (p?.category === 'industry' && p.topic?.includes(' > ')) {
-    return p.topic.split(' > ')[0].trim();
-  }
-  return null;
+  return p?.category === 'industry' ? presentationTopicPrefix(p) || null : null;
 }
 
 function parsePresentationStockName(p) {
@@ -101,12 +116,38 @@ function getPresentationPriceTitle(p) {
 
 // The DB increments edit_revision for every writer, including price jobs and
 // shared-topic changes. A short CAS predicate also supports long manuscripts.
-async function savePresentationEdit(client, baseline, draft, values, storagePayload) {
+function createPresentationInsertRequest(draft, values, storagePayload) {
+  return { payload: { ...(storagePayload || {}), ...presentationContentPayload(draft, values), id: crypto.randomUUID() } };
+}
+
+async function savePresentationEdit(client, baseline, draft, values, storagePayload, insertRequest) {
   const desired = { ...(storagePayload || {}), ...presentationContentPayload(draft, values) };
   if (!baseline?.id) {
-    const { data, error } = await client.from('presentations').insert(desired).select().single();
-    if (error) throw error;
-    return data;
+    const original = insertRequest?.payload;
+    if (!original?.id || original.member_id !== desired.member_id || original.schedule_id !== desired.schedule_id) {
+      throw new Error('신규 발표 저장 정보를 확인할 수 없습니다. 입력 내용을 보관한 뒤 다시 열어 주세요.');
+    }
+    let result;
+    try { result = await client.from('presentations').insert(original).select().single(); }
+    catch (error) { result = { error }; }
+    let data = result.data;
+    if (result.error) {
+      // A lost response is indistinguishable from a failed INSERT. Look up the
+      // same UUID; never generate another request or blindly overwrite a row.
+      let lookup;
+      try { lookup = await client.from('presentations').select('*').eq('id', original.id).maybeSingle(); }
+      catch (_) { throw result.error; }
+      if (lookup.error || !lookup.data) throw result.error;
+      data = lookup.data;
+      const fields = ['member_id', 'schedule_id', 'category', 'status', 'topic', 'reason', 'risk', 'presented_at', 'stock_code', 'market_cap_at', 'target_cap'];
+      if (Number(data.edit_revision) !== 0 || fields.some(key => JSON.stringify(data[key] ?? null) !== JSON.stringify(original[key] ?? null))) {
+        throw Object.assign(new Error('이 발표는 이미 저장된 뒤 변경되었습니다. 최신 내용과 비교해 주세요.'), { code: 'PRESENTATION_CONFLICT' });
+      }
+    }
+    if (!data?.id) throw new Error('저장 결과를 확인하지 못했습니다. 같은 입력창에서 다시 저장해 주세요.');
+    // If the user amended inputs after the failed response, save those edits
+    // against the recovered row's revision rather than discarding them.
+    return savePresentationEdit(client, data, draft, values, storagePayload);
   }
   // An unchanged individual title must never write an old shared-topic prefix.
   if (!Object.hasOwn(storagePayload || {}, 'topic') &&

@@ -3486,3 +3486,74 @@ button:disabled { cursor: wait; opacity: 0.62; }
   #portfolioOverview .portfolio-cell-meta { font-size:10px; white-space:normal; }
   #portfolioOverview .portfolio-status-chip { font-size:11px; padding:3px 7px; }
 }
+
+/* Trading workspace: equal columns, aligned entry steps, distinct buy/sell actions. */
+.trade-page .main { width: 100%; max-width: 1440px; margin-inline: auto; }
+.trade-page .topbar { margin-bottom: 24px; }
+.trade-page .page-title { font-size: 22px; font-weight: 700; }
+.trade-page .updated { margin-top: 6px; line-height: 1.6; }
+.trade-page .trade-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch; }
+.trade-page .trade-form-card { --trade-color: #b43838; --trade-tint: #fff5f3; display: flex; flex-direction: column; min-width: 0; padding: 24px; border-radius: 16px; border-top: 3px solid var(--trade-color); }
+.trade-page #sellFormCard { --trade-color: #1c61a8; --trade-tint: #f1f7fe; }
+.trade-page .trade-card-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.trade-page .trade-type-icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; border-radius: 12px; font-size: 26px; background: var(--trade-tint); color: var(--trade-color); }
+.trade-page .trade-card-heading h2 { margin: 0; font-size: 19px; font-weight: 700; }
+.trade-page .trade-card-heading p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.trade-page .trade-type-tag { margin-left: auto; color: var(--trade-color); font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+.trade-page .form-section { flex: 1; gap: 18px; }
+.trade-page .form-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px !important; }
+.trade-page .form-group { min-width: 0; gap: 7px; }
+.trade-page label { font-size: 13px; color: var(--text); }
+.trade-page label span { color: var(--muted); font-weight: 400; }
+.trade-page input, .trade-page select { height: 44px; min-width: 0; font-size: 14px; border-radius: 9px; }
+.trade-page .trade-stock-section { min-height: 164px; display: flex; flex-direction: column; gap: 10px; padding-block: 18px 0; border-top: 1px solid var(--border); }
+.trade-page .trade-section-label { display: flex; align-items: center; gap: 7px; margin-bottom: 2px; font-size: 13px; font-weight: 600; }
+.trade-page .trade-section-label > span { color: var(--muted); font-size: 11px; font-weight: 500; }
+.trade-page .trade-stock-modes { display: flex; gap: 4px; align-self: flex-start; background: var(--bg); border-radius: 8px; padding: 3px; }
+.trade-page .trade-stock-modes button { border: 0; border-radius: 6px; background: transparent; color: var(--muted); padding: 6px 10px; min-height: 32px; font-size: 12px; cursor: pointer; }
+.trade-page .trade-stock-modes button[aria-pressed="true"] { background: var(--surface); color: var(--trade-color); font-weight: 700; box-shadow: 0 1px 4px #00000012; }
+.trade-page .trade-stock-search { position: relative; }
+.trade-page #buy-stock-results { position: absolute; z-index: 20; background: var(--surface); width: 100%; max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 8px 24px #00000014; }
+.trade-page .trade-help { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.trade-page .trade-available { font-size: 13px; line-height: 1.5; color: var(--trade-color); font-weight: 500; }
+.trade-page .trade-execution-section .trade-section-label { margin-bottom: 12px; }
+.trade-page .trade-price-row input { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.trade-page .trade-price-row input::placeholder { font-size: 14px; font-weight: 400; }
+.trade-page .trade-summary { background: var(--trade-tint); border: 1px solid color-mix(in srgb, var(--trade-color) 12%, transparent); border-radius: 12px; padding: 16px; min-height: 112px; }
+.trade-page .trade-total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+.trade-page .trade-total-line > strong { font-size: 24px; color: var(--trade-color); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.trade-page .trade-summary p { font-size: 11px; color: var(--muted); margin: 8px 0 0; }
+.trade-page .trade-estimate { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; margin-top: 8px; }
+.trade-page .trade-estimate strong { margin-left: 5px; }
+.trade-page .trade-save { width: 100%; min-height: 46px; margin-top: auto; justify-content: center; background: var(--trade-color); color: white; border: 0; font-size: 14px; font-weight: 600; border-radius: 9px; }
+.trade-page .trade-save:hover { filter: brightness(.94); }
+.trade-page .field-error:empty { display: none; }
+.trade-page [hidden] { display: none !important; }
+@media (max-width: 768px) {
+  .trade-page .trade-form-card { display: none; padding: 20px 16px; }
+  .trade-page .trade-form-card.active { display: flex; }
+  .trade-page .trade-card-heading { margin-bottom: 20px; }
+  .trade-page .trade-stock-section { min-height: 0; padding-top: 16px; }
+  .trade-page .trade-price-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trade-page .trade-summary { min-height: 0; }
+  .trade-page .trade-type-tag { display: none; }
+  .trade-page .trade-mobile-toggle #mobileBuyTab[aria-selected="true"] { color: #b43838; }
+  .trade-page .trade-mobile-toggle #mobileSellTab[aria-selected="true"] { color: #1c61a8; }
+}
+@media (max-width: 380px) {
+  .trade-page .trade-meta-row { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 769px) {
+  .trade-page .trade-form-grid { row-gap: 18px; }
+  .trade-page .trade-form-card { display: grid; grid-row: span 8; grid-template-rows: subgrid; }
+  .trade-page .trade-card-heading { grid-row: 1; margin-bottom: 4px; }
+  .trade-page .trade-form-card .form-section { display: contents; }
+  .trade-page .trade-meta-row { grid-row: 2; }
+  .trade-page .trade-stock-section { grid-row: 3; min-height: 0; }
+  .trade-page .trade-execution-section { grid-row: 4; }
+  .trade-page .trade-summary { grid-row: 5; }
+  .trade-page .trade-note { grid-row: 6; }
+  .trade-page .field-error { grid-row: 7; }
+  .trade-page .trade-save { grid-row: 8; }
+}

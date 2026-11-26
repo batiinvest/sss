@@ -64,7 +64,7 @@ function fixture() {
   try{
     browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});
     const base=`http://127.0.0.1:${server.address().port}`;
-    for(const width of [1280,390]){
+    for(const width of [1700,900,390,360]){
       const context=await browser.newContext({viewport:{width,height:1000},timezoneId:'Asia/Seoul'});
       await context.addInitScript(fixture);
       await context.route('**/*',route=>route.request().url().startsWith(base)?route.continue():route.fulfill({body:'',contentType:'text/javascript'}));
@@ -73,6 +73,20 @@ function fixture() {
       page.on('dialog',d=>d.accept());
       await page.goto(base+'/trade.html');
       await page.waitForFunction(()=>document.getElementById('buy-member').value==='m');
+      if(width>768){
+        const buy=await page.locator('#buyFormCard').boundingBox(),sell=await page.locator('#sellFormCard').boundingBox();
+        assert.ok(Math.abs(buy.width-sell.width)<2,'buy/sell cards have equal widths');
+        const buyPrice=await page.locator('#buy-price').boundingBox(),sellPrice=await page.locator('#sell-price').boundingBox();
+        assert.ok(Math.abs(buyPrice.y-sellPrice.y)<2,'execution rows align');
+        const buySave=await page.locator('#buySubmitBtn').boundingBox(),sellSave=await page.locator('#sellSubmitBtn').boundingBox();
+        assert.ok(Math.abs(buySave.y-sellSave.y)<2,'save buttons align');
+      }
+      await page.fill('#buy-qty','22');
+      await page.click('#buyExistingMode');
+      assert.equal(await page.locator('#buy-stock').isVisible(),false);
+      assert.equal(await page.locator('#buy-pick').isVisible(),true);
+      assert.equal(await page.locator('#buy-qty').inputValue(),'22');
+      await page.click('#buySearchMode');
       await page.fill('#buy-stock','삼성');
       await page.locator('#buy-stock-results .dd-item').click();
       await page.fill('#buy-price','18030');
@@ -85,10 +99,14 @@ function fixture() {
       assert.equal(state.calls[0].p_trade.quantity,22);
       assert.equal(state.calls[0].p_trade.stock_code,'005930');
       assert.equal(state.picks.length,0);
-      if(width===390) await page.click('#mobileSellTab');
+      await page.click('#buyExistingMode');
+      await page.selectOption('#buy-pick','position');
+      assert.equal(await page.locator('#buy-pick').inputValue(),'position');
+      if(width<=768) await page.click('#mobileSellTab');
       await page.selectOption('#sell-pick','position');
       await page.waitForFunction(()=>document.getElementById('sellAvailable').textContent.includes('22주'));
       await page.fill('#sell-price','25350');await page.fill('#sell-qty','5');
+      assert.match(await page.locator('#sellAmount').textContent(),/126,750/);
       await page.click('#sellSubmitBtn');
       await page.waitForFunction(()=>window.testState.calls.length===2 && !document.getElementById('sellSubmitBtn').disabled);
       state=await page.evaluate(()=>window.testState);

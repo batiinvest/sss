@@ -4,17 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 매수·매도 등록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261126.1">
+  <link rel="stylesheet" href="css/style.css?v=20261127.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
-<body>
+<body class="trade-page">
 
 <div class="layout layout-page"><main class="main">
 
     <div class="topbar">
       <div>
         <div class="page-title">매수·매도 등록</div>
-        <div class="updated">탑픽 등록 없이 매수할 수 있습니다. 실제 체결가와 몇 주를 샀는지 입력하세요.</div>
+        <div class="updated">탑픽 등록 없이 매수할 수 있습니다. 실제 거래한 가격과 수량을 입력하면 보유현황에 반영됩니다.</div>
       </div>
     </div>
 
@@ -29,101 +29,85 @@
       <button type="button" class="btn" id="pendingTradeRetry" onclick="resolvePendingTrade()">미확인 거래 결과 확인</button>
     </div>
 
-    <div class="grid-2 mb-card trade-form-grid">
-
-      <!-- 매수 입력 -->
-      <div class="card trade-form-card active" id="buyFormCard">
-        <div class="card-head">
-          <div class="card-title" style="color:var(--up);">매수 입력</div>
-          <span class="badge b-buy">BUY</span>
+    <div class="mb-card trade-form-grid">
+      <section class="card trade-form-card active" id="buyFormCard" aria-labelledby="buyFormTitle">
+        <div class="trade-card-heading">
+          <span class="trade-type-icon" aria-hidden="true">+</span>
+          <div><h2 id="buyFormTitle">매수 등록</h2><p>실제로 산 가격과 수량을 기록하세요.</p></div>
+          <span class="trade-type-tag">BUY</span>
         </div>
         <div class="form-section">
-          <div class="form-group">
-            <label for="buy-member">담당자</label>
-            <select id="buy-member"><option value="">선택</option></select>
+          <div class="form-row trade-meta-row">
+            <div class="form-group"><label for="buy-member">담당자</label><select id="buy-member"><option value="">선택</option></select></div>
+            <div class="form-group"><label for="buy-date">매수일</label><input type="date" id="buy-date" ></div>
           </div>
-          <div class="form-group">
-            <label for="buy-stock">매수 종목 검색</label>
-            <div style="position:relative">
-              <input id="buy-stock" type="search" autocomplete="off" placeholder="종목명 또는 종목코드 검색" aria-label="매수 종목 검색">
-              <div id="buy-stock-results" class="stock-dd" style="display:none;position:absolute;z-index:20;background:var(--surface,#fff);width:100%;max-height:280px;overflow:auto;border:1px solid var(--border)"></div>
+          <div class="trade-stock-section">
+            <div class="trade-section-label"><span>01</span> 종목 선택</div>
+            <div class="trade-stock-modes" role="group" aria-label="매수 종목 선택 방법">
+              <button type="button" id="buySearchMode" aria-pressed="true" onclick="setBuyStockMode('search')">종목 검색</button>
+              <button type="button" id="buyExistingMode" aria-pressed="false" onclick="setBuyStockMode('existing')">기존 종목 추가 매수</button>
             </div>
-            <p id="buyStockSelected" class="muted" role="status">검색 결과에서 종목을 선택하세요.</p>
-            <label for="buy-pick">기존 거래에 추가 매수 (선택)</label>
-            <select id="buy-pick"><option value="">추천자 먼저 선택</option></select>
-            <p id="buyPickHelp" class="muted" role="status">새 종목은 검색해서 선택하고, 기존 종목은 아래 기록을 선택하세요.</p>
-          </div>
-          <div class="form-group">
-            <label for="buy-date">매수일</label>
-            <input type="date" id="buy-date" />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="buy-price">매수가 (원)</label>
-              <input type="number" id="buy-price" min="1" inputmode="numeric" placeholder="예: 72,400" oninput="calcBuyAmount()" />
+            <div id="buySearchPanel" class="form-group">
+              <label class="sr-only" for="buy-stock">매수 종목 검색</label>
+              <div class="trade-stock-search">
+                <input id="buy-stock" type="search" autocomplete="off" placeholder="종목명 또는 코드로 검색" aria-label="매수 종목 검색">
+                <div id="buy-stock-results" class="stock-dd" style="display:none"></div>
+              </div>
+              <p id="buyStockSelected" class="trade-help" role="status">검색 결과에서 매수할 종목을 선택하세요.</p>
             </div>
-            <div class="form-group">
-              <label for="buy-qty">매수 수량 · 몇 주 샀나요? (주)</label>
-              <input type="number" id="buy-qty" min="1" inputmode="numeric" placeholder="예: 22주 → 22 입력" oninput="calcBuyAmount()" />
+            <div id="buyExistingPanel" class="form-group" hidden>
+              <label class="sr-only" for="buy-pick">추가 매수할 기존 종목</label>
+              <select id="buy-pick"><option value="">담당자를 먼저 선택하세요</option></select>
+              <p id="buyPickHelp" class="trade-help" role="status">추가 매수할 기존 거래 기록을 선택하세요.</p>
             </div>
           </div>
-          <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
-            매수 금액: <strong id="buyAmount">—</strong>
+          <div class="trade-execution-section">
+            <div class="trade-section-label"><span>02</span> 가격 · 수량 입력</div>
+            <div class="form-row trade-price-row">
+              <div class="form-group"><label for="buy-price">1주당 매수가 <span>(원)</span></label><input type="number" id="buy-price" min="1" inputmode="numeric" placeholder="예: 72,400" oninput="calcBuyAmount()"></div>
+              <div class="form-group"><label for="buy-qty">매수 수량 <span>(주)</span></label><input type="number" id="buy-qty" min="1" inputmode="numeric" placeholder="예: 22" oninput="calcBuyAmount()"></div>
+            </div>
           </div>
-          <div class="form-group">
-              <label for="buy-note">메모 (선택)</label>
-              <input type="text" id="buy-note" placeholder="예: 09:03 시가 체결" />
-          </div>
+          <div class="trade-summary" aria-live="polite"><div class="trade-total-line"><span>매수 금액</span><strong id="buyAmount">—</strong></div>
+            <p>매수가 × 매수 수량</p></div>
+          <div class="form-group trade-note"><label for="buy-note">메모 <span>(선택)</span></label><input type="text" id="buy-note" placeholder="거래 관련 메모를 남겨보세요"></div>
           <div id="buy-error" class="field-error" role="alert"></div>
-          <button class="btn btn-primary mobile-form-submit" id="buySubmitBtn" onclick="submitBuy()">매수 저장</button>
+          <button class="btn mobile-form-submit trade-save" id="buySubmitBtn" onclick="submitBuy()">매수 저장</button>
         </div>
-      </div>
-
-      <!-- 매도 입력 -->
-      <div class="card trade-form-card" id="sellFormCard">
-        <div class="card-head">
-          <div class="card-title" style="color:var(--dn);">매도 입력</div>
-          <span class="badge b-sell">SELL</span>
+      </section>
+      <section class="card trade-form-card" id="sellFormCard" aria-labelledby="sellFormTitle">
+        <div class="trade-card-heading">
+          <span class="trade-type-icon" aria-hidden="true">−</span>
+          <div><h2 id="sellFormTitle">매도 등록</h2><p>실제로 판 가격과 수량을 기록하세요.</p></div>
+          <span class="trade-type-tag">SELL</span>
         </div>
         <div class="form-section">
-          <div class="form-group">
-            <label for="sell-member">담당자</label>
-            <select id="sell-member"><option value="">선택</option></select>
+          <div class="form-row trade-meta-row">
+            <div class="form-group"><label for="sell-member">담당자</label><select id="sell-member"><option value="">선택</option></select></div>
+            <div class="form-group"><label for="sell-date">매도일</label><input type="date" id="sell-date" onchange="loadAvailableSellQuantity()"></div>
           </div>
-          <div class="form-group">
-            <label for="sell-pick">보유 종목</label>
-            <select id="sell-pick"><option value="">추천자 먼저 선택</option></select>
-            <p id="sellPickHelp" class="muted" role="status">선택한 매도일 기준으로 매도 가능 수량을 확인합니다.</p>
+          <div class="trade-stock-section">
+            <div class="trade-section-label"><span>01</span> 종목 선택</div>
+            <label class="sr-only" for="sell-pick">매도할 보유 종목</label>
+            <select id="sell-pick"><option value="">담당자를 먼저 선택하세요</option></select>
+            <div id="sellAvailable" class="trade-available" role="status">매도 가능 수량: 종목을 선택하세요.</div>
+            <p id="sellPickHelp" class="trade-help" role="status">선택한 매도일 기준으로 매도 가능 수량을 확인합니다.</p>
           </div>
-          <div class="form-group">
-            <label for="sell-date">매도일</label>
-            <input type="date" id="sell-date" onchange="loadAvailableSellQuantity()" />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="sell-price">매도가 (원)</label>
-              <input type="number" id="sell-price" min="1" inputmode="numeric" placeholder="예: 81,300" oninput="calcSellReturn()" />
-            </div>
-            <div class="form-group">
-              <label for="sell-qty">매도 수량 (주)</label>
-              <input type="number" id="sell-qty" min="1" inputmode="numeric" placeholder="예: 5" oninput="calcSellReturn()" />
+          <div class="trade-execution-section">
+            <div class="trade-section-label"><span>02</span> 가격 · 수량 입력</div>
+            <div class="form-row trade-price-row">
+              <div class="form-group"><label for="sell-price">1주당 매도가 <span>(원)</span></label><input type="number" id="sell-price" min="1" inputmode="numeric" placeholder="예: 81,300" oninput="calcSellReturn()"></div>
+              <div class="form-group"><label for="sell-qty">매도 수량 <span>(주)</span></label><input type="number" id="sell-qty" min="1" inputmode="numeric" placeholder="예: 5" oninput="calcSellReturn()"></div>
             </div>
           </div>
-          <!-- 예상 수익률 미리보기 -->
-          <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
-            예상 수익률: <strong id="sellReturn">—</strong>
-            &nbsp;|&nbsp; 예상 손익: <strong id="sellProfit">—</strong>
-            <div id="sellAvailable" style="margin-top:4px;color:var(--muted);font-size:12px;">매도 가능 수량: 종목을 선택하세요.</div>
-          </div>
-          <div class="form-group">
-              <label for="sell-note">메모 (선택)</label>
-            <input type="text" id="sell-note" placeholder="예: 단톡 매도 의사 표시 확인" />
-          </div>
+          <div class="trade-summary" aria-live="polite"><div class="trade-total-line"><span>매도 금액</span><strong id="sellAmount">—</strong></div>
+            <div class="trade-estimate"><span>예상 손익 <strong id="sellProfit">—</strong></span><span>수익률 <strong id="sellReturn">—</strong></span></div>
+            <p>수수료·세금 차감 전 예상 금액</p></div>
+          <div class="form-group trade-note"><label for="sell-note">메모 <span>(선택)</span></label><input type="text" id="sell-note" placeholder="거래 관련 메모를 남겨보세요"></div>
           <div id="sell-error" class="field-error" role="alert"></div>
-          <button class="btn btn-danger mobile-form-submit" id="sellSubmitBtn" onclick="submitSell()">매도 저장</button>
+          <button class="btn mobile-form-submit trade-save" id="sellSubmitBtn" onclick="submitSell()">매도 저장</button>
         </div>
-      </div>
-
+      </section>
     </div>
 
     <!-- 전체 매매 내역 -->
@@ -162,10 +146,10 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20261126.1"></script>
+<script src="js/config.js?v=20261127.1"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261126.1"></script>
-<script src="js/db.js?v=20261126.1"></script>
+<script src="js/corporate-actions-service.js?v=20261127.1"></script>
+<script src="js/db.js?v=20261127.1"></script>
 <script>
 let selectedBuyStock = null;
 let members  = [];
@@ -294,6 +278,7 @@ async function preselectRequestedPick(type, pickId) {
   memberSelect.value = pick.member_id;
   updatePickSelect(type);
   const pickSelect = document.getElementById(`${type}-pick`);
+  if (type === 'buy') setBuyStockMode('existing');
   pickSelect.value = pick.pick_id || pick.id;
   if (type === 'sell') await loadAvailableSellQuantity();
 }
@@ -336,6 +321,19 @@ function updatePickSelect(type) {
     ? '추가 매수할 기존 기록을 선택하거나 위에서 새 종목을 검색하세요.'
     : '현재 잔고가 없는 종목도 과거 매도일의 잔고를 확인할 수 있습니다.';
   if (type === 'sell') loadAvailableSellQuantity();
+}
+
+function setBuyStockMode(mode) {
+  const existing = mode === 'existing';
+  document.getElementById('buySearchPanel').hidden = existing;
+  document.getElementById('buyExistingPanel').hidden = !existing;
+  document.getElementById('buySearchMode').setAttribute('aria-pressed', String(!existing));
+  document.getElementById('buyExistingMode').setAttribute('aria-pressed', String(existing));
+  selectedBuyStock = null;
+  document.getElementById('buy-stock').value = '';
+  document.getElementById('buy-pick').value = '';
+  document.getElementById('buy-stock-results').style.display = 'none';
+  document.getElementById('buyStockSelected').textContent = '검색 결과에서 매수할 종목을 선택하세요.';
 }
 
 function setupTradeStockSearch() {
@@ -410,6 +408,7 @@ function calcSellReturn() {
   const sq = tradeInteger(document.getElementById('sell-qty').value) || 0;
   const pickOpt = document.getElementById('sell-pick').selectedOptions[0];
   const bp  = Number(pickOpt?.dataset?.buy) || 0;
+  document.getElementById('sellAmount').textContent = sp && sq ? won(sp * sq) : '—';
 
   if (bp && sp && sq) {
     const r = ((sp - bp) / bp * 100).toFixed(2);

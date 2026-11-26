@@ -21,7 +21,7 @@ const ModalPick = (() => {
   <div style="background:var(--surface);border-radius:var(--r-lg);padding:1.5rem;width:100%;max-width:520px;border:0.5px solid var(--border);margin:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;">
       <div>
-        <div id="pick-modal-title" style="font-size:15px;font-weight:500;">투자종목 등록</div>
+        <div id="pick-modal-title" style="font-size:15px;font-weight:500;">탑픽 등록</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;">핵심 정보만 먼저 저장하고 상세 내용은 나중에 보완할 수 있습니다.</div>
       </div>
       <button class="btn" onclick="ModalPick.close()" style="font-size:12px;">닫기</button>
@@ -59,23 +59,15 @@ const ModalPick = (() => {
 
     // 대상 월의 직접 제출 여부와 가장 최근 탑픽 조회
     const thisMonth = opts.month || currentMonth();
-    const [{ data: currentPicks }, carrySources] = await Promise.all([
-      sb.from('picks_with_trades')
-        .select('pick_id')
-        .eq('member_id', me.id)
-        .eq('month', thisMonth)
-        .limit(1),
-      fetchCarryForwardSourcePicks(
-        thisMonth,
-        'member_id,stock_name,stock_code,market,target_price,current_cap,target_cap,reason,buy_price,buy_price_ref,buy_quantity,month,carried_from,status'
-      ),
-    ]);
-    const prevPick = me.is_active === false || currentPicks?.length
-      ? null
-      : carrySources.find(p => p.member_id === me.id) || null;
-
+    const { data: currentPicks, error } = await sb.from('investment_ideas').select('*')
+      .eq('member_id', me.id).eq('month', thisMonth).limit(1);
+    if (error) { document.getElementById('pick-panel').textContent = '탑픽을 불러오지 못했습니다. 다시 시도해 주세요.'; return; }
+    const existing = currentPicks?.[0];
+    const carrySources = existing || me.is_active === false ? [] : await fetchCarryForwardSourcePicks(thisMonth);
+    const prevPick = carrySources.find(p => p.member_id === me.id) || null;
+    if (existing && !opts.prefill) opts = { ...opts, prefill: { ...existing, price: existing.price_at, market_cap: existing.current_cap } };
     renderPanel(me, { ...opts, prevPick, thisMonth });
-    document.getElementById('pick-modal-title').textContent = me.name + ' · 투자종목 등록';
+    document.getElementById('pick-modal-title').textContent = me.name + ' · 탑픽 등록';
   }
 
   // ── 닫기
@@ -135,10 +127,10 @@ const ModalPick = (() => {
       '<div id="pick-badge" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);font-size:13px;color:var(--green);margin-bottom:10px;">' +
         '<button onclick="ModalPick.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>' +
       '</div>' +
-      // 매수가 (직접 입력 가능)
+      // 아이디어 기준가 (실제 매수 체결가와 별도)
       '<div style="margin-bottom:8px;">' +
         '<label for="pick-buy-price" style="font-size:12px;color:var(--muted);font-weight:500;display:block;margin-bottom:4px;">' +
-          '예상 또는 평균 매수가 (원) <span style="font-weight:400;color:var(--muted);">— 선택</span>' +
+          '아이디어 기준가 (원) <span style="font-weight:400;color:var(--muted);">— 선택</span>' +
         '</label>' +
         '<input type="number" id="pick-buy-price" inputmode="numeric" min="1" placeholder="예: 75,500" style="font-size:13px;padding:7px 10px;width:100%;">' +
       '</div>' +
@@ -168,7 +160,7 @@ const ModalPick = (() => {
           'style="font-size:13px;padding:7px 10px;width:100%;min-height:80px;resize:vertical;border:0.5px solid var(--border2);border-radius:var(--r-md);font-family:inherit;"></textarea>' +
       '</div>' +
       '<div class="mobile-sticky-action"><button class="btn btn-primary" id="pick-submit-btn" style="font-size:14px;padding:9px;justify-content:center;width:100%;" ' +
-        'onclick="ModalPick.submit(\'' + me.id + '\')">투자종목 저장</button></div>';
+        'onclick="ModalPick.submit(\'' + me.id + '\')">탑픽 저장</button></div>';
 
     // 종목 자동완성
     const inp   = document.getElementById('pick-input');
@@ -229,12 +221,13 @@ const ModalPick = (() => {
         ' <span style="color:var(--muted);font-size:12px;">' + escapeHtml(prefill.stock_code || '') + ' · ' + escapeHtml(prefill.market || 'KOSPI') + '</span>' +
         '<button type="button" onclick="ModalPick.clearStock()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;margin-left:auto;">✕ 다시 선택</button>';
       if (prefill.price) document.getElementById('pick-cur-price').value = prefill.price;
+      if (prefill.price_at) document.getElementById('pick-buy-price').value = prefill.price_at;
       if (prefill.market_cap) document.getElementById('pick-cur-cap').value = prefill.market_cap;
       if (prefill.target_price) document.getElementById('pick-tgt-price').value = prefill.target_price;
       if (prefill.target_cap) document.getElementById('pick-tgt-cap').value = prefill.target_cap;
       if (prefill.reason) document.getElementById('pick-reason').value = prefill.reason;
       if (prefill.source_presentation_id) {
-        panel.insertAdjacentHTML('afterbegin', '<div class="info-banner" style="margin-bottom:10px;">발표종목 정보를 불러왔습니다. 매수가와 목표가를 확인한 뒤 저장하세요.</div>');
+        panel.insertAdjacentHTML('afterbegin', '<div class="info-banner" style="margin-bottom:10px;">발표종목 정보를 불러왔습니다. 아이디어 기준가와 목표가를 확인한 뒤 저장하세요.</div>');
       }
       document.getElementById('pick-cur-price').dispatchEvent(new Event('input'));
       document.getElementById('pick-tgt-cap').dispatchEvent(new Event('input'));
@@ -355,18 +348,7 @@ const ModalPick = (() => {
     const { data: already, error: lookupError } = await sb.from('picks')
       .select('id,stock_code,stock_name').eq('member_id', memberId).eq('month', month).maybeSingle();
     if (lookupError) throw lookupError;
-    let hasLinkedTrades = false;
-    if (already) {
-      const changingStock = already.stock_code !== inp.dataset.stockCode;
-      const { data: linkedTrades, error: tradeError } = await sb.from('trades').select('id').eq('pick_id', already.id).limit(1);
-      if (tradeError) throw tradeError;
-      hasLinkedTrades = Boolean(linkedTrades?.length);
-      if (changingStock && hasLinkedTrades) {
-          toast('매매내역이 있는 투자종목은 종목을 바꿀 수 없습니다. 목표가와 투자 의견만 수정해 주세요.');
-          return;
-      }
-      if (!confirm(month.replace('-','년 ') + '월 투자종목이 이미 있습니다.\n기존 기록을 안전하게 수정할까요?')) return;
-    }
+    if (already && !confirm(month.replace('-','년 ') + '월 탑픽을 수정할까요?\n실제 매매 기록과 보유 수량은 변경되지 않습니다.')) return;
 
     const payload = {
       member_id:     memberId,
@@ -388,16 +370,13 @@ const ModalPick = (() => {
     try {
       let saved;
       if (already) {
-        const safeUpdate = hasLinkedTrades
-          ? { target_price: tgtPrice, current_cap: curCap, target_cap: tgtCap, reason }
-          : payload;
-        const { error } = await sb.from('picks').update(safeUpdate).eq('id', already.id);
+        const { error } = await sb.from('picks').update(payload).eq('id', already.id);
         if (error) throw error;
         saved = { ...payload, id: already.id };
       } else {
         saved = await submitPick(payload);
       }
-      toast('투자종목을 저장했습니다.');
+      toast('탑픽을 저장했습니다. 실제 매수는 매수·매도에서 별도로 등록하세요.');
       _dirty = false;
       _submitting = false;
       close();
@@ -408,7 +387,7 @@ const ModalPick = (() => {
     } catch(e) {
       toast('오류: ' + (e.message || '제출 실패'));
     } finally {
-      if (btn) { btn.textContent = '투자종목 저장'; btn.disabled = false; }
+      if (btn) { btn.textContent = '탑픽 저장'; btn.disabled = false; }
     }
     } catch (error) { toast('종목 정보를 확인하지 못했습니다. ' + error.message); }
     finally { _submitting = false; locked.forEach(([element, disabled]) => { element.disabled = disabled; }); }

@@ -57,7 +57,7 @@ test('investment lifecycle uses accessible buttons and exclusive tab panels', ()
   assert.match(picks, /params\.set\('view', view\)/);
   assert.match(picks, /class="investment-search"[\s\S]*?class="sr-only">투자 기록 검색/);
   assert.match(picks, /id="investmentSearch" aria-label="투자 기록 검색"/);
-  assert.match(picks, /<details class="investment-ledger-details" open>/);
+  assert.match(picks, /<details class="investment-ledger-details" hidden>/);
 });
 
 test('investment lifecycle classification keeps ideas, live holdings and completed records separate', () => {
@@ -82,9 +82,8 @@ test('investment lifecycle classification keeps ideas, live holdings and complet
   ];
   const result = plain(context.partitionInvestmentItems('2026-08', rows, [{ id: 'a' }, { id: 'b' }]));
 
-  assert.deepEqual(result.ideas.map(item => item.id), ['idea-b', 'idea-a']);
-  assert.equal(result.ideas.find(item => item.id === 'idea-a')._isCarryFallback, true);
-  assert.deepEqual(result.holding.map(item => item.id), ['holding-c']);
+  assert.deepEqual(result.ideas, []); // Recommendations live on their own page.
+  assert.deepEqual(result.holding.map(item => item.id), ['holding-c', 'old-held-d']); // Distinct real accounts are never collapsed as idea carry chains.
   assert.deepEqual(result.completed.map(item => item.id), ['sold-d']);
 });
 

@@ -1,4 +1,4 @@
-const APP_VERSION = '20261125.1';
+const APP_VERSION = '20261126.1';
 const CACHE_NAME = `sss-pwa-v${APP_VERSION}`;
 const STYLE_URL = `./css/style.css?v=${APP_VERSION}`;
 
@@ -7,6 +7,8 @@ const APP_SHELL = [
   './app.html',
   './index.html',
   './picks.html',
+  './top-picks.html',
+  './js/top-picks.js',
   './trade.html',
   './members.html',
   './settle.html',

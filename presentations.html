@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 발표 관리 · 발표 기록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261125.1">
+  <link rel="stylesheet" href="css/style.css?v=20261126.1">
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
@@ -134,11 +134,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260921.3"></script>
+<script src="js/config.js?v=20261126.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261125.1"></script>
+<script src="js/utils/presentation.js?v=20261126.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261125.1"></script>
+<script src="js/db.js?v=20261126.1"></script>
 <script>
 let allData  = [];
 let members  = [];
@@ -568,7 +568,7 @@ async function openPresentationDetail(id) {
 
   let linkedPick = null;
   if (item.stock_code) {
-    const { data } = await sb.from('picks_with_trades')
+    const { data } = await sb.from('investment_ideas')
       .select('pick_id,stock_name,stock_code,status,member_name,month,target_price,target_cap,reason,buy_price,buy_quantity,sell_price,realized_return')
       .eq('stock_code', item.stock_code)
       .order('month', { ascending: false })
@@ -610,7 +610,7 @@ async function openPresentationDetail(id) {
     convertButton.onclick = () => navigateToAppRoute(`picks?id=${encodeURIComponent(linkedPick.pick_id)}`);
   } else {
     convertButton.textContent = '투자종목으로 전환';
-    convertButton.onclick = () => navigateToAppRoute(`picks?action=new&presentation=${encodeURIComponent(item.id)}`);
+    convertButton.onclick = () => navigateToAppRoute(`top-picks?action=new&presentation=${encodeURIComponent(item.id)}`);
   }
 }
 

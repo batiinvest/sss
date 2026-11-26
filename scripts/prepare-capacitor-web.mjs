@@ -19,6 +19,7 @@ const entries = [
   'schedule-order.html',
   'settle.html',
   'trade.html',
+  'top-picks.html',
   'manifest.webmanifest',
   'sw.js',
   'assets',

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSS · 투자 아이디어 (탑픽)</title>
+  <link rel="stylesheet" href="css/style.css?v=20261126.1">
+  <script>if(window!==window.parent){document.documentElement.classList.add('in-iframe');}</script>
+</head>
+<body>
+<div class="layout layout-page"><main class="main">
+  <div class="topbar"><div><h1 class="page-title">투자 아이디어 (탑픽)</h1>
+    <p class="updated">월별 추천 종목과 투자 의견을 관리합니다. 탑픽을 등록하거나 수정해도 실제 매매와 보유 수량은 바뀌지 않습니다.</p></div>
+    <button class="btn btn-primary" id="newIdea" onclick="openPickForm()">탑픽 등록·수정</button>
+  </div>
+  <div class="card mb-card"><div class="form-row" style="padding:16px;flex-wrap:wrap">
+    <div class="form-group"><label for="ideaMonth">추천 월</label><input id="ideaMonth" type="month" onchange="renderIdeas()"></div>
+    <div class="form-group"><label for="ideaMember">담당자</label><select id="ideaMember" onchange="renderIdeas()"><option value="">전체 담당자</option></select></div>
+    <div class="form-group"><label for="ideaSearch">종목·투자 의견 검색</label><input id="ideaSearch" type="search" oninput="renderIdeas()" placeholder="종목명, 코드 또는 투자 의견"></div>
+  </div></div>
+  <p id="ideaNotice" role="status">탑픽을 불러오는 중...</p>
+  <div id="ideaList" class="investment-card-grid"></div>
+  <div class="card" style="margin-top:20px;padding:16px"><strong>실제 매매는 별도로 기록합니다</strong>
+    <p>탑픽에 없는 종목도 매수할 수 있습니다. 실제 매수 가격과 수량은 매수·매도에서 입력하세요.</p>
+    <button class="btn" onclick="navigateToAppRoute('trade')">매수·매도 등록</button>
+    <button class="btn" onclick="navigateToAppRoute('picks?view=holding')">보유·완료 보기</button>
+  </div>
+</main></div>
+<div id="toast" class="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js?v=20261126.1"></script>
+<script src="js/utils/corporate-actions.js?v=20261126.1"></script>
+<script src="js/corporate-actions-service.js?v=20261126.1"></script>
+<script src="js/db.js?v=20261126.1"></script>
+<script src="js/utils/presentation.js?v=20261126.1"></script>
+<script src="js/modal-pick.js?v=20261126.1"></script>
+<script src="js/top-picks.js?v=20261126.1"></script>
+</body></html>

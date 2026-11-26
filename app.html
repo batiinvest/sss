@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>SSS · 스터디 펀드</title>
-  <link rel="stylesheet" href="css/style.css?v=20261125.1">
+  <link rel="stylesheet" href="css/style.css?v=20261126.1">
   <style>
     html, body { height: 100%; margin: 0; }
     .layout { height: 100vh; height: 100dvh; display: flex; overflow: hidden; }
@@ -126,7 +126,8 @@
     <a href="#" onclick="loadPage('fees');return false;"          class="nav-item" data-page="fees"><div class="nav-dot a"></div>스터디 회비</a>
 
     <div class="nav-section-label">투자</div>
-    <a href="#" onclick="loadPage('picks');return false;"   class="nav-item" data-page="picks"><div class="nav-dot"></div>투자</a>
+    <a href="#" onclick="loadPage('picks');return false;"   class="nav-item" data-page="picks"><div class="nav-dot"></div>보유·완료</a>
+    <a href="#" onclick="loadPage('top-picks');return false;" class="nav-item" data-page="top-picks"><div class="nav-dot"></div>투자 아이디어 (탑픽)</a>
     <a href="#" onclick="loadPage('trade');return false;"   class="nav-item" data-page="trade"><div class="nav-dot r"></div>매수·매도 등록</a>
     <a href="#" onclick="loadPage('settle');return false;"  class="nav-item" data-page="settle"><div class="nav-dot a"></div>결산 관리</a>
     <a href="#" onclick="loadPage('members');return false;" class="nav-item" data-page="members"><div class="nav-dot"></div>참여자 현황</a>
@@ -147,7 +148,7 @@
     <button type="button" data-page="index" onclick="loadPage('index')"><span aria-hidden="true">⌂</span><span>홈</span></button>
     <button type="button" data-page="presentations" onclick="loadPage('presentations?view=prepare')"><span aria-hidden="true">▤</span><span>발표</span></button>
     <button type="button" data-page="schedule-calendar" onclick="loadPage('schedule-calendar')"><span aria-hidden="true">▦</span><span>일정</span></button>
-    <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>투자</span></button>
+    <button type="button" data-page="picks" onclick="loadPage('picks')"><span aria-hidden="true">◇</span><span>보유</span></button>
     <button type="button" data-more-nav onclick="openMoreMenu()"><span aria-hidden="true">☰</span><span>내 메뉴</span></button>
   </nav>
 
@@ -181,7 +182,7 @@
     <div class="sheet-action-list">
       <button type="button" onclick="runQuickRoute('schedule-calendar?action=new')"><strong>스터디 일정 등록</strong><span>날짜·시간·장소를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('presentations?view=prepare')"><strong>발표 준비</strong><span>자동 배정된 순서와 발표종목을 확인합니다.</span></button>
-      <button type="button" onclick="runQuickRoute('picks?action=new')"><strong>아이디어 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
+      <button type="button" onclick="runQuickRoute('top-picks?action=new')"><strong>아이디어 등록</strong><span>투자 아이디어와 목표가를 등록합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=buy')"><strong>매수 등록</strong><span>보유를 시작하거나 추가 매수합니다.</span></button>
       <button type="button" onclick="runQuickRoute('trade?type=sell')"><strong>매도 등록</strong><span>일부 또는 전량 매도를 기록합니다.</span></button>
     </div>
@@ -194,6 +195,7 @@
     <div class="app-sheet-handle" aria-hidden="true"></div>
     <div class="app-sheet-head"><div><h2 id="moreMenuTitle">내 메뉴</h2><p>개인 정보와 보조 기능입니다.</p></div><button type="button" class="app-sheet-close" onclick="closeMoreMenu()" aria-label="내 메뉴 닫기">×</button></div>
     <div class="more-menu-grid">
+      <button type="button" onclick="runMoreRoute('top-picks')">투자 아이디어 (탑픽)</button>
       <button type="button" onclick="runMoreRoute('mypage')">내 정보</button>
       <button type="button" onclick="runMoreRoute('trade')">매수·매도</button>
       <button type="button" onclick="runMoreRoute('schedule-calendar')">스터디 일정</button>
@@ -211,16 +213,16 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
-<script src="js/config.js?v=20260921.3"></script>
-<script src="js/utils/presentation.js?v=20261125.1"></script>
+<script src="js/config.js?v=20261126.1"></script>
+<script src="js/utils/presentation.js?v=20261126.1"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261125.1"></script>
-<script src="js/db.js?v=20261125.1"></script>
-  <script src="js/pwa.js?v=20261125.1"></script>
+<script src="js/corporate-actions-service.js?v=20261126.1"></script>
+<script src="js/db.js?v=20261126.1"></script>
+  <script src="js/pwa.js?v=20261126.1"></script>
 <script>
 (function reloadAfterServiceWorkerUpgrade() {
   if (!('serviceWorker' in navigator)) return;
-  const refreshKey = 'sss-sw-refresh-20261125.1';
+  const refreshKey = 'sss-sw-refresh-20261126.1';
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
     if (refreshing || sessionStorage.getItem(refreshKey) === 'done') return;
@@ -231,13 +233,14 @@
 })();
 
 const APP_PAGES = new Set([
-  'index', 'presentations', 'picks', 'trade', 'schedule-calendar',
+  'index', 'presentations', 'picks', 'top-picks', 'trade', 'schedule-calendar',
   'fees', 'settle', 'members', 'mypage', 'admin', 'corporate-actions'
 ]);
 const PAGE_LABELS = {
   index: '홈',
   presentations: '발표 관리',
-  picks: '투자',
+  picks: '보유·완료',
+  'top-picks': '투자 아이디어 (탑픽)',
   trade: '매수·매도',
   'schedule-calendar': '스터디 일정',
   fees: '스터디 회비',
@@ -292,7 +295,7 @@ function normalizeRoute(input) {
 function routeFrameSrc(route) {
   const parsed = normalizeRoute(route);
   const params = new URLSearchParams(parsed.params);
-  params.set('v', '20261125.1');
+  params.set('v', '20261126.1');
   const framePage = parsed.page === 'presentations' && parsed.params.get('view') === 'prepare'
     ? 'schedule-order'
     : parsed.page;
@@ -520,7 +523,7 @@ async function runGlobalSearch(rawQuery) {
         .or(`topic.ilike.%${term}%,stock_code.ilike.%${term}%`)
         .not('presented_at', 'is', null)
         .order('presented_at', { ascending: false, nullsFirst: false }).limit(8),
-      sb.from('picks_with_trades')
+      sb.from('investment_ideas')
         .select('pick_id,stock_name,stock_code,status,member_name,month,buy_price,buy_quantity,realized_return')
         .or(`stock_name.ilike.%${term}%,stock_code.ilike.%${term}%`)
         .order('month', { ascending: false }).limit(8)
@@ -547,12 +550,12 @@ async function runGlobalSearch(rawQuery) {
     }
     if (picks.length) {
       html += '<div class="search-section-title">투자</div>' + picks.map(item =>
-        `<button type="button" class="search-result-row" data-route="picks?id=${encodeURIComponent(item.pick_id)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon search-result-pick" aria-hidden="true">◇</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml([item.member_name, item.stock_code].filter(Boolean).join(' · '))}</small></span><span class="search-result-state">${investmentStateLabel(item)}</span></button>`
+        `<button type="button" class="search-result-row" data-route="top-picks?id=${encodeURIComponent(item.pick_id)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon search-result-pick" aria-hidden="true">◇</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml([item.member_name, item.stock_code].filter(Boolean).join(' · '))}</small></span><span class="search-result-state">탑픽</span></button>`
       ).join('');
     }
     if (stocks.length) {
       html += '<div class="search-section-title">전체 종목</div>' + stocks.slice(0, 5).map(item =>
-        `<button type="button" class="search-result-row" data-route="picks?search=${encodeURIComponent(item.stock_name)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon" aria-hidden="true">⌕</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml(item.stock_code + ' · ' + (item.market || ''))}</small></span><span class="search-result-price">${item.price ? Number(item.price).toLocaleString('ko-KR') + '원' : '—'}</span></button>`
+        `<button type="button" class="search-result-row" data-route="top-picks?search=${encodeURIComponent(item.stock_name)}" data-label="${escapeHtml(item.stock_name)}"><span class="search-result-icon" aria-hidden="true">⌕</span><span><strong>${escapeHtml(item.stock_name)}</strong><small>${escapeHtml(item.stock_code + ' · ' + (item.market || ''))}</small></span><span class="search-result-price">${item.price ? Number(item.price).toLocaleString('ko-KR') + '원' : '—'}</span></button>`
       ).join('');
     }
     results.innerHTML = html;

@@ -217,9 +217,9 @@ test('automatic extension is shown consistently instead of as a missing submissi
   assert.match(index, /직접 \$\{directCount\}명 · 자동 연장 \$\{automatic\.length\}명/);
   assert.match(index, /automaticPickLabel\(p\)/);
   assert.match(index, /detailRoute = `picks\?id=.*&month=/);
-  assert.match(index, /const holdPicks = selectLatestHeldPickChains\(picks\)/);
-  assert.match(index, /const isAutoSource = effectivePick\?\._isCarryFallback/);
-  assert.match(mypage, /effectiveCurrentPick\?\._isCarryFallback/);
+  assert.match(index, /const p = effectivePick/);
+  assert.match(index, /effectivePick\?\._isCarryFallback/);
+  assert.match(mypage, /fetchTradePositions/);
   assert.match(mypage, /월 자동 연장<\/span>/);
 });
 

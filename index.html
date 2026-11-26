@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 홈</title>
-  <link rel="stylesheet" href="css/style.css?v=20261125.1">
+  <link rel="stylesheet" href="css/style.css?v=20261126.1">
   <script>
     (function () {
       if (window === window.parent) {
@@ -68,7 +68,7 @@
         <div class="home-priority-label">이번 달 내 아이디어</div>
         <strong id="homeMonthlyIdeaTitle">아이디어 상태를 불러오는 중...</strong>
         <p id="homeMonthlyIdeaMeta">직접 등록 또는 자동 연장 상태를 확인합니다.</p>
-        <button id="homeMonthlyIdeaLink" type="button" class="home-priority-link" onclick="navigateToAppRoute('picks?view=ideas')">아이디어 보기 <span aria-hidden="true">→</span></button>
+        <button id="homeMonthlyIdeaLink" type="button" class="home-priority-link" onclick="navigateToAppRoute('top-picks')">아이디어 보기 <span aria-hidden="true">→</span></button>
       </article>
 
       <article class="home-priority-card" data-home-action="fund-summary">
@@ -83,7 +83,7 @@
 
     <div class="home-quick-actions" aria-label="빠른 메뉴">
       <button type="button" onclick="navigateToAppRoute('presentations?view=prepare')"><span aria-hidden="true">▤</span> 발표 준비</button>
-      <button type="button" onclick="navigateToAppRoute('picks?view=ideas')"><span aria-hidden="true">◇</span> 투자 아이디어</button>
+      <button type="button" onclick="navigateToAppRoute('top-picks')"><span aria-hidden="true">◇</span> 투자 아이디어</button>
       <button type="button" onclick="window.parent.openQuickAdd()"><span aria-hidden="true">＋</span> 새로 등록</button>
     </div>
 
@@ -328,17 +328,17 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260921.3"></script>
+<script src="js/config.js?v=20261126.1"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261125.1"></script>
+<script src="js/corporate-actions-service.js?v=20261126.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261125.1"></script>
+<script src="js/utils/presentation.js?v=20261126.1"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261125.1"></script>
-<script src="js/schedule-shared.js?v=20261125.1"></script>
-<script src="js/modal-pick.js?v=20261125.1"></script>
-<script src="js/modal-pres.js?v=20261125.1"></script>
+<script src="js/db.js?v=20261126.1"></script>
+<script src="js/schedule-shared.js?v=20261126.1"></script>
+<script src="js/modal-pick.js?v=20261126.1"></script>
+<script src="js/modal-pres.js?v=20261126.1"></script>
 <script>
 let currentPicks   = [];
 let currentMembers = [];
@@ -447,7 +447,7 @@ async function initMobileHome(now = new Date()) {
       .order('presented_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(12),
-    fetchPicksByMonthWithCarryFallback(month),
+    fetchTradePositions(),
     fetchMembers(),
     loadPresentationOrderData(),
   ]);
@@ -549,7 +549,7 @@ function automaticPickLabel(pick) {
 function renderMobileActiveInvestments(items) {
   const container = document.getElementById('mobileActiveInvestments');
   if (!items.length) {
-    container.innerHTML = '<div class="mobile-empty-state"><strong>현재 보유 종목이 없습니다.</strong><span>투자 아이디어를 등록하면 여기에서 바로 확인할 수 있습니다.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'picks?action=new\')">아이디어 등록</button></div>';
+    container.innerHTML = '<div class="mobile-empty-state"><strong>현재 보유 종목이 없습니다.</strong><span>매수를 등록하면 보유 수량과 매수 금액이 표시됩니다.</span><button type="button" class="btn btn-primary" onclick="navigateToAppRoute(\'trade\')">매수 등록</button></div>';
     return;
   }
   container.innerHTML = items.map(item => {
@@ -575,7 +575,7 @@ async function loadDashboardData() {
   const [members, picks, allPicksRaw, trades, allTradesData, me, turnData] = await Promise.all([
     fetchMemberStats(),
     loadDashboardPicks(month),
-    fetchAllPicks(),
+    fetchTradePositions(),
     fetchTrades(8),
     fetchAllTrades(),
     getCurrentMember(),
@@ -814,7 +814,7 @@ function renderHomePriorities(dashboardData, myData) {
         tone: 'ready',
       });
       ideaLink.textContent = '아이디어 변경 →';
-      ideaLink.onclick = () => navigateToAppRoute('picks?action=new&view=ideas');
+      ideaLink.onclick = () => navigateToAppRoute('top-picks?action=new&view=ideas');
     } else if (effectivePick?._isCarryFallback) {
       setHomePriorityCard('monthly-idea', {
         state: '자동 연장',
@@ -823,7 +823,7 @@ function renderHomePriorities(dashboardData, myData) {
         tone: 'ready',
       });
       ideaLink.textContent = '아이디어 변경 →';
-      ideaLink.onclick = () => navigateToAppRoute('picks?action=new&view=ideas');
+      ideaLink.onclick = () => navigateToAppRoute('top-picks?action=new&view=ideas');
     } else {
       setHomePriorityCard('monthly-idea', {
         state: '등록 필요',
@@ -832,7 +832,7 @@ function renderHomePriorities(dashboardData, myData) {
         tone: 'attention',
       });
       ideaLink.textContent = '아이디어 등록 →';
-      ideaLink.onclick = () => navigateToAppRoute('picks?action=new&view=ideas');
+      ideaLink.onclick = () => navigateToAppRoute('top-picks?action=new&view=ideas');
     }
   }
 
@@ -861,7 +861,7 @@ async function loadDashboardPicks(month) {
 
 async function loadMyDashboardData(memberId) {
   const [myPicksRes, myPresRes] = await Promise.all([
-    sb.from('picks_with_trades').select('*').eq('member_id', memberId).order('month', { ascending: false }),
+    sb.from('investment_ideas').select('*').eq('member_id', memberId).order('month', { ascending: false }),
     sb.from('presentations').select('*').eq('member_id', memberId)
       .order('presented_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false }),
@@ -1039,7 +1039,7 @@ async function renderMySection() {
   if (!me) { document.getElementById('myMemberNotice').style.display = 'block'; return; }
   document.getElementById('mySection').style.display = 'grid';
   const [myPicksRes, myPresRes] = await Promise.all([
-    sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false }),
+    sb.from('investment_ideas').select('*').eq('member_id', me.id).order('month', { ascending: false }),
     sb.from('presentations').select('*').eq('member_id', me.id)
       .order('presented_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false }),
@@ -1050,113 +1050,23 @@ async function renderMySection() {
 
 // 데이터를 받아 바로 렌더 (DB 호출 없음)
 function renderMyPicksData(me, picks) {
-  const thisMonth = currentMonth();
-  const submitted = picks.find(p => p.month === thisMonth);
-  const effectivePick = buildCarryForwardPicks(
-    thisMonth,
-    picks.filter(p => p.month === thisMonth),
-    picks,
-    { activeMemberIds: me.is_active === false ? new Set() : new Set([me.id]) }
-  ).find(p => p.member_id === me.id);
-  const bannerEl  = document.getElementById('myPickBanner');
-
-  bannerEl.style.display = 'block';
-  if (submitted) {
-    bannerEl.innerHTML =
-      `<div style="background:var(--greenbg);border:0.5px solid #9fe1cb;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--green);">
-        <strong>${thisMonth.replace('-','년 ')}월</strong> 아이디어 직접 등록 — ${escapeHtml(submitted.stock_name)}
-       </div>`;
-  } else if (effectivePick?._isCarryFallback) {
-    bannerEl.innerHTML =
-      `<div style="background:#e8f2fb;border:0.5px solid #b5d4f4;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:#185fa5;display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <span>↻ <strong>${thisMonth.replace('-','년 ')}월</strong> ${escapeHtml(effectivePick.stock_name)} 자동 연장</span>
-        <a href="picks.html?action=new" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;white-space:nowrap;">변경하기 →</a>
-       </div>`;
-  } else {
-    bannerEl.innerHTML =
-      `<div style="background:var(--amberbg);border:0.5px solid #f0c070;border-radius:var(--r-md);padding:8px 12px;font-size:12px;color:var(--amber);display:flex;justify-content:space-between;align-items:center;">
-        <span><strong>${thisMonth.replace('-','년 ')}월</strong> 아이디어 등록 필요</span>
-        <a href="picks.html?action=new" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;">등록하기 →</a>
-       </div>`;
-  }
-
-  const holdPicks = selectLatestHeldPickChains(picks);
-  const cardsEl   = document.getElementById('myPickCards');
-
-  if (!holdPicks.length) {
-    cardsEl.innerHTML = `<div style="font-size:13px;color:var(--muted);padding:12px 0;text-align:center;">보유 중인 내 종목이 없습니다</div>`;
-    return;
-  }
-
-  cardsEl.innerHTML = holdPicks.map(p => {
-    const cur      = globalPriceMap[p.stock_code];
-    const curPrice = cur?.price;
-    const dayChg   = cur?.change;
-
-    // 매수가: price_at(이번 달 입력가) 우선, 없으면 trades 체결가
-    const basePrice = p.price_at || p.buy_price;
-
-    // price_at 기준 수익률 (이번 달 성과)
-    const pnl     = (basePrice && p.buy_quantity && curPrice)
-      ? (curPrice - basePrice) * p.buy_quantity : null;
-    const pnlRate = calcReturnRate(basePrice, curPrice);
-
-    const isCarried = !!p.carried_from;
-    const isAutoSource = effectivePick?._isCarryFallback &&
-      String(effectivePick.pick_id || effectivePick.id) === String(p.pick_id || p.id);
-    const myValuation = buildMemberPortfolioValuation(me, currentPortfolioContext.holdings,
-      currentPortfolioContext.allTradesData, globalPriceMap);
-    const positions = myValuation.positions.filter(position => position.stock_code === p.stock_code);
-    const realQuantity = positions.reduce((sum, position) => sum + position.quantity, 0);
-    const realBuy = realQuantity ? positions.reduce((sum, position) => sum + position.cost, 0) / realQuantity : null;
-    const realRate = realBuy ? calcReturnRate(realBuy, curPrice) : null;
-
-    const upside   = (p.target_price && curPrice) ? ((p.target_price - curPrice) / curPrice * 100).toFixed(1) : null;
-    const pnlColor = pnlRate === null ? '' : pnlRate >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
-    const dayColor = dayChg  === null ? '' : dayChg  >= 0 ? 'color:var(--dn)' : 'color:var(--up)';
-
-    return `<div style="background:var(--bg);border-radius:var(--r-md);padding:10px 14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <div>
-          <span style="font-size:14px;font-weight:500;">${p.stock_name}</span>
-          <span style="font-size:11px;color:var(--muted);margin-left:6px;">${p.stock_code||''} · ${(p.month||'').replace('-','년 ')}월</span>
-          ${isAutoSource
-            ? `<span style="font-size:10px;background:#e8f2fb;color:#185fa5;padding:1px 5px;border-radius:3px;margin-left:4px;">${thisMonth.replace('-','년 ')}월 자동 연장</span>`
-            : isCarried ? '<span style="font-size:10px;background:var(--amberbg);color:var(--amber);padding:1px 5px;border-radius:3px;margin-left:4px;">이월</span>' : ''}
-        </div>
-        <span class="badge b-hold">${realQuantity ? '보유 중' : '아이디어'}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;">
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">${p._priceAdjusted ? '무상증자 조정 기준가' : '아이디어 기준가'}</div>
-          <div style="font-weight:500;">${basePrice ? basePrice.toLocaleString()+'원' : '—'}</div>
-          ${realBuy
-            ? `<div style="font-size:10px;color:var(--muted);">실제 평균 매수가 ${realBuy.toLocaleString()}원</div>` : ''}
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">현재가</div>
-          <div style="font-weight:500;">${curPrice ? curPrice.toLocaleString()+'원' : '—'}
-            ${dayChg != null ? `<span style="font-size:10px;${dayColor}">(${dayChg>=0?'+':''}${Number(dayChg).toFixed(1)}%)</span>` : ''}
-          </div>
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">기준가 대비 수익률</div>
-          <div style="font-weight:500;${pnlColor}">
-            ${pnlRate !== null ? (pnlRate>=0?'+':'') + pnlRate.toFixed(1) + '%' : '—'}
-          </div>
-          ${realRate !== null
-            ? `<div style="font-size:10px;" class="${rCls(realRate)}">실제 매수가 대비 ${realRate>=0?'+':''}${realRate.toFixed(1)}%</div>` : ''}
-        </div>
-        <div>
-          <div style="color:var(--muted);margin-bottom:2px;">목표가</div>
-          <div style="font-weight:500;color:var(--green);">
-            ${p.target_price ? p.target_price.toLocaleString()+'원' : '—'}
-            ${upside !== null ? `<span style="font-size:10px;">(+${upside}%)</span>` : ''}
-          </div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+  const month = currentMonth();
+  const effectivePick = buildCarryForwardPicks(month, picks.filter(p => p.month === month), picks,
+    { activeMemberIds: me.is_active === false ? new Set() : new Set([me.id]) }).find(p => p.member_id === me.id);
+  const banner = document.getElementById('myPickBanner');
+  banner.style.display = 'block';
+  banner.innerHTML = effectivePick
+    ? `<p>${escapeHtml(month)} · ${effectivePick?._isCarryFallback ? '아이디어 자동 연장' : '탑픽 직접 등록'} — ${escapeHtml(effectivePick.stock_name)}</p>`
+    : '<p>이번 달 탑픽을 등록해 주세요.</p>';
+  const cards = document.getElementById('myPickCards');
+  if (!effectivePick) { cards.innerHTML = ''; return; }
+  const p = effectivePick;
+  cards.innerHTML = `<div class="card" style="padding:14px">
+    <strong>${escapeHtml(p.stock_name)}</strong> <span class="badge">탑픽</span>
+    <p>아이디어 기준가 ${p.price_at ? Number(p.price_at).toLocaleString('ko-KR') + '원' : '—'} · 목표가 ${p.target_price ? Number(p.target_price).toLocaleString('ko-KR') + '원' : '—'}</p>
+    <p style="white-space:pre-wrap">${escapeHtml(p.reason || '')}</p>
+    <button class="btn" onclick="navigateToAppRoute('top-picks')">탑픽 보기·수정</button>
+  </div>`;
 }
 
 async function renderMyPresData(me, presData, priceMap) {
@@ -1222,7 +1132,7 @@ async function renderMyPresData(me, presData, priceMap) {
 
 // 하위 호환 (팝업 닫힐 때 호출되는 기존 함수명 유지)
 async function renderMyPicks(me) {
-  const { data } = await sb.from('picks_with_trades').select('*').eq('member_id', me.id).order('month', { ascending: false });
+  const { data } = await sb.from('investment_ideas').select('*').eq('member_id', me.id).order('month', { ascending: false });
   renderMyPicksData(me, data || []);
 }
 async function renderMyPresentations(me) {
@@ -1257,7 +1167,7 @@ async function refreshPrices() {
   const rateEl = document.getElementById('unrealizedRate');
 
   try {
-    const holdPicks = await fetchAllPicks();
+    const holdPicks = await fetchTradePositions();
 
     const activeMemberIds = new Set(
       (currentPortfolioContext.members || []).map(member => String(member.id))
@@ -1494,26 +1404,13 @@ function renderPicksTable(picks, prices) {
     const upside     = p.target_price && (curPrice || refPrice)
       ? (((p.target_price - (curPrice||refPrice)) / (curPrice||refPrice)) * 100).toFixed(1)
       : null;
-    const badgeHtml  = p.status === 'sold' ? statusBadge('sold') : statusBadge('hold');
+    const badgeHtml = '<span class="badge">탑픽</span>';
     const isCarried  = !!p.carried_from;
     const dayChangeEl = dayChange != null
       ? `<span style="font-size:11px;" class="${rCls(dayChange)}">${dayChange>=0?'+':''}${dayChange}%</span>`
       : '<span class="muted" style="font-size:11px;">-</span>';
 
-    // 이월 시 원본 월 실질 수익률 계산
-    let origRate = null;
-    if (isCarried && p.carried_from && curPrice) {
-      // allCurrentPicks(보유 중 전체)에서 원본 월 + 같은 종목의 buy_price 찾기
-      const origPick = (allCurrentPicks || []).find(op =>
-        op.member_id === p.member_id &&
-        op.month === p.carried_from &&
-        op.stock_code === p.stock_code &&
-        op.buy_price
-      );
-      if (origPick?.buy_price) {
-        origRate = calcReturnRate(origPick.buy_price, curPrice);
-      }
-    }
+    const origRate = null; // 탑픽 성과에는 실제 보유 원가를 섞지 않는다.
 
     // 수익률 셀
     let rateCell;

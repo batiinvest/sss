@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 매수·매도 등록</title>
-  <link rel="stylesheet" href="css/style.css?v=20261125.1">
+  <link rel="stylesheet" href="css/style.css?v=20261126.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -14,7 +14,7 @@
     <div class="topbar">
       <div>
         <div class="page-title">매수·매도 등록</div>
-        <div class="updated">거래 정보를 입력하면 보유현황에 바로 반영됩니다.</div>
+        <div class="updated">탑픽 등록 없이 매수할 수 있습니다. 실제 체결가와 몇 주를 샀는지 입력하세요.</div>
       </div>
     </div>
 
@@ -43,10 +43,15 @@
             <select id="buy-member"><option value="">선택</option></select>
           </div>
           <div class="form-group">
-            <label for="buy-pick">매수 종목</label>
+            <label for="buy-stock">매수 종목 검색</label>
+            <div style="position:relative">
+              <input id="buy-stock" type="search" autocomplete="off" placeholder="종목명 또는 종목코드 검색" aria-label="매수 종목 검색">
+              <div id="buy-stock-results" class="stock-dd" style="display:none;position:absolute;z-index:20;background:var(--surface,#fff);width:100%;max-height:280px;overflow:auto;border:1px solid var(--border)"></div>
+            </div>
+            <p id="buyStockSelected" class="muted" role="status">검색 결과에서 종목을 선택하세요.</p>
+            <label for="buy-pick">기존 거래에 추가 매수 (선택)</label>
             <select id="buy-pick"><option value="">추천자 먼저 선택</option></select>
-            <p id="buyPickHelp" class="muted" role="status">등록된 투자종목을 선택하거나 새 종목을 검색·등록하세요.</p>
-            <button type="button" class="btn" id="buyRegisterPick" onclick="openTradePickRegistration()">종목 검색·등록</button>
+            <p id="buyPickHelp" class="muted" role="status">새 종목은 검색해서 선택하고, 기존 종목은 아래 기록을 선택하세요.</p>
           </div>
           <div class="form-group">
             <label for="buy-date">매수일</label>
@@ -58,8 +63,8 @@
               <input type="number" id="buy-price" min="1" inputmode="numeric" placeholder="예: 72,400" oninput="calcBuyAmount()" />
             </div>
             <div class="form-group">
-              <label for="buy-qty">수량 (주)</label>
-              <input type="number" id="buy-qty" min="1" inputmode="numeric" placeholder="예: 13" oninput="calcBuyAmount()" />
+              <label for="buy-qty">매수 수량 · 몇 주 샀나요? (주)</label>
+              <input type="number" id="buy-qty" min="1" inputmode="numeric" placeholder="예: 22주 → 22 입력" oninput="calcBuyAmount()" />
             </div>
           </div>
           <div style="background:var(--bg);border-radius:var(--r-md);padding:10px 12px;font-size:13px;">
@@ -124,7 +129,7 @@
     <!-- 전체 매매 내역 -->
     <div class="card">
       <div class="card-head">
-        <div class="card-title">전체 매매 내역</div>
+        <div class="card-title">최근 매매 내역 (최대 50건)</div>
         <div class="desktop-filter-controls" style="display:flex;gap:6px;">
           <select id="tradeFilterMember" aria-label="매매 담당자 필터" onchange="filterTrades()" style="font-size:12px;padding:4px 8px;width:auto;">
             <option value="">전체 참여자</option>
@@ -141,7 +146,7 @@
         <table>
           <caption class="sr-only">전체 매수 및 매도 거래내역</caption>
           <thead><tr>
-            <th class="col-hide-mobile">일시</th><th class="col-hide-mobile">추천자</th><th>종목</th><th>구분</th>
+            <th class="col-hide-mobile">일시</th><th class="col-hide-mobile">담당자</th><th>종목</th><th>구분</th>
             <th>체결가</th><th class="col-hide-mobile">수량</th><th>금액</th><th class="col-hide-mobile">메모</th>
           </tr></thead>
           <tbody id="tradesTbody">
@@ -157,12 +162,12 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260921.3"></script>
+<script src="js/config.js?v=20261126.1"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261125.1"></script>
-<script src="js/db.js?v=20261125.1"></script>
-<script src="js/modal-pick.js?v=20261125.1"></script>
+<script src="js/corporate-actions-service.js?v=20261126.1"></script>
+<script src="js/db.js?v=20261126.1"></script>
 <script>
+let selectedBuyStock = null;
 let members  = [];
 let allPicks = [];
 let allTrades = [];
@@ -175,6 +180,7 @@ const tradeParams = new URLSearchParams(location.search);
 async function init() {
   const session = await requireAuth();
   if (!session) return;
+  setupTradeStockSearch();
 
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
   document.getElementById('buy-date').value = today;
@@ -184,7 +190,7 @@ async function init() {
   try {
     [members, allPicks, allTrades, me, admin] = await Promise.all([
     fetchMembers({ strict: true }),
-    fetchAllPicks({}, { strict: true }),
+    fetchTradePositions({}, { strict: true }),
     fetchTrades(50, { strict: true }),
     getCurrentMember(),
     isAdmin(),
@@ -282,8 +288,8 @@ function showTradeForm(type) {
 async function preselectRequestedPick(type, pickId) {
   if (!pickId) return;
   const pick = allPicks.find(item => String(item.pick_id || item.id) === String(pickId));
-  if (!pick) { toast('선택한 투자 아이디어를 찾지 못했습니다.'); return; }
-  if (!admin && (!me || pick.member_id !== me.id)) { toast('본인의 투자 아이디어만 등록할 수 있습니다.'); return; }
+  if (!pick) { toast('선택한 거래 종목을 찾지 못했습니다.'); return; }
+  if (!admin && (!me || pick.member_id !== me.id)) { toast('본인의 거래만 등록할 수 있습니다.'); return; }
   const memberSelect = document.getElementById(`${type}-member`);
   memberSelect.value = pick.member_id;
   updatePickSelect(type);
@@ -310,10 +316,10 @@ function updatePickSelect(type) {
 
   if (!filtered.length) {
     pickSel.innerHTML += type === 'buy'
-      ? '<option value="" disabled>매수 가능한 아이디어 없음</option>'
+      ? '<option value="" disabled>기존 거래 없음 · 위에서 종목 검색</option>'
       : '<option value="" disabled>보유 중인 종목 없음</option>';
     document.getElementById(type + 'PickHelp').textContent = !memberId ? '담당자를 먼저 선택하세요.' : type === 'buy'
-      ? '이 담당자의 등록 종목이 없습니다. 종목 검색·등록을 눌러 추가하세요.'
+      ? '이 담당자의 거래 기록이 없습니다. 위에서 종목을 검색해 바로 매수하세요.'
       : '이 담당자에게 매수 기록이 있는 종목이 없습니다.';
     if (type === 'sell') loadAvailableSellQuantity();
     return;
@@ -327,28 +333,33 @@ function updatePickSelect(type) {
   });
   if (filtered.some(p => String(p.pick_id || p.id) === String(previous))) pickSel.value = previous;
   document.getElementById(type + 'PickHelp').textContent = type === 'buy'
-    ? '등록된 종목을 선택하세요. 새 종목은 검색·등록 후 매수를 저장합니다.'
+    ? '추가 매수할 기존 기록을 선택하거나 위에서 새 종목을 검색하세요.'
     : '현재 잔고가 없는 종목도 과거 매도일의 잔고를 확인할 수 있습니다.';
   if (type === 'sell') loadAvailableSellQuantity();
 }
 
-async function openTradePickRegistration() {
-  const memberId = document.getElementById('buy-member').value;
-  const member = members.find(row => row.id === memberId);
-  if (!member || (!admin && memberId !== me?.id)) return setTradeError('buy', '등록할 담당자를 먼저 선택하세요.');
-  try {
-    const date = document.getElementById('buy-date').value;
-    tradeDateTime(date);
-    ModalPick._onSubmit = async saved => {
-      allPicks = await fetchAllPicks({}, { strict: true });
-      document.getElementById('buy-member').value = memberId;
-      updatePickSelect('buy'); updatePickSelect('sell');
-      document.getElementById('buy-pick').value = saved.id;
-      document.getElementById('buy-price').focus();
-      toast('종목을 선택했습니다. 실제 매수가와 수량을 입력해 매수를 저장하세요.');
-    };
-    await ModalPick.open({ member, month: date.slice(0, 7) });
-  } catch (error) { setTradeError('buy', error.message); }
+function setupTradeStockSearch() {
+  const input = document.getElementById('buy-stock');
+  input.addEventListener('input', () => {
+    selectedBuyStock = null;
+    document.getElementById('buy-pick').value = '';
+    document.getElementById('buyStockSelected').textContent = '검색 결과에서 종목을 선택하세요.';
+  });
+  bindStockSearch(input, document.getElementById('buy-stock-results'), stock => {
+    selectedBuyStock = { ...stock };
+    input.value = stock.stock_name;
+    document.getElementById('buy-pick').value = '';
+    document.getElementById('buyStockSelected').textContent = stock.stock_name + ' · ' + stock.stock_code;
+    document.getElementById('buy-price').focus();
+  });
+  document.getElementById('buy-pick').addEventListener('change', () => {
+    selectedBuyStock = null;
+    input.value = '';
+    const id = document.getElementById('buy-pick').value;
+    const row = allPicks.find(item => String(item.pick_id || item.id) === String(id));
+    document.getElementById('buyStockSelected').textContent = row
+      ? row.stock_name + ' · 기존 거래에 추가 매수' : '검색 결과에서 종목을 선택하세요.';
+  });
 }
 
 async function loadAvailableSellQuantity() {
@@ -433,10 +444,10 @@ async function submitBuy() {
 
   setTradeError('buy', '');
   if (!admin && (!me || memberId !== me.id)) return setTradeError('buy', '본인의 매수만 등록할 수 있습니다.');
-  if (!memberId || !pickId || !date || !Number.isFinite(price) || price <= 0 || !Number.isFinite(quantity) || quantity <= 0) {
-    return setTradeError('buy', '투자 아이디어, 매수일, 매수가와 수량을 모두 확인해 주세요.');
+  if (!memberId || (!pickId && !selectedBuyStock?.stock_code) || !date || !Number.isFinite(price) || price <= 0 || !Number.isFinite(quantity) || quantity <= 0) {
+    return setTradeError('buy', '종목, 매수일, 매수가와 매수 수량을 모두 확인해 주세요.');
   }
-  if (!pick || pick.member_id !== memberId) return setTradeError('buy', '담당자와 투자 아이디어 정보가 일치하지 않습니다.');
+  if (pickId && (!pick || pick.member_id !== memberId)) return setTradeError('buy', '담당자와 거래 종목 정보가 일치하지 않습니다.');
 
   const button = document.getElementById('buySubmitBtn');
   setTradeFormBusy('buy', true);
@@ -445,13 +456,16 @@ async function submitBuy() {
   let saved = false;
 
   try {
-    await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'buy',
-      stock_name: pick.stock_name, price, quantity, note: note || null,
+    await submitTrade({ member_id: memberId, ...(pickId ? { position_id: pickId } : { stock_code: selectedBuyStock.stock_code }), trade_type: 'buy',
+      stock_name: pick?.stock_name || selectedBuyStock.stock_name, price, quantity, note: note || null,
       traded_at: tradeDateTime(date) });
     saved = true;
     clearTradeInputs('buy');
+    selectedBuyStock = null;
+    document.getElementById('buy-stock').value = '';
+    document.getElementById('buyStockSelected').textContent = '검색 결과에서 종목을 선택하세요.';
     await reloadTradeState('buy', memberId);
-    toast('매수를 저장했습니다. 투자 화면의 보유 중 탭에서 확인할 수 있습니다.');
+    toast('매수를 저장했습니다. 보유·완료 화면에서 확인할 수 있습니다.');
   } catch(e) {
     setTradeError('buy', saved ? '매수는 저장됐지만 화면 갱신에 실패했습니다. 새로고침해 주세요.' : '매수 처리 결과를 확인하지 못했습니다. 같은 입력으로 재시도해 주세요. ' + (e.message || ''));
   } finally {
@@ -493,7 +507,7 @@ async function submitSell() {
         return setTradeError('sell', `보유수량 ${availableSellQuantity.toLocaleString('ko-KR')}주를 초과해 매도할 수 없습니다.`);
       }
     }
-    await submitTrade({ member_id: memberId, pick_id: pickId, trade_type: 'sell',
+    await submitTrade({ member_id: memberId, position_id: pickId, trade_type: 'sell',
       stock_name: pick.stock_name, price, quantity, note: note || null,
       traded_at: tradeDateTime(date) });
     saved = true;
@@ -529,7 +543,7 @@ function clearTradeInputs(type) {
 }
 
 async function reloadTradeState(type, memberId) {
-  [allPicks, allTrades] = await Promise.all([fetchAllPicks({}, { strict: true }), fetchTrades(50, { strict: true })]);
+  [allPicks, allTrades] = await Promise.all([fetchTradePositions({}, { strict: true }), fetchTrades(50, { strict: true })]);
   filterTrades();
   document.getElementById(type + '-member').value = memberId;
   updatePickSelect('buy');

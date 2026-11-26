@@ -24,9 +24,9 @@ function fixture(extra = {}) {
 
 test('buy list explains empty state and includes unbought, additional-buy and repurchase stocks for only the chosen member', () => {
   const { ctx, el } = fixture();
-  vm.runInContext(section('function updatePickSelect', 'async function openTradePickRegistration'), ctx);
+  vm.runInContext(section('function updatePickSelect', 'function setupTradeStockSearch'), ctx);
   el('buy-member').value = 'm'; ctx.updatePickSelect('buy');
-  assert.match(el('buyPickHelp').textContent, /종목 검색·등록/);
+  assert.match(el('buyPickHelp').textContent, /종목을 검색/);
   ctx.allPicks = [
     { id: 'idea', member_id: 'm', stock_name: '삼성전자', month: '2026-11', status: 'pending' },
     { id: 'hold', member_id: 'm', stock_name: '원익IPS', month: '2026-10', buy_price: 20000, status: 'hold' },
@@ -47,7 +47,7 @@ test('sell list includes completed positions for historical dates, excludes neve
     { id: 'sold', member_id: 'm', stock_name: '완료종목', buy_price: 100, buy_quantity: 0, status: 'sold' },
     { id: 'idea', member_id: 'm', stock_name: '미매수', buy_price: null, status: 'pending' },
   ] });
-  vm.runInContext(section('function updatePickSelect', 'async function openTradePickRegistration'), ctx);
+  vm.runInContext(section('function updatePickSelect', 'function setupTradeStockSearch'), ctx);
   el('sell-member').value = 'm'; ctx.updatePickSelect('sell');
   assert.match(el('sell-pick').innerHTML, /보유종목/);
   assert.match(el('sell-pick').innerHTML, /완료종목.*과거 거래 확인/);
@@ -89,7 +89,7 @@ test('balance lookup errors, missing backend and invalid quantities never leave 
 
 test('saving either trade refreshes both pick lists and retains history filters', async () => {
   const updated = [], renders = [];
-  const { ctx, el } = fixture({ fetchAllPicks: async () => [{ id: 'new' }], fetchTrades: async () => [{ id: 't' }],
+  const { ctx, el } = fixture({ fetchTradePositions: async () => [{ id: 'new' }], fetchTrades: async () => [{ id: 't' }],
     updatePickSelect: type => updated.push(type), filterTrades: () => renders.push('filtered'), calcBuyAmount() {} });
   vm.runInContext(section('async function reloadTradeState', 'function renderTrades'), ctx);
   for (const type of ['buy', 'sell']) await ctx.reloadTradeState(type, 'm');
@@ -98,17 +98,20 @@ test('saving either trade refreshes both pick lists and retains history filters'
   assert.equal(el('sell-member').value, 'm');
 });
 
-test('new stock registration targets the selected member and selects the saved stock without clearing trade inputs', async () => {
-  let options;
-  const { ctx, el } = fixture({ members: [{ id: 'm', name: '선택한 담당자' }],
-    ModalPick: { open: async opts => { options = opts; } }, tradeDateTime: date => date,
-    updatePickSelect() {}, fetchAllPicks: async () => [{ pick_id: 'p', member_id: 'm' }], setTradeError: () => assert.fail('unexpected error') });
-  vm.runInContext(section('async function openTradePickRegistration', 'async function loadAvailableSellQuantity'), ctx);
-  el('buy-member').value = 'm'; el('buy-date').value = '2026-11-25'; el('buy-qty').value = '22';
-  await ctx.openTradePickRegistration();
-  assert.equal(options.member.id, 'm'); assert.equal(options.month, '2026-11');
-  await ctx.ModalPick._onSubmit({ id: 'p' });
-  assert.equal(el('buy-pick').value, 'p'); assert.equal(el('buy-qty').value, '22');
+test('stock search chooses a real stock, clears stale account selection and preserves entered quantity', () => {
+  const listeners = {}, { ctx, el } = fixture({ selectedBuyStock: null,
+    bindStockSearch: (input, dropdown, onSelect) => { ctx.choose = onSelect; } });
+  for (const id of ['buy-stock', 'buy-pick']) el(id).addEventListener = (event, callback) => { listeners[id + event] = callback; };
+  vm.runInContext(section('function setupTradeStockSearch', 'async function loadAvailableSellQuantity'), ctx);
+  el('buy-qty').value = '22'; el('buy-pick').value = 'old';
+  ctx.setupTradeStockSearch();
+  ctx.choose({ stock_name: '삼성전자', stock_code: '005930' });
+  assert.equal(ctx.selectedBuyStock.stock_code, '005930');
+  assert.equal(el('buy-pick').value, '');
+  assert.equal(el('buy-qty').value, '22');
+  listeners['buy-stockinput']();
+  assert.equal(ctx.selectedBuyStock, null);
+  assert.equal(el('buy-pick').value, '');
 });
 
 test('registration modal permits an admin-selected owner and rejects that override for an ordinary member', async () => {
@@ -125,7 +128,7 @@ test('registration modal permits an admin-selected owner and rejects that overri
   vm.runInContext(openSource, ctx);
   await ctx.open({ member: { id: 'selected', name: '황준선' } });
   assert.equal(rendered.id, 'selected');
-  assert.equal(nodes.get('pick-modal-title').textContent, '황준선 · 투자종목 등록');
+  assert.equal(nodes.get('pick-modal-title').textContent, '황준선 · 탑픽 등록');
   admin = false; rendered = null;
   await ctx.open({ member: { id: 'selected', name: '황준선' } });
   assert.equal(rendered, null);

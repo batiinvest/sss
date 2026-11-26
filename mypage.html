@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SSS · 내 정보</title>
-  <link rel="stylesheet" href="css/style.css?v=20261125.1">
+  <link rel="stylesheet" href="css/style.css?v=20261126.1">
   <script>if(window!==window.parent){document.documentElement.classList.add("in-iframe");}</script>
 </head>
 <body>
@@ -131,7 +131,7 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th class="col-hide-mobile">월</th><th>종목</th><th>매수가</th><th>현재가</th><th>평가손익</th><th class="col-hide-mobile">목표가</th><th>상태</th>
+            <th class="col-hide-mobile">월</th><th>종목</th><th>매수가</th><th>현재가</th><th>평가손익</th><th>보유 수량</th><th>상태</th>
           </tr></thead>
           <tbody id="myPicksTbody">
             <tr><td colspan="7" class="empty-cell">불러오는 중...</td></tr>
@@ -181,14 +181,14 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js?v=20260921.3"></script>
+<script src="js/config.js?v=20261126.1"></script>
 <script src="js/utils/portfolio.js?v=20260921.3"></script>
 <script src="js/utils/corporate-actions.js?v=20260921.3"></script>
-<script src="js/corporate-actions-service.js?v=20261125.1"></script>
+<script src="js/corporate-actions-service.js?v=20261126.1"></script>
 <script src="js/utils/returns.js?v=20260529"></script>
-<script src="js/utils/presentation.js?v=20261125.1"></script>
+<script src="js/utils/presentation.js?v=20261126.1"></script>
 <script src="js/services/price-service.js?v=20260529"></script>
-<script src="js/db.js?v=20261125.1"></script>
+<script src="js/db.js?v=20261126.1"></script>
 <script>
 let myMember    = null;
 let myPriceMap  = {};
@@ -258,7 +258,7 @@ async function renderMetrics() {
     const [{ data: trades, error: e1 }, { data: settles, error: e2 }, picks] = await Promise.all([
       sb.from('trades').select('*').eq('member_id', m.id),
       sb.from('settlements').select('net_profit').eq('member_id', m.id),
-      fetchAllPicks({ member_id: m.id }),
+      fetchTradePositions({ member_id: m.id }),
     ]);
     if (e1) throw e1;
     if (e2) throw e2;
@@ -285,20 +285,13 @@ async function renderMetrics() {
 async function renderMyPicks() {
   const tbody = document.getElementById('myPicksTbody');
   try {
-    const picks = await fetchAllPicks({ member_id: myMember.id });
+    const picks = await fetchTradePositions({ member_id: myMember.id });
 
     document.getElementById('myPickCount').textContent = (picks||[]).length + '건';
     const holds = (picks||[]).filter(p => p.status === 'hold');
     const thisMonth = currentMonth();
-    const effectiveCurrentPick = buildCarryForwardPicks(
-      thisMonth,
-      (picks || []).filter(p => p.month === thisMonth),
-      picks || [],
-      { activeMemberIds: myMember.is_active === false ? new Set() : new Set([myMember.id]) }
-    ).find(p => p.member_id === myMember.id);
-    document.getElementById('myPickSub').textContent = effectiveCurrentPick?._isCarryFallback
-      ? `현재 ${effectiveCurrentPick.stock_name} 자동 연장 · 보유 ${holds.length}건`
-      : `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
+    const effectiveCurrentPick = null; // Actual positions never auto-carry as recommendations.
+    document.getElementById('myPickSub').textContent = `보유 ${holds.length}건 · 매도 ${(picks||[]).length - holds.length}건`;
 
     if (!picks || !picks.length) {
       tbody.innerHTML = '<tr><td colspan="7" class="empty-cell">보유 종목 없음</td></tr>';
@@ -331,7 +324,7 @@ async function renderMyPicks() {
         <td>${p.buy_price ? won(p.buy_price) : '—'}</td>
         <td>${curPrice ? curPrice.toLocaleString()+'원' : '—'}</td>
         <td class="${pnlRate !== null ? rCls(pnlRate) : ''}">${pnl !== null ? (pnl>=0?'+':'')+won(pnl)+'('+pnlRate+'%)' : '—'}</td>
-        <td>${p.target_price ? p.target_price.toLocaleString()+'원'+(upside?` <span style="font-size:11px;">(+${upside}%)</span>`:'') : '—'}</td>
+        <td>${Number(p.buy_quantity || 0).toLocaleString('ko-KR')}주</td>
         <td>${statusBadgeHtml}</td>
       </tr>`;
     }).join('');
@@ -403,7 +396,7 @@ async function renderMySettles() {
   const tbody = document.getElementById('mySettlesTbody');
   try {
     const { data: settles, error } = await sb.from('settlements')
-      .select('*, picks(stock_name)')
+      .select('*, picks:trade_accounts(stock_name)')
       .eq('member_id', myMember.id)
       .order('settled_at', { ascending: false });
     if (error) throw error;

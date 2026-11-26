@@ -312,7 +312,7 @@ async function initSidebarAuth() {
 
     // Use remaining acquisition cost, consistent with the portfolio overview.
     const [holdingsResult, tradesResult] = await Promise.all([
-      sb.from('picks_with_trades').select('*').eq('member_id', me.id),
+      sb.from('trade_positions').select('*').eq('member_id', me.id),
       sb.from('trades').select('*').eq('member_id', me.id),
     ]);
     if (holdingsResult.error || tradesResult.error) throw holdingsResult.error || tradesResult.error;

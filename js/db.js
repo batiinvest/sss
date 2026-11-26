@@ -51,13 +51,13 @@ async function deactivateMember(id) {
 
 // ── 탑픽
 async function fetchPicksByMonth(month) {
-  const { data, error } = await sb.from('picks_with_trades').select('*').eq('month', month).order('submitted_at');
+  const { data, error } = await sb.from('investment_ideas').select('*').eq('month', month).order('submitted_at');
   if (error) { console.error('fetchPicksByMonth:', error); return []; }
   return typeof attachCorporatePositions === 'function' ? attachCorporatePositions(data) : data;
 }
 
 async function fetchAllPicks(filters = {}, opts = {}) {
-  let q = sb.from('picks_with_trades').select('*');
+  let q = sb.from('investment_ideas').select('*');
   if (filters.member_id) q = q.eq('member_id', filters.member_id);
   if (filters.status)    q = q.eq('status', filters.status);
   const { data, error } = await q.order('month', { ascending: false });
@@ -69,6 +69,16 @@ async function submitPick(payload) {
   const { data, error } = await sb.from('picks').insert(payload).select().single();
   if (error) throw error;
   return data;
+}
+
+// Actual positions are independent of monthly investment ideas.
+async function fetchTradePositions(filters = {}, opts = {}) {
+  let q = sb.from('trade_positions').select('*');
+  if (filters.member_id) q = q.eq('member_id', filters.member_id);
+  const { data, error } = await q.order('submitted_at', { ascending: false });
+  if (error) throw error; // Never present missing accounting data as an empty portfolio.
+  const rows = await attachCorporatePositions(data || []);
+  return filters.status ? rows.filter(row => row.status === filters.status) : rows;
 }
 
 function prevMonthOf(month) {
@@ -95,7 +105,7 @@ async function fetchRawPriceMap(codes) {
 }
 
 async function fetchLatestPriorPicks(month, fields = '*') {
-  const { data, error } = await sb.from('picks_with_trades')
+  const { data, error } = await sb.from('investment_ideas')
     .select(fields)
     .lt('month', month)
     .order('month', { ascending: false });
@@ -116,7 +126,7 @@ async function fetchLatestPriorPicks(month, fields = '*') {
 
 async function fetchCarryForwardSourcePicks(month, fields = '*') {
   const latestPicks = await fetchLatestPriorPicks(month, fields);
-  return latestPicks.filter(p => p.status === 'hold');
+  return latestPicks.filter(p => p.status === 'idea' || p.status === 'hold');
 }
 
 function buildCarryForwardPicks(month, currentPicks = [], priorPicks = [], opts = {}) {
@@ -138,7 +148,7 @@ function buildCarryForwardPicks(month, currentPicks = [], priorPicks = [], opts 
 
   const fallbackPicks = [...latestPriorByMember.values()]
     .filter(p =>
-      p.status === 'hold' &&
+      (p.status === 'idea' || p.status === 'hold') &&
       p.member_id &&
       !currentMemberIds.has(p.member_id) &&
       (!activeMemberIds || activeMemberIds.has(p.member_id))
@@ -219,7 +229,7 @@ async function fetchPicksByMonthWithCarryFallback(month, opts = {}) {
 // ── 거래
 async function fetchTrades(limit = 30, opts = {}) {
   const { data, error } = await sb.from('trades')
-    .select('*, members(name), picks(stock_name, month)')
+    .select('*, members(name), picks:trade_accounts(stock_name)')
     .order('traded_at', { ascending: false })
     .limit(limit);
   if (error) { if (opts.strict) throw error; console.error('fetchTrades:', error); return []; }
@@ -244,7 +254,7 @@ async function submitTrade(payload) {
 // ── 결산
 async function fetchSettlements() {
   const { data, error } = await sb.from('settlements')
-    .select('*, members(name), picks(stock_name, month)')
+    .select('*, members(name), picks:trade_accounts(stock_name)')
     .order('settled_at', { ascending: false });
   if (error) { console.error('fetchSettlements:', error); return []; }
   return data;
@@ -343,15 +353,11 @@ async function setAppSetting(key, value) {
 }
 
 // ── 펀드 현황 (보유 종목 매수금액)
-async function fetchFundStatus() {
-  const { data: picks } = await sb.from('picks_with_trades')
-    .select('member_id, buy_price, buy_quantity, status');
-  return picks || [];
-}
+async function fetchFundStatus() { return fetchTradePositions(); }
 
 // ── 내 탑픽 (로그인 멤버 기준)
 async function fetchMyPicks(memberId, filters = {}) {
-  let q = sb.from('picks_with_trades').select('*').eq('member_id', memberId);
+  let q = sb.from('investment_ideas').select('*').eq('member_id', memberId);
   if (filters.status) q = q.eq('status', filters.status);
   const { data, error } = await q.order('month', { ascending: false });
   if (error) { console.error('fetchMyPicks:', error); return []; }
@@ -372,7 +378,7 @@ async function fetchMyPresentations(memberId, limit = 20) {
 // ── 내 결산 내역
 async function fetchMySettlements(memberId) {
   const { data, error } = await sb.from('settlements')
-    .select('*, picks(stock_name)')
+    .select('*, picks:trade_accounts(stock_name)')
     .eq('member_id', memberId)
     .order('settled_at', { ascending: false });
   if (error) { console.error('fetchMySettlements:', error); return []; }

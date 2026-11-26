@@ -24,7 +24,7 @@ async function attachCorporatePositions(picks) {
   if (picks?.some(pick => !pick.pick_id && !pick.id)) return picks;
   if (!picks?.length || !await corporateBackendAvailable()) return picks;
   const [result, actions] = await Promise.all([corporateRpc('sss_corporate_positions', {
-    p_pick_ids: [...new Set(picks.map(p => String(p.pick_id || p.id)))],
+    p_pick_ids: [...new Set(picks.filter(p => p.status !== 'idea').map(p => String(p.pick_id || p.id)))],
     p_as_of: new Date().toISOString(),
   }), corporateRpc('sss_corporate_actions_list')]);
   const positions = new Map((result || []).map(row => [String(row.pick_id), row]));
@@ -39,6 +39,7 @@ async function attachCorporatePositions(picks) {
     const decorated = { ...pick, price_at: adjustedPrice ?? originalPrice, target_price: adjustedTarget ?? originalTarget,
       _originalPriceAt: originalPrice, _originalTargetPrice: originalTarget,
       _priceAdjusted: adjustedPrice !== null && adjustedPrice !== Number(originalPrice) };
+    if (pick.status === 'idea') return decorated;
     const position = positions.get(String(pick.pick_id || pick.id));
     if (!position || !(Number(position.quantity) > 0 || position.sales?.length || position.history?.length)) return decorated;
     const soldQuantity = (position.sales || []).reduce((sum, sale) => sum + Number(sale.quantity), 0);
